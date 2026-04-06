@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0c0c0f">
+<title>CardScan AI</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQ2FyZFNjYW4gQUkiLCJzaG9ydF9uYW1lIjoiQ2FyZFNjYW4iLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBjMGMwZiIsInRoZW1lX2NvbG9yIjoiIzBjMGMwZiJ9">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{font-family:'DM Sans','Segoe UI',sans-serif;background:#0c0c0f;color:#e8e8ed;min-height:100vh;overflow-x:hidden}
+  input,textarea,select,button{font-family:inherit}
+  input:focus,textarea:focus,select:focus{border-color:#6ee7b7!important;outline:none}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+
+  .app{max-width:480px;margin:0 auto;position:relative;min-height:100vh;padding-bottom:70px}
+
+  /* Header */
+  .header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:linear-gradient(135deg,#141419,#0c0c0f);border-bottom:1px solid #1e1e28;position:sticky;top:0;z-index:50}
+  .logo{font-size:20px;font-weight:700;background:linear-gradient(90deg,#6ee7b7,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .badge{background:#6ee7b7;color:#0c0c0f;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:700}
+
+  /* Nav */
+  .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:#111117;border-top:1px solid #1e1e28;z-index:50}
+  .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0;border:none;background:none;color:#555;font-size:10px;font-weight:600;cursor:pointer}
+  .nav-btn.active{color:#6ee7b7}
+  .nav-btn svg{width:20px;height:20px}
+
+  /* Screens */
+  .screen{display:none;padding:0 16px}.screen.active{display:block}
+
+  /* Cards */
+  .card{background:#16161d;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid #23232f;transition:all .15s}
+  .card:active{transform:scale(.98);background:#1a1a24}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all .15s}
+  .btn:active{transform:scale(.97)}
+  .btn-p{background:linear-gradient(135deg,#6ee7b7,#3b82f6);color:#0c0c0f}
+  .btn-s{background:#23232f;color:#e8e8ed}
+  .btn-d{background:#dc2626;color:#fff}
+  .btn-full{width:100%}
+
+  /* Inputs */
+  .inp{width:100%;padding:12px 14px;background:#1e1e28;border:1px solid #2d2d3a;border-radius:10px;color:#e8e8ed;font-size:14px}
+  .lbl{font-size:12px;color:#888;margin-bottom:4px;display:block;font-weight:500}
+  select.inp{appearance:auto}
+  textarea.inp{resize:none}
+
+  /* Chips */
+  .chip{padding:6px 14px;border-radius:99px;border:1px solid #2d2d3a;background:#1a1a24;color:#999;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-block}
+  .chip.on{border-color:#6ee7b7;background:#6ee7b720;color:#6ee7b7}
+
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+  .modal{background:#16161d;border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:85vh;overflow:auto;padding:24px 20px 40px;animation:slideUp .3s ease}
+
+  /* Quick actions */
+  .qlink{color:#3b82f6;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+
+  /* Contact row */
+  .crow{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+  .cbox{width:22px;height:22px;border-radius:6px;border:2px solid #333;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+  .cbox.on{border-color:#6ee7b7;background:#6ee7b720}
+  .cname{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .csub{font-size:12px;color:#6ee7b7}
+  .cactions{display:flex;gap:12px;margin-top:8px}
+
+  /* Stars */
+  .stars{display:flex;gap:2px;cursor:pointer}
+  .star{font-size:14px;color:#555}.star.on{color:#facc15}
+
+  /* Loading */
+  .dots{display:flex;gap:8px;justify-content:center}
+  .dot{width:10px;height:10px;border-radius:99px;background:#6ee7b7;animation:pulse 1.2s ease infinite}
+  .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+
+  /* Toast */
+  .toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#6ee7b7;color:#0c0c0f;padding:10px 24px;border-radius:12px;font-weight:600;font-size:14px;z-index:200;animation:slideUp .3s ease;pointer-events:none}
+
+  /* Scan hero */
+  .scan-icon{width:120px;height:120px;margin:0 auto 24px;border-radius:30px;background:linear-gradient(135deg,#6ee7b720,#3b82f620);display:flex;align-items:center;justify-content:center;border:2px dashed #6ee7b750}
+  .scan-icon svg{width:48px;height:48px;stroke:#6ee7b7}
+
+  /* Stat box */
+  .statbox{margin-top:32px;padding:16px;background:#16161d;border-radius:12px;border:1px solid #23232f;text-align:center}
+  .statnum{font-size:28px;font-weight:700;color:#6ee7b7}
+
+  /* Filter bar */
+  .fbar{display:flex;gap:8px;padding:16px 0 8px;position:sticky;top:57px;background:#0c0c0f;z-index:10}
+  .fbar input{flex:1;padding-left:38px}
+  .fbar .search-icon{position:absolute;left:12px;top:12px}
+  .fchips{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 8px}
+  .sel-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;color:#888}
+  .sel-bar button{background:none;border:none;color:#6ee7b7;font-size:13px;font-weight:600;cursor:pointer}
+
+  /* Grid btns */
+  .grid-btns{display:grid;gap:12px}
+  .grid-btns .btn{padding:16px}
+
+  /* Edit rows */
+  .erow{margin-bottom:12px}
+
+  .hidden{display:none!important}
+
+  @keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">CardScan AI</div>
+    <div id="headerBadge"></div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast hidden" id="toast"></div>
+
+  <!-- File input -->
+  <input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none">
+
+  <!-- ═══ SCAN SCREEN ═══ -->
+  <div class="screen active" id="screenScan" style="padding-top:24px">
+    <div id="scanDefault" style="text-align:center;padding-top:40px">
+      <div class="scan-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:8px">Scan Business Cards</div>
+      <div style="font-size:14px;color:#888;margin-bottom:32px;line-height:1.5">Spread your cards out and snap a photo.<br>AI extracts all contacts automatically.</div>
+      <button class="btn btn-p btn-full" style="padding:16px;font-size:16px" onclick="startScan('front')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Scan Front Side
+      </button>
+      <button class="btn btn-s btn-full hidden" id="btnBackScan" style="margin-top:12px;padding:14px" onclick="startBackScan()">
+        ↻ Scan Back Side (Last Card)
+      </button>
+      <div class="statbox hidden" id="statBox">
+        <div style="font-size:13px;color:#888">Total cards scanned</div>
+        <div class="statnum" id="statNum">0</div>
+      </div>
+    </div>
+    <div id="scanLoading" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:40px">
+      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div style="font-size:16px;font-weight:600">Extracting contacts...</div>
+      <div style="font-size:13px;color:#888">Gemini AI is reading your cards</div>
+    </div>
+    <div id="scanPreview" class="hidden"></div>
+  </div>
+
+  <!-- ═══ CONTACTS SCREEN ═══ -->
+  <div class="screen" id="screenContacts">
+    <div class="fbar">
+      <div style="flex:1;position:relative">
+        <input class="inp" placeholder="Search name, company, email..." id="searchInput" oninput="renderContacts()">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      </div>
+      <button class="btn btn-s" style="padding:0 14px;position:relative" onclick="showFilterModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        <span class="hidden" id="filterDot" style="position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:99px;background:#6ee7b7"></span>
+      </button>
+    </div>
+    <div id="filterChips" class="fchips hidden"></div>
+    <div id="selBar" class="sel-bar hidden"></div>
+    <div id="contactList"></div>
+  </div>
+
+  <!-- ═══ BULK SCREEN ═══ -->
+  <div class="screen" id="screenBulk" style="padding-top:20px">
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px">Bulk Actions</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px" id="bulkInfo">Select contacts in Contacts tab, or actions apply to all.</div>
+    <div class="grid-btns">
+      <button class="btn btn-s btn-full" onclick="openBulkModal('email')">✉ Bulk Email</button>
+      <button class="btn btn-s btn-full" onclick="openBulkModal('sms')">💬 Bulk SMS</button>
+      <button class="btn btn-s btn-full" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-s btn-full" onclick="exportSheets()">📊 Google Sheets</button>
+    </div>
+    <button class="btn btn-d btn-full hidden" id="btnDeleteSel" style="margin-top:20px;padding:14px" onclick="deleteSelected()">🗑 Delete Selected</button>
+  </div>
+
+  <!-- ═══ SETTINGS SCREEN ═══ -->
+  <div class="screen" id="screenSettings" style="padding-top:20px">
+    <div style="font-size:18px;font-weight:700;margin-bottom:20px">Settings</div>
+    <div class="card">
+      <label class="lbl">Gemini API Key</label>
+      <input class="inp" type="password" placeholder="Paste your Gemini API key..." id="apiKeyInput" oninput="saveApiKey()">
+      <div style="font-size:11px;color:#555;margin-top:8px">Free from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#6ee7b7">Google AI Studio</a>. Stored locally on your device.</div>
+    </div>
+    <div class="card hidden" id="dataCard" style="margin-top:12px">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Data</div>
+      <div style="font-size:13px;color:#888;margin-bottom:12px" id="dataInfo"></div>
+      <button class="btn btn-d" style="font-size:13px;padding:8px 16px" onclick="clearAll()">Clear All Data</button>
+    </div>
+  </div>
+
+  <!-- ═══ BOTTOM NAV ═══ -->
+  <div class="nav">
+    <button class="nav-btn active" data-tab="scan" onclick="switchTab('scan')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Scan
+    </button>
+    <button class="nav-btn" data-tab="contacts" onclick="switchTab('contacts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Contacts
+    </button>
+    <button class="nav-btn" data-tab="bulk" onclick="switchTab('bulk')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+      Bulk
+    </button>
+    <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </button>
+  </div>
+</div>
+
+<!-- ═══ MODALS (injected dynamically) ═══ -->
+<div id="modalRoot"></div>
+
+<script>
+// ─── STATE ───
+let contacts = JSON.parse(localStorage.getItem('cs_contacts') || '[]');
+let selected = new Set();
+let apiKey = localStorage.getItem('cs_apikey') || '';
+let pendingBack = null;
+let filters = { star: false, state: '', city: '', search: '' };
+
+const PROMPT = `You are a business card data extractor. Analyze this image containing one or more business cards. For EACH business card visible, extract: name, title, company, email, phone, phone2, website, address, city, state, country, notes. Return ONLY valid JSON array like: [{"name":"John","title":"CEO","company":"Acme","email":"j@a.com","phone":"+1234","phone2":"","website":"","address":"","city":"","state":"","country":"","notes":""}]. If a field is not found, use empty string.`;
+
+// ─── INIT ───
+document.getElementById('apiKeyInput').value = apiKey;
+updateUI();
+
+// ─── PERSIST ───
+function save() {
+  localStorage.setItem('cs_contacts', JSON.stringify(contacts));
+  updateUI();
+}
+function saveApiKey() {
+  apiKey = document.getElementById('apiKeyInput').value;
+  localStorage.setItem('cs_apikey', apiKey);
+}
+
+// ─── TOAST ───
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
+// ─── NAV ───
+function switchTab(tab) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'contacts') renderContacts();
+  if (tab === 'bulk') updateBulkUI();
+}
+
+// ─── UPDATE UI ───
+function updateUI() {
+  // Header badge
+  document.getElementById('headerBadge').innerHTML = contacts.length ? `<span class="badge">${contacts.length}</span>` : '';
+  // Scan screen
+  const bb = document.getElementById('btnBackScan');
+  const sb = document.getElementById('statBox');
+  if (contacts.length) { bb.classList.remove('hidden'); sb.classList.remove('hidden'); } else { bb.classList.add('hidden'); sb.classList.add('hidden'); }
+  document.getElementById('statNum').textContent = contacts.length;
+  // Settings
+  const dc = document.getElementById('dataCard');
+  if (contacts.length) { dc.classList.remove('hidden'); document.getElementById('dataInfo').textContent = contacts.length + ' contacts stored on this device.'; }
+  else dc.classList.add('hidden');
+}
+
+// ─── GEMINI API ───
+async function callGemini(base64, mime) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data: base64 } }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+    })
+  });
+  if (!res.ok) throw new Error('API error: ' + res.status);
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) throw new Error('No valid data found');
+  return JSON.parse(m[0]);
+}
+
+// ─── SCAN ───
+function startScan(side) {
+  if (!apiKey) { toast('Set your Gemini API key in Settings first'); switchTab('settings'); return; }
+  document.getElementById('fileInput').onclick = null;
+  document.getElementById('fileInput').click();
+}
+function startBackScan() {
+  if (!contacts.length) return;
+  pendingBack = contacts[contacts.length - 1].id;
+  startScan('back');
+}
+
+document.getElementById('fileInput').addEventListener('change', async function(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (!apiKey) { toast('Set API key first'); return; }
+
+  // Show loading
+  document.getElementById('scanDefault').classList.add('hidden');
+  document.getElementById('scanPreview').classList.add('hidden');
+  const ld = document.getElementById('scanLoading');
+  ld.classList.remove('hidden');
+  ld.style.display = 'flex';
+
+  try {
+    const base64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(file); });
+    const results = await callGemini(base64, file.type);
+
+    if (pendingBack) {
+      const backText = results.map(r => Object.entries(r).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(', ')).join(' | ');
+      contacts = contacts.map(c => c.id === pendingBack ? { ...c, backNotes: backText } : c);
+      pendingBack = null;
+      save();
+      toast('Back side info merged!');
+      ld.classList.add('hidden');
+      document.getElementById('scanDefault').classList.remove('hidden');
+    } else {
+      const enriched = results.map(c => ({
+        id: Math.random().toString(36).slice(2,10), stars: 0,
+        scannedAt: new Date().toISOString().split('T')[0], backNotes: '',
+        name: c.name||'', title: c.title||'', company: c.company||'',
+        email: c.email||'', phone: c.phone||'', phone2: c.phone2||'',
+        website: c.website||'', address: c.address||'', city: c.city||'',
+        state: c.state||'', country: c.country||'', notes: c.notes||''
+      }));
+      showPreview(enriched);
+    }
+  } catch (err) {
+    toast('Scan failed: ' + err.message);
+    ld.classList.add('hidden');
+    document.getElementById('scanDefault').classList.remove('hidden');
+  }
+  e.target.value = '';
+});
+
+function showPreview(cards) {
+  document.getElementById('scanLoading').classList.add('hidden');
+  document.getElementById('scanLoading').style.display = 'none';
+  const el = document.getElementById('scanPreview');
+  el.classList.remove('hidden');
+
+  let html = `<div style="font-size:18px;font-weight:700;margin-bottom:16px">Found ${cards.length} card${cards.length>1?'s':''} ✨</div>`;
+  cards.forEach(c => {
+    html += `<div class="card">
+      <div style="font-weight:700;font-size:16px">${esc(c.name)||'Unknown'}</div>
+      <div style="color:#6ee7b7;font-size:13px">${esc(c.title)}${c.company?' @ '+esc(c.company):''}</div>
+      ${c.email?`<div style="font-size:13px;color:#888;margin-top:4px">✉ ${esc(c.email)}</div>`:''}
+      ${c.phone?`<div style="font-size:13px;color:#888">☎ ${esc(c.phone)}</div>`:''}
+      ${c.city?`<div style="font-size:13px;color:#888">📍 ${esc(c.city)}${c.state?', '+esc(c.state):''}</div>`:''}
+    </div>`;
+  });
+  html += `<div style="display:flex;gap:10px;margin-top:16px">
+    <button class="btn btn-s" style="flex:1" onclick="cancelPreview()">Rescan</button>
+    <button class="btn btn-p" style="flex:2" onclick="acceptPreview()">✓ Add All</button>
+  </div>`;
+
+  el.innerHTML = html;
+  window._previewCards = cards;
+}
+function acceptPreview() {
+  contacts.push(...window._previewCards);
+  save();
+  toast(window._previewCards.length + ' card(s) added!');
+  cancelPreview();
+  switchTab('contacts');
+}
+function cancelPreview() {
+  document.getElementById('scanPreview').classList.add('hidden');
+  document.getElementById('scanPreview').innerHTML = '';
+  document.getElementById('scanDefault').classList.remove('hidden');
+}
+
+// ─── CONTACTS ───
+function getFiltered() {
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  return contacts.filter(c => {
+    if (filters.star && c.stars < 3) return false;
+    if (filters.state && c.state !== filters.state) return false;
+    if (filters.city && c.city !== filters.city) return false;
+    if (q && !(c.name+c.company+c.email+c.phone).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderContacts() {
+  const list = getFiltered();
+  const el = document.getElementById('contactList');
+  const hasFilters = filters.star || filters.state || filters.city;
+
+  // Filter dot
+  document.getElementById('filterDot').classList.toggle('hidden', !hasFilters);
+
+  // Filter chips
+  const fc = document.getElementById('filterChips');
+  if (hasFilters) {
+    fc.classList.remove('hidden');
+    let ch = '';
+    if (filters.star) ch += `<span class="chip on" onclick="filters.star=false;renderContacts()">⭐ 3-Star ×</span>`;
+    if (filters.state) ch += `<span class="chip on" onclick="filters.state='';renderContacts()">${esc(filters.state)} ×</span>`;
+    if (filters.city) ch += `<span class="chip on" onclick="filters.city='';renderContacts()">${esc(filters.city)} ×</span>`;
+    fc.innerHTML = ch;
+  } else fc.classList.add('hidden');
+
+  // Select bar
+  const sb = document.getElementById('selBar');
+  if (list.length) {
+    sb.classList.remove('hidden');
+    const allSel = list.length > 0 && list.every(c => selected.has(c.id));
+    sb.innerHTML = `<span>${list.length} contact${list.length!==1?'s':''}</span><button onclick="toggleSelectAll()">${allSel?'Deselect All':'Select All'}</button>`;
+  } else sb.classList.add('hidden');
+
+  if (!list.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 0;color:#555">${contacts.length?'No contacts match filters.':'No contacts yet. Scan some cards!'}</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(c => `
+    <div class="card crow" onclick="openEdit('${c.id}')">
+      <div class="cbox ${selected.has(c.id)?'on':''}" onclick="event.stopPropagation();toggleSel('${c.id}')">
+        ${selected.has(c.id)?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>':''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="cname">${esc(c.name)||'Unknown'}</div>
+          <div class="stars" onclick="event.stopPropagation();cycleStar('${c.id}')">
+            ${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}">★</span>`).join('')}
+          </div>
+        </div>
+        <div class="csub">${esc(c.title)}${c.company?' · '+esc(c.company):''}</div>
+        <div class="cactions">
+          ${c.phone?`<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" class="qlink">📞 Call</a>`:''}
+          ${c.email?`<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" class="qlink">✉ Email</a>`:''}
+          ${(c.address||c.city)?`<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" onclick="event.stopPropagation()" class="qlink">📍 Map</a>`:''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleSel(id) { selected.has(id) ? selected.delete(id) : selected.add(id); renderContacts(); updateBulkUI(); }
+function toggleSelectAll() {
+  const list = getFiltered();
+  const allSel = list.every(c => selected.has(c.id));
+  list.forEach(c => allSel ? selected.delete(c.id) : selected.add(c.id));
+  renderContacts(); updateBulkUI();
+}
+function cycleStar(id) {
+  contacts = contacts.map(c => c.id === id ? { ...c, stars: c.stars >= 3 ? 0 : c.stars + 1 } : c);
+  save(); renderContacts();
+}
+
+// ─── EDIT MODAL ───
+function openEdit(id) {
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  const fields = [['name','Name'],['title','Title'],['company','Company'],['email','Email'],['phone','Phone'],['phone2','Phone 2'],['website','Website'],['address','Address'],['city','City'],['state','State'],['country','Country'],['notes','Notes']];
+
+  let html = `<div class="modal-bg" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:18px;font-weight:700">Edit Contact</div>
+      <button style="background:none;border:none;color:#888;font-size:24px;cursor:pointer" onclick="closeModal()">×</button>
+    </div>`;
+
+  fields.forEach(([k,l]) => {
+    html += `<div class="erow"><label class="lbl">${l}</label><input class="inp" id="edit_${k}" value="${esc(c[k]||'')}"></div>`;
+  });
+
+  if (c.backNotes) {
+    html += `<div class="erow"><label class="lbl">Back Side Notes</label><div class="inp" style="background:#1a1a24;white-space:pre-wrap;font-size:13px">${esc(c.backNotes)}</div></div>`;
+  }
+
+  // Stars
+  html += `<div class="erow"><label class="lbl">Priority</label><div class="stars" style="gap:6px;margin-top:4px" id="editStars">
+    ${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}" style="font-size:28px;cursor:pointer" onclick="setEditStar('${id}',${n})">\u2605</span>`).join('')}
+  </div></div>`;
+
+  // Action buttons
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap">`;
+  if (c.phone) html += `<a href="tel:${esc(c.phone)}" class="btn btn-p" style="flex:1;text-decoration:none">📞 Call</a>`;
+  if (c.email) html += `<a href="mailto:${esc(c.email)}" class="btn btn-p" style="flex:1;text-decoration:none">✉ Email</a>`;
+  if (c.address||c.city) html += `<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" class="btn btn-s" style="flex:1;text-decoration:none">📍 Maps</a>`;
+  html += `</div>`;
+
+  html += `<div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn btn-p" style="flex:1" onclick="saveEdit('${id}')">✓ Save</button>
+    <button class="btn btn-s" style="flex:1" onclick="pendingBack='${id}';closeModal();switchTab('scan');startScan('back')">↻ Scan Back</button>
+    <button class="btn btn-d" style="flex:1" onclick="deleteContact('${id}')">🗑 Delete</button>
+  </div>`;
+
+  html += `</div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+function saveEdit(id) {
+  const fields = ['name','title','company','email','phone','phone2','website','address','city','state','country','notes'];
+  contacts = contacts.map(c => {
+    if (c.id !== id) return c;
+    const updated = { ...c };
+    fields.forEach(f => { updated[f] = document.getElementById('edit_'+f)?.value || ''; });
+    return updated;
+  });
+  save(); closeModal(); renderContacts(); toast('Saved!');
+}
+function setEditStar(id, n) {
+  contacts = contacts.map(c => c.id === id ? { ...c, stars: c.stars === n ? 0 : n } : c);
+  save(); openEdit(id); // re-render modal
+}
+function deleteContact(id) {
+  contacts = contacts.filter(c => c.id !== id);
+  selected.delete(id);
+  save(); closeModal(); renderContacts(); toast('Deleted');
+}
+function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+// ─── FILTER MODAL ───
+function showFilterModal() {
+  const states = [...new Set(contacts.map(c=>c.state).filter(Boolean))].sort();
+  const cities = [...new Set(contacts.map(c=>c.city).filter(Boolean))].sort();
+
+  let html = `<div class="modal-bg" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">
+    <div style="font-size:18px;font-weight:700;margin-bottom:20px">Filters</div>
+    <div style="margin-bottom:20px"><label class="lbl">Priority</label>
+      <span class="chip ${filters.star?'on':''}" onclick="this.classList.toggle('on');document.getElementById('fstar').value=this.classList.contains('on')" id="starChip">⭐ 3-Star Contacts Only</span>
+      <input type="hidden" id="fstar" value="${filters.star}">
+    </div>
+    <div style="margin-bottom:16px"><label class="lbl">State</label>
+      <select class="inp" id="fstate"><option value="">All States</option>${states.map(s=>`<option value="${esc(s)}" ${filters.state===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+    </div>
+    <div style="margin-bottom:16px"><label class="lbl">City</label>
+      <select class="inp" id="fcity"><option value="">All Cities</option>${cities.map(s=>`<option value="${esc(s)}" ${filters.city===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn-s" style="flex:1" onclick="filters={star:false,state:'',city:'',search:''};document.getElementById('searchInput').value='';closeModal();renderContacts()">Clear All</button>
+      <button class="btn btn-p" style="flex:1" onclick="applyFilters()">Apply</button>
+    </div>
+  </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+function applyFilters() {
+  filters.star = document.getElementById('fstar').value === 'true';
+  filters.state = document.getElementById('fstate').value;
+  filters.city = document.getElementById('fcity').value;
+  closeModal(); renderContacts();
+}
+
+// ─── BULK ───
+function updateBulkUI() {
+  document.getElementById('bulkInfo').textContent = selected.size ? `${selected.size} selected` : 'Select contacts in Contacts tab, or actions apply to all.';
+  document.getElementById('btnDeleteSel').classList.toggle('hidden', !selected.size);
+  document.getElementById('btnDeleteSel').innerHTML = `🗑 Delete Selected (${selected.size})`;
+}
+function deleteSelected() {
+  contacts = contacts.filter(c => !selected.has(c.id));
+  selected.clear(); save(); renderContacts(); updateBulkUI(); toast('Deleted!');
+}
+
+function openBulkModal(type) {
+  const count = selected.size || contacts.length;
+  let html = `<div class="modal-bg" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">
+    <div style="font-size:18px;font-weight:700;margin-bottom:16px">Bulk ${type==='email'?'Email':'SMS'}</div>
+    <div style="font-size:13px;color:#888;margin-bottom:16px">Sending to ${count} contact${count!==1?'s':''}</div>
+    ${type==='email'?`<div class="erow"><label class="lbl">Subject</label><input class="inp" id="bulkSubject" placeholder="Great meeting you at..."></div>`:''}
+    <div class="erow"><label class="lbl">Message</label><textarea class="inp" id="bulkBody" style="height:120px" placeholder="Hi! It was a pleasure meeting you..."></textarea></div>
+    <button class="btn btn-p btn-full" onclick="sendBulk('${type}')">✈ Send ${type==='email'?'Email':'SMS'}</button>
+  </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+function sendBulk(type) {
+  const list = selected.size ? contacts.filter(c=>selected.has(c.id)) : contacts;
+  const body = document.getElementById('bulkBody')?.value || '';
+  if (type === 'email') {
+    const emails = list.map(c=>c.email).filter(Boolean).join(',');
+    if (!emails) { toast('No emails found'); return; }
+    const subj = document.getElementById('bulkSubject')?.value || '';
+    window.open(`mailto:${emails}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`);
+    toast('Opening email...');
+  } else {
+    const phones = list.map(c=>c.phone).filter(Boolean).join(',');
+    if (!phones) { toast('No phone numbers'); return; }
+    window.open(`sms:${phones}?body=${encodeURIComponent(body)}`);
+    toast('Opening SMS...');
+  }
+  closeModal();
+}
+
+// ─── EXPORT ───
+function exportCSV() {
+  const list = selected.size ? contacts.filter(c=>selected.has(c.id)) : contacts;
+  if (!list.length) { toast('No contacts'); return; }
+  const h = ['Name','Title','Company','Email','Phone','Phone2','Website','Address','City','State','Country','Stars','Notes','Back Notes','Scanned'];
+  const rows = list.map(c => [c.name,c.title,c.company,c.email,c.phone,c.phone2,c.website,c.address,c.city,c.state,c.country,c.stars,c.notes,c.backNotes,c.scannedAt].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  const blob = new Blob([h.join(',')+'\n'+rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `business_cards_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  toast('CSV downloaded!');
+}
+async function exportSheets() {
+  const list = selected.size ? contacts.filter(c=>selected.has(c.id)) : contacts;
+  if (!list.length) { toast('No contacts'); return; }
+  const h = ['Name','Title','Company','Email','Phone','City','State','Stars'];
+  const rows = list.map(c=>[c.name,c.title,c.company,c.email,c.phone,c.city,c.state,c.stars].join('\t'));
+  try { await navigator.clipboard.writeText(h.join('\t')+'\n'+rows.join('\n')); toast('Copied! Paste into Google Sheets'); } catch { toast('Opening Google Sheets...'); }
+  window.open('https://docs.google.com/spreadsheets/create','_blank');
+}
+
+function clearAll() {
+  if (!confirm('Delete all contacts?')) return;
+  contacts = []; selected.clear(); save(); renderContacts(); updateBulkUI(); toast('All cleared');
+}
+
+// ─── UTIL ───
+function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+</script>
+</body>
+</html>

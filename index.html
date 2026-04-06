@@ -28,6 +28,10 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)!important;out
 .nb.on{color:var(--accent)}
 .nb.on::before{content:'';position:absolute;top:-4px;width:20px;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
 .nb svg{width:20px;height:20px}
+.nb.scan-btn{position:relative}
+.nb.scan-btn .scan-circle{width:44px;height:44px;border-radius:14px;background:var(--accentG);display:flex;align-items:center;justify-content:center;margin-top:-22px;box-shadow:0 4px 16px rgba(52,211,153,.25)}
+.nb.scan-btn .scan-circle svg{stroke:#000;width:22px;height:22px}
+.nb.scan-btn.on::before{display:none}
 .scr{display:none;padding:0 16px}.scr.on{display:block;animation:fi .3s ease}
 .cd{background:var(--bg2);border-radius:var(--r);padding:16px;margin-bottom:10px;border:1px solid var(--border);transition:all .2s;box-shadow:var(--shadow)}
 .cd:active{transform:scale(.985)}
@@ -78,6 +82,18 @@ textarea.inp{resize:none}
 .ap:active{transform:scale(.95);background:var(--bg4)}
 .st{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin:18px 0 10px;padding:0 2px}
 .hid{display:none!important}
+.card-img-thumb{width:52px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg3);border:1px solid var(--border)}
+.card-img-full{width:100%;border-radius:var(--rs);margin-bottom:14px;border:1px solid var(--border)}
+.sel-bar{display:flex;gap:8px;padding:8px 0;animation:fi .2s ease}
+.sel-bar .btn{padding:8px 14px;font-size:12px}
+.confirm-modal{position:fixed;inset:0;background:var(--modal-bg);z-index:200;display:flex;align-items:center;justify-content:center;animation:fi .15s ease}
+.confirm-box{background:var(--bg2);border-radius:var(--r);padding:24px;width:90%;max-width:340px;text-align:center;animation:su .3s cubic-bezier(.16,1,.3,1);box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid var(--border)}
+.confirm-box h3{font-size:18px;margin-bottom:8px}
+.confirm-box p{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+.confirm-box .btns{display:flex;gap:10px}
+.confirm-box .btns .btn{flex:1}
+.dup-banner{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:var(--rs);padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.dup-banner:active{opacity:.8}
 @keyframes fi{from{opacity:0}to{opacity:1}}
 @keyframes su{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @keyframes ti{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
@@ -94,8 +110,20 @@ textarea.inp{resize:none}
   </div>
   <div class="toast hid" id="toast"></div>
   <input type="file" accept="image/*" capture="environment" id="fInp" style="display:none">
- 
-  <div class="scr on" id="sScan" style="padding-top:24px">
+
+  <!-- CONTACTS (now default/home) -->
+  <div class="scr on" id="sContacts">
+    <div class="fb"><div style="flex:1;position:relative"><input class="inp" placeholder="Search name, company, email..." id="sInp" oninput="renderC()"><svg class="si2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+      <button class="btn bs" style="padding:0 14px;position:relative" onclick="showFilt()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span class="hid" id="fDot" style="position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:99px;background:var(--accent)"></span></button>
+    </div>
+    <div id="fChips" class="fc hid"></div>
+    <div id="dupBanner"></div>
+    <div id="selBar"></div>
+    <div id="cList"></div>
+  </div>
+
+  <!-- SCAN -->
+  <div class="scr" id="sScan" style="padding-top:24px">
     <div id="sDef" style="text-align:center;padding-top:36px">
       <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
       <div style="font-size:24px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px">Scan Business Cards</div>
@@ -111,16 +139,8 @@ textarea.inp{resize:none}
     </div>
     <div id="sPrev" class="hid"></div>
   </div>
- 
-  <div class="scr" id="sContacts">
-    <div class="fb"><div style="flex:1;position:relative"><input class="inp" placeholder="Search name, company, email..." id="sInp" oninput="renderC()"><svg class="si2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
-      <button class="btn bs" style="padding:0 14px;position:relative" onclick="showFilt()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span class="hid" id="fDot" style="position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:99px;background:var(--accent)"></span></button>
-    </div>
-    <div id="fChips" class="fc hid"></div>
-    <div id="selBar" class="slb hid"></div>
-    <div id="cList"></div>
-  </div>
- 
+
+  <!-- BULK -->
   <div class="scr" id="sBulk" style="padding-top:20px">
     <div style="font-size:20px;font-weight:800;margin-bottom:4px">Bulk Actions</div>
     <div style="font-size:13px;color:var(--text3);margin-bottom:20px;font-weight:500" id="bInfo">Select contacts in Contacts tab, or actions apply to all.</div>
@@ -130,86 +150,157 @@ textarea.inp{resize:none}
       <button class="btn bs bf" onclick="expCSV()">⬇ Export CSV</button>
       <button class="btn bs bf" onclick="expSheets()">📊 Google Sheets</button>
     </div>
-    <button class="btn bd bf hid" id="bDel" style="margin-top:16px;padding:14px" onclick="delSel()">🗑 Delete Selected</button>
   </div>
- 
+
+  <!-- SETTINGS -->
   <div class="scr" id="sSettings" style="padding-top:20px">
     <div style="font-size:20px;font-weight:800;margin-bottom:20px">Settings</div>
     <div class="cd"><label class="lbl">Gemini API Key</label><input class="inp" type="password" placeholder="Paste your Gemini API key..." id="akInp" oninput="saveAK()"><div style="font-size:11px;color:var(--text3);margin-top:8px">Free from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);font-weight:600">Google AI Studio</a></div></div>
     <div class="cd" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Appearance</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn bsm bs" style="flex:1" onclick="setTh('light')">☀️ Light</button><button class="btn bsm bs" style="flex:1" onclick="setTh('dark')">🌙 Dark</button></div></div>
     <div class="cd" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Backup & Restore</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px">Save contacts to a file. Restore anytime.</div><div style="display:flex;gap:8px"><button class="btn bsm bp" style="flex:1" onclick="backup()">⬇ Backup</button><button class="btn bsm bs" style="flex:1" onclick="document.getElementById('rInp').click()">⬆ Restore</button></div><input type="file" accept=".json" id="rInp" style="display:none" onchange="restore(event)"></div>
-    <div class="cd hid" id="dCard" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Data</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px" id="dInfo"></div><button class="btn bsm bd" onclick="clearAll()">Clear All Data</button></div>
+    <div class="cd" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Duplicates</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px">Find and merge duplicate contacts.</div><button class="btn bsm bs bf" onclick="showDups()">🔍 Find Duplicates</button></div>
+    <div class="cd hid" id="dCard" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--danger)">Danger Zone</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px" id="dInfo"></div><button class="btn bsm bd" onclick="confirmAction('Delete ALL contacts? This cannot be undone.',clearAll)">🗑 Clear All Data</button></div>
   </div>
- 
+
+  <!-- NAV: Contacts | Scan (center) | Bulk | Settings -->
   <div class="nav">
-    <button class="nb on" data-t="scan" onclick="sw('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>Scan</button>
-    <button class="nb" data-t="contacts" onclick="sw('contacts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts</button>
+    <button class="nb on" data-t="contacts" onclick="sw('contacts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts</button>
+    <button class="nb scan-btn" data-t="scan" onclick="sw('scan')"><div class="scan-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>Scan</button>
     <button class="nb" data-t="bulk" onclick="sw('bulk')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Bulk</button>
     <button class="nb" data-t="settings" onclick="sw('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</button>
   </div>
 </div>
 <div id="MR"></div>
+<div id="CF"></div>
 <script>
-let C=JSON.parse(localStorage.getItem('cs_c')||'[]'),sel=new Set,ak=localStorage.getItem('cs_ak')||'',pB=null,F={sl:0,st:'',ci:'',q:''},th=localStorage.getItem('cs_th')||'dark';
+// ─── State ───────────────────────────────────────
+let C=[],sel=new Set,ak='',pB=null,F={sl:0,st:'',ci:'',q:''},th='dark';
 const PR=`You are a business card data extractor. Analyze this image containing one or more business cards. For EACH card extract: name, title, company, email, phone, phone2, website, address, city, state, country, notes (include social media URLs/handles here). Return ONLY valid JSON array like: [{"name":"John","title":"CEO","company":"Acme","email":"j@a.com","phone":"+1234","phone2":"","website":"acme.com","address":"","city":"","state":"","country":"","notes":"LinkedIn: linkedin.com/in/john"}]. Empty string for missing fields.`;
- 
-document.getElementById('akInp').value=ak;apTh();uUI();
- 
+
+// ─── IndexedDB Persistence ───────────────────────
+const DB_NAME='cardscan_db',DB_VER=1,STORE='contacts';
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function dbSaveAll(){try{const db=await openDB();const tx=db.transaction(STORE,'readwrite');const st=tx.objectStore(STORE);st.clear();C.forEach(c=>st.put(c));await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j})}catch(e){console.warn('IDB save fail, using localStorage',e)}localStorage.setItem('cs_c',JSON.stringify(C))}
+async function dbLoadAll(){try{const db=await openDB();const tx=db.transaction(STORE,'readonly');const st=tx.objectStore(STORE);return new Promise((res)=>{const r=st.getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([])})}catch(e){console.warn('IDB load fail, using localStorage',e);return JSON.parse(localStorage.getItem('cs_c')||'[]')}}
+
+// ─── Init ────────────────────────────────────────
+(async function init(){
+  ak=localStorage.getItem('cs_ak')||'';
+  th=localStorage.getItem('cs_th')||'dark';
+  document.getElementById('akInp').value=ak;
+  apTh();
+  C=await dbLoadAll();
+  // Fallback: if IDB empty but localStorage has data, migrate
+  if(!C.length){const ls=JSON.parse(localStorage.getItem('cs_c')||'[]');if(ls.length){C=ls;await dbSaveAll()}}
+  uUI();renderC();checkDups();
+})();
+
+// ─── Theme ───────────────────────────────────────
 function apTh(){document.documentElement.setAttribute('data-theme',th);document.getElementById('tBtn').textContent=th==='dark'?'☀️':'🌙';document.getElementById('metaTheme').content=th==='dark'?'#08080c':'#f4f4f7'}
 function toggleTheme(){th=th==='dark'?'light':'dark';localStorage.setItem('cs_th',th);apTh()}
 function setTh(t){th=t;localStorage.setItem('cs_th',th);apTh()}
-function sv(){localStorage.setItem('cs_c',JSON.stringify(C));uUI()}
+
+// ─── Save / Utils ────────────────────────────────
+function sv(){dbSaveAll();uUI()}
 function saveAK(){ak=document.getElementById('akInp').value;localStorage.setItem('cs_ak',ak)}
 function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.remove('hid');setTimeout(()=>e.classList.add('hid'),2800)}
-function sw(t){const map={scan:'sScan',contacts:'sContacts',bulk:'sBulk',settings:'sSettings'};document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));document.getElementById(map[t]).classList.add('on');document.querySelectorAll('.nb').forEach(b=>b.classList.toggle('on',b.dataset.t===t));if(t==='contacts')renderC();if(t==='bulk')uBulk()}
-function uUI(){document.getElementById('hBadge').innerHTML=C.length?`<span class="badge">${C.length}</span>`:'';const b=document.getElementById('bBack'),s=document.getElementById('sBox');if(C.length){b.classList.remove('hid');s.classList.remove('hid')}else{b.classList.add('hid');s.classList.add('hid')}document.getElementById('sNum').textContent=C.length;const d=document.getElementById('dCard');if(C.length){d.classList.remove('hid');document.getElementById('dInfo').textContent=C.length+' contacts on device.'}else d.classList.add('hid')}
- 
+
+// ─── Confirm Dialog ──────────────────────────────
+function confirmAction(msg,onYes,dangerLabel='Delete'){
+  document.getElementById('CF').innerHTML=`<div class="confirm-modal" onclick="closeConfirm()"><div class="confirm-box" onclick="event.stopPropagation()"><h3>Are you sure?</h3><p>${msg}</p><div class="btns"><button class="btn bs" onclick="closeConfirm()">Cancel</button><button class="btn bd" onclick="closeConfirm();(${onYes.toString()})()">${dangerLabel}</button></div></div></div>`}
+function closeConfirm(){document.getElementById('CF').innerHTML=''}
+
+// ─── Navigation ──────────────────────────────────
+function sw(t){const map={contacts:'sContacts',scan:'sScan',bulk:'sBulk',settings:'sSettings'};document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));document.getElementById(map[t]).classList.add('on');document.querySelectorAll('.nb').forEach(b=>b.classList.toggle('on',b.dataset.t===t));if(t==='contacts'){renderC();checkDups()}if(t==='bulk')uBulk()}
+function uUI(){document.getElementById('hBadge').innerHTML=C.length?`<span class="badge">${C.length}</span>`:'';const b=document.getElementById('bBack'),s=document.getElementById('sBox');if(C.length){b.classList.remove('hid');s.classList.remove('hid')}else{b.classList.add('hid');s.classList.add('hid')}document.getElementById('sNum').textContent=C.length;const d=document.getElementById('dCard');if(C.length){d.classList.remove('hid');document.getElementById('dInfo').textContent=C.length+' contacts stored.'}else d.classList.add('hid')}
+
+// ─── Image Capture ───────────────────────────────
+function captureImage(file){return new Promise(res=>{const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');let w=img.width,h=img.height;const mx=600;if(w>mx){h=(mx/w)*h;w=mx}c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);res(c.toDataURL('image/jpeg',0.6))};img.src=e.target.result};r.readAsDataURL(file)})}
+
+// ─── Scan ────────────────────────────────────────
 async function callG(b64,mime){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${ak}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:PR},{inline_data:{mime_type:mime,data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:4096}})});if(!r.ok)throw new Error('API error: '+r.status);const d=await r.json(),t=d.candidates?.[0]?.content?.parts?.[0]?.text||'',m=t.match(/\[[\s\S]*\]/);if(!m)throw new Error('No data found');return JSON.parse(m[0])}
- 
+
 function startScan(){if(!ak){toast('Set API key in Settings');sw('settings');return}document.getElementById('fInp').click()}
 function startBackScan(){if(!C.length)return;pB=C[C.length-1].id;startScan()}
- 
+
 document.getElementById('fInp').addEventListener('change',async function(e){
   const f=e.target.files?.[0];if(!f||!ak)return;
   document.getElementById('sDef').classList.add('hid');document.getElementById('sPrev').classList.add('hid');
   const ld=document.getElementById('sLoad');ld.classList.remove('hid');ld.style.display='flex';
   try{
     const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f)});
+    // Capture card image thumbnail
+    const cardImg=await captureImage(f);
     const res=await callG(b64,f.type);
     if(pB){const bt=res.map(r=>Object.entries(r).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(', ')).join(' | ');C=C.map(c=>c.id===pB?{...c,backNotes:bt}:c);pB=null;sv();toast('Back side merged!');ld.classList.add('hid');document.getElementById('sDef').classList.remove('hid')}
-    else{const en=res.map(c=>({id:Math.random().toString(36).slice(2,10),stars:0,userNotes:'',scannedAt:new Date().toISOString().split('T')[0],backNotes:'',sentToSheets:false,name:c.name||'',title:c.title||'',company:c.company||'',email:c.email||'',phone:c.phone||'',phone2:c.phone2||'',website:c.website||'',address:c.address||'',city:c.city||'',state:c.state||'',country:c.country||'',notes:c.notes||''}));showPrev(en)}
+    else{
+      // Create contacts with image, then open edit form for EACH
+      const en=res.map(c=>({id:Math.random().toString(36).slice(2,10),stars:0,userNotes:'',scannedAt:new Date().toISOString().split('T')[0],backNotes:'',sentToSheets:false,cardImage:cardImg,name:c.name||'',title:c.title||'',company:c.company||'',email:c.email||'',phone:c.phone||'',phone2:c.phone2||'',website:c.website||'',address:c.address||'',city:c.city||'',state:c.state||'',country:c.country||'',notes:c.notes||''}));
+      // Show full edit form for the scanned cards
+      showScanEdit(en);
+    }
   }catch(err){toast('Scan failed: '+err.message);ld.classList.add('hid');document.getElementById('sDef').classList.remove('hid')}
   e.target.value='';
 });
- 
-function showPrev(cards){document.getElementById('sLoad').classList.add('hid');document.getElementById('sLoad').style.display='none';const el=document.getElementById('sPrev');el.classList.remove('hid');
-  let h=`<div style="font-size:20px;font-weight:800;margin-bottom:16px">Found ${cards.length} card${cards.length>1?'s':''} ✨</div>`;
-  cards.forEach((c,i)=>{h+=`<div class="cd" style="animation:ci .4s ease ${i*.08}s both"><div style="font-weight:700;font-size:16px">${esc(c.name)||'Unknown'}</div><div style="color:var(--accent);font-size:13px;font-weight:600">${esc(c.title)}${c.company?' @ '+esc(c.company):''}</div>${c.email?`<div style="font-size:13px;color:var(--text2);margin-top:4px">✉ ${esc(c.email)}</div>`:''}${c.phone?`<div style="font-size:13px;color:var(--text2)">📞 ${esc(c.phone)}</div>`:''}${c.city?`<div style="font-size:13px;color:var(--text2)">📍 ${esc(c.city)}${c.state?', '+esc(c.state):''}</div>`:''}${c.website?`<div style="font-size:13px;color:var(--text2)">🌐 ${esc(c.website)}</div>`:''}</div>`});
-  h+=`<div style="display:flex;gap:10px;margin-top:16px"><button class="btn bs" style="flex:1" onclick="canPrev()">Rescan</button><button class="btn bp" style="flex:2" onclick="accPrev()">✓ Add All</button></div>`;
-  el.innerHTML=h;window._pc=cards}
-function accPrev(){C.push(...window._pc);sv();toast(window._pc.length+' card(s) added!');canPrev();sw('contacts')}
+
+// ─── Post-Scan Edit Form ─────────────────────────
+function showScanEdit(cards){
+  document.getElementById('sLoad').classList.add('hid');document.getElementById('sLoad').style.display='none';
+  const el=document.getElementById('sPrev');el.classList.remove('hid');
+  window._pc=cards;window._pcIdx=0;
+  renderScanEditCard();
+}
+function renderScanEditCard(){
+  const cards=window._pc,idx=window._pcIdx,c=cards[idx];if(!c)return;
+  const el=document.getElementById('sPrev');
+  const flds=[['name','Name'],['title','Job Title'],['company','Company'],['email','Email'],['phone','Phone'],['phone2','Phone 2'],['website','Website'],['address','Address'],['city','City'],['state','State'],['country','Country'],['notes','Notes']];
+  let h=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">Card ${idx+1} of ${cards.length} ✨</div><div style="font-size:13px;color:var(--text3);margin-bottom:16px">Review & edit before saving</div>`;
+  if(c.cardImage)h+=`<img src="${c.cardImage}" class="card-img-full" alt="Card">`;
+  flds.forEach(([k,l])=>{h+=`<div class="er"><label class="lbl">${l}</label><input class="inp" id="se_${k}" value="${esc(c[k]||'')}"></div>`});
+  h+=`<div style="display:flex;gap:10px;margin-top:8px">`;
+  if(cards.length>1&&idx>0)h+=`<button class="btn bs" onclick="saveScanCard();window._pcIdx--;renderScanEditCard()">← Prev</button>`;
+  h+=`<button class="btn bs" style="flex:1" onclick="canPrev()">Cancel</button>`;
+  if(idx<cards.length-1)h+=`<button class="btn bp" style="flex:2" onclick="saveScanCard();window._pcIdx++;renderScanEditCard()">Save & Next →</button>`;
+  else h+=`<button class="btn bp" style="flex:2" onclick="saveScanCard();finishScanEdit()">✓ Save & Done</button>`;
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+function saveScanCard(){
+  const cards=window._pc,idx=window._pcIdx,c=cards[idx];
+  const flds=['name','title','company','email','phone','phone2','website','address','city','state','country','notes'];
+  flds.forEach(f=>{c[f]=document.getElementById('se_'+f)?.value||''});
+}
+function finishScanEdit(){
+  C.push(...window._pc);sv();toast(window._pc.length+' card(s) saved!');canPrev();sw('contacts');
+}
 function canPrev(){document.getElementById('sPrev').classList.add('hid');document.getElementById('sPrev').innerHTML='';document.getElementById('sDef').classList.remove('hid')}
- 
-function getF(){const q=(document.getElementById('sInp')?.value||'').toLowerCase();return C.filter(c=>{if(F.sl>0&&c.stars!==F.sl)return false;if(F.st&&c.state!==F.st)return false;if(F.ci&&c.city!==F.ci)return false;if(q&&!(c.name+c.company+c.email+c.phone).toLowerCase().includes(q))return false;return true})}
- 
+
+// ─── Contacts List ───────────────────────────────
+function getF(){const q=(document.getElementById('sInp')?.value||'').toLowerCase();return C.filter(c=>{if(F.sl>0&&c.stars!==F.sl)return false;if(F.st&&c.state!==F.st)return false;if(F.ci&&c.city!==F.ci)return false;if(q&&!(c.name+c.company+c.email+c.phone+c.title).toLowerCase().includes(q))return false;return true})}
+
 function renderC(){const list=getF(),el=document.getElementById('cList'),hf=F.sl>0||F.st||F.ci;
   document.getElementById('fDot').classList.toggle('hid',!hf);
   const fc=document.getElementById('fChips');
   if(hf){fc.classList.remove('hid');let ch='';if(F.sl>0)ch+=`<span class="chip on" onclick="F.sl=0;renderC()">${'★'.repeat(F.sl)} ${F.sl}-Star ×</span>`;if(F.st)ch+=`<span class="chip on" onclick="F.st='';renderC()">${esc(F.st)} ×</span>`;if(F.ci)ch+=`<span class="chip on" onclick="F.ci='';renderC()">${esc(F.ci)} ×</span>`;fc.innerHTML=ch}else fc.classList.add('hid');
+  // Selection bar with delete
   const sb=document.getElementById('selBar');
-  if(list.length){sb.classList.remove('hid');const a=list.every(c=>sel.has(c.id));sb.innerHTML=`<span><strong>${list.length}</strong> contact${list.length!==1?'s':''}</span><button onclick="togAll()">${a?'Deselect All':'Select All'}</button>`}else sb.classList.add('hid');
-  if(!list.length){el.innerHTML=`<div style="text-align:center;padding:60px 0;color:var(--text3)">${C.length?'No matches.':'No contacts yet.'}</div>`;return}
-  el.innerHTML=list.map((c,i)=>`<div class="cd crow" onclick="oEdit('${c.id}')" style="animation:ci .3s ease ${i*.04}s both"><div class="cb ${sel.has(c.id)?'on':''}" onclick="event.stopPropagation();togS('${c.id}')">${sel.has(c.id)?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>':''}</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center"><div class="cn">${esc(c.name)||'Unknown'}</div><div class="stars" onclick="event.stopPropagation();cyS('${c.id}')">${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}">★</span>`).join('')}</div></div><div class="cs">${esc(c.title)}${c.company?' · '+esc(c.company):''}</div><div class="ca">${c.phone?`<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" class="ql">📞 Call</a>`:''}${c.email?`<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" class="ql">✉ Email</a>`:''}${(c.address||c.city)?`<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" onclick="event.stopPropagation()" class="ql">📍 Map</a>`:''}${c.website?`<a href="${mUrl(c.website)}" target="_blank" onclick="event.stopPropagation()" class="ql">🌐 Web</a>`:''}</div></div></div>`).join('')}
- 
+  if(sel.size>0){sb.innerHTML=`<div class="sel-bar"><span style="font-size:13px;color:var(--text2);font-weight:600">${sel.size} selected</span><button class="btn bsm bs" onclick="togAll()">Select All</button><button class="btn bsm bd" onclick="confirmAction('Delete ${sel.size} selected contact(s)?',delSel)">🗑 Delete</button><button class="btn bsm bs" onclick="sel.clear();renderC()">Cancel</button></div>`}else if(list.length){sb.innerHTML=`<div class="slb"><span><strong>${list.length}</strong> contact${list.length!==1?'s':''}</span><button onclick="togAll()">Select All</button></div>`}else sb.innerHTML='';
+  if(!list.length){el.innerHTML=`<div style="text-align:center;padding:60px 0;color:var(--text3)">${C.length?'No matches.':'<div style="font-size:48px;margin-bottom:16px">📇</div>No contacts yet.<br><span style="font-size:13px">Tap Scan to get started</span>'}</div>`;return}
+  el.innerHTML=list.map((c,i)=>`<div class="cd crow" onclick="oEdit('${c.id}')" style="animation:ci .3s ease ${i*.04}s both"><div class="cb ${sel.has(c.id)?'on':''}" onclick="event.stopPropagation();togS('${c.id}')">${sel.has(c.id)?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>':''}</div>${c.cardImage?`<img src="${c.cardImage}" class="card-img-thumb" onclick="event.stopPropagation();viewImg('${c.id}')">`:''}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center"><div class="cn">${esc(c.name)||'Unknown'}</div><div class="stars" onclick="event.stopPropagation();cyS('${c.id}')">${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}">★</span>`).join('')}</div></div><div class="cs">${esc(c.title)}${c.company?' · '+esc(c.company):''}</div><div class="ca">${c.phone?`<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" class="ql">📞 Call</a>`:''}${c.email?`<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" class="ql">✉ Email</a>`:''}${(c.address||c.city)?`<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" onclick="event.stopPropagation()" class="ql">📍 Map</a>`:''}${c.website?`<a href="${mUrl(c.website)}" target="_blank" onclick="event.stopPropagation()" class="ql">🌐 Web</a>`:''}</div></div></div>`).join('')}
+
+function viewImg(id){const c=C.find(x=>x.id===id);if(!c||!c.cardImage)return;document.getElementById('MR').innerHTML=`<div class="mbg" onclick="cM()"><div style="padding:20px;display:flex;align-items:center;justify-content:center;height:100%" onclick="event.stopPropagation()"><img src="${c.cardImage}" style="max-width:100%;max-height:80vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5)" onclick="cM()"></div></div>`}
 function mUrl(u){return u&&!u.match(/^https?:\/\//)?'https://'+u:u}
 function togS(id){sel.has(id)?sel.delete(id):sel.add(id);renderC();uBulk()}
 function togAll(){const l=getF(),a=l.every(c=>sel.has(c.id));l.forEach(c=>a?sel.delete(c.id):sel.add(c.id));renderC();uBulk()}
 function cyS(id){C=C.map(c=>c.id===id?{...c,stars:c.stars>=3?0:c.stars+1}:c);sv();renderC()}
- 
+
+// ─── Edit Contact Modal ──────────────────────────
 function oEdit(id){const c=C.find(x=>x.id===id);if(!c)return;
   const flds=[['name','Name'],['title','Job Title'],['company','Company'],['email','Email'],['phone','Phone'],['phone2','Phone 2'],['website','Website / Social'],['address','Address'],['city','City'],['state','State'],['country','Country'],['notes','Extracted Notes']];
   let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:20px;font-weight:800">${esc(c.name)||'Edit Contact'}</div><button style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px 8px" onclick="cM()">✕</button></div>`;
+  // Card image
+  if(c.cardImage)h+=`<img src="${c.cardImage}" class="card-img-full" alt="Card" style="cursor:pointer" onclick="viewImg('${id}')">`;
   // Action pills
   h+=`<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">`;
   if(c.phone)h+=`<a href="tel:${esc(c.phone)}" class="ap">📞 Call</a>`;
@@ -228,26 +319,27 @@ function oEdit(id){const c=C.find(x=>x.id===id);if(!c)return;
   h+=`<div class="st">Contact Details</div>`;
   flds.forEach(([k,l])=>{h+=`<div class="er"><label class="lbl">${l}</label><input class="inp" id="e_${k}" value="${esc(c[k]||'')}"></div>`});
   if(c.backNotes)h+=`<div class="st">Back Side</div><div class="inp" style="background:var(--bg3);white-space:pre-wrap;font-size:13px;margin-bottom:14px">${esc(c.backNotes)}</div>`;
-  h+=`<div style="display:flex;gap:8px;margin-top:20px"><button class="btn bp" style="flex:2" onclick="sEdit('${id}')">✓ Save</button><button class="btn bs" style="flex:1" onclick="pB='${id}';cM();sw('scan');startScan()">↻ Back</button><button class="btn bd" style="flex:1" onclick="delC('${id}')">🗑</button></div></div></div>`;
+  h+=`<div style="display:flex;gap:8px;margin-top:20px"><button class="btn bp" style="flex:2" onclick="sEdit('${id}')">✓ Save</button><button class="btn bs" style="flex:1" onclick="pB='${id}';cM();sw('scan');startScan()">↻ Back</button><button class="btn bd" style="flex:1" onclick="cM();confirmAction('Delete this contact?',function(){delC('${id}')})">🗑</button></div></div></div>`;
   document.getElementById('MR').innerHTML=h}
- 
+
 function exSoc(t){const s=[];if(!t)return s;const l=t.toLowerCase();
   if(l.includes('linkedin')){const m=t.match(/(https?:\/\/)?(www\.)?linkedin\.com\/\S+/i);s.push({ic:'💼',lb:'LinkedIn',url:m?mUrl(m[0]):'https://linkedin.com'})}
   if(l.includes('twitter')||l.includes('x.com')){const m=t.match(/(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/\S+/i);s.push({ic:'𝕏',lb:'Twitter/X',url:m?mUrl(m[0]):'https://x.com'})}
   if(l.includes('instagram')){const m=t.match(/(https?:\/\/)?(www\.)?instagram\.com\/\S+/i);s.push({ic:'📸',lb:'Instagram',url:m?mUrl(m[0]):'https://instagram.com'})}
   if(l.includes('facebook')){const m=t.match(/(https?:\/\/)?(www\.)?facebook\.com\/\S+/i);s.push({ic:'📘',lb:'Facebook',url:m?mUrl(m[0]):'https://facebook.com'})}
   return s}
- 
+
 function sPhone(id){const c=C.find(x=>x.id===id);if(!c)return;
   const vc=`BEGIN:VCARD\nVERSION:3.0\nFN:${c.name}\nORG:${c.company}\nTITLE:${c.title}\nTEL;TYPE=CELL:${c.phone}\n${c.phone2?'TEL;TYPE=WORK:'+c.phone2+'\n':''}EMAIL:${c.email}\nADR;TYPE=WORK:;;${c.address};${c.city};${c.state};;${c.country}\nURL:${c.website}\nNOTE:${c.userNotes||c.notes}\nEND:VCARD`;
-  const bl=new Blob([vc],{type:'text/vcard'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`${(c.name||'contact').replace(/\s+/g,'_')}.vcf`;a.click();toast('Open the .vcf file to save contact!')}
- 
+  const bl=new Blob([vc],{type:'text/vcard'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`${(c.name||'contact').replace(/\s+/g,'_')}.vcf`;a.click();toast('Open the .vcf file to save!')}
+
 function sEdit(id){const flds=['name','title','company','email','phone','phone2','website','address','city','state','country','notes'];
   C=C.map(c=>{if(c.id!==id)return c;const u={...c,userNotes:document.getElementById('e_un')?.value||''};flds.forEach(f=>{u[f]=document.getElementById('e_'+f)?.value||''});return u});sv();cM();renderC();toast('Saved!')}
 function eStar(id,n){C=C.map(c=>c.id===id?{...c,stars:c.stars===n?0:n}:c);sv();oEdit(id)}
 function delC(id){C=C.filter(c=>c.id!==id);sel.delete(id);sv();cM();renderC();toast('Deleted')}
 function cM(){document.getElementById('MR').innerHTML=''}
- 
+
+// ─── Filters ─────────────────────────────────────
 function showFilt(){const sts=[...new Set(C.map(c=>c.state).filter(Boolean))].sort(),cis=[...new Set(C.map(c=>c.city).filter(Boolean))].sort();
   let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
     <div style="font-size:20px;font-weight:800;margin-bottom:20px">Filters</div>
@@ -260,10 +352,53 @@ function showFilt(){const sts=[...new Set(C.map(c=>c.state).filter(Boolean))].so
     <div style="display:flex;gap:10px;margin-top:20px"><button class="btn bs" style="flex:1" onclick="F={sl:0,st:'',ci:'',q:''};document.getElementById('sInp').value='';cM();renderC()">Clear All</button><button class="btn bp" style="flex:1" onclick="apF()">Apply Filters</button></div></div></div>`;
   document.getElementById('MR').innerHTML=h}
 function apF(){F.sl=parseInt(document.getElementById('fs').value)||0;F.st=document.getElementById('fst').value;F.ci=document.getElementById('fci').value;cM();renderC()}
- 
-function uBulk(){document.getElementById('bInfo').textContent=sel.size?`${sel.size} contact${sel.size!==1?'s':''} selected`:'Select contacts in Contacts tab, or actions apply to all.';document.getElementById('bDel').classList.toggle('hid',!sel.size);document.getElementById('bDel').innerHTML=`🗑 Delete Selected (${sel.size})`}
+
+// ─── Duplicate Detection ─────────────────────────
+function findDups(){
+  const dups=[];const seen={};
+  C.forEach(c=>{
+    const keys=[];
+    if(c.email)keys.push('e:'+c.email.toLowerCase().trim());
+    if(c.phone)keys.push('p:'+c.phone.replace(/\D/g,'').slice(-10));
+    if(c.name&&c.company)keys.push('n:'+c.name.toLowerCase().trim()+'@'+c.company.toLowerCase().trim());
+    keys.forEach(k=>{if(seen[k]&&seen[k]!==c.id){const pair=[seen[k],c.id].sort().join('-');if(!dups.find(d=>d.pair===pair))dups.push({pair,ids:[seen[k],c.id],key:k})}else seen[k]=c.id})
+  });
+  return dups;
+}
+function checkDups(){
+  const dups=findDups(),el=document.getElementById('dupBanner');
+  if(dups.length){el.innerHTML=`<div class="dup-banner" onclick="showDups()"><span style="font-size:20px">⚠️</span><div><div style="font-weight:700;font-size:14px">${dups.length} possible duplicate${dups.length>1?'s':''}</div><div style="font-size:12px;color:var(--text3)">Tap to review and merge</div></div></div>`}
+  else el.innerHTML='';
+}
+function showDups(){
+  const dups=findDups();
+  if(!dups.length){toast('No duplicates found!');return}
+  let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:6px">Duplicate Contacts</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:20px">${dups.length} possible duplicate${dups.length>1?'s':''} found</div>`;
+  dups.forEach((d,i)=>{
+    const c1=C.find(c=>c.id===d.ids[0]),c2=C.find(c=>c.id===d.ids[1]);
+    if(!c1||!c2)return;
+    h+=`<div class="cd" style="animation:ci .3s ease ${i*.06}s both">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Match: ${d.key.startsWith('e:')?'Same email':d.key.startsWith('p:')?'Same phone':'Same name & company'}</div>
+      <div style="display:flex;gap:12px;margin-bottom:12px">
+        <div style="flex:1;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-weight:700;font-size:13px">${esc(c1.name)}</div><div style="font-size:11px;color:var(--text3)">${esc(c1.company)}</div><div style="font-size:11px;color:var(--text3)">${esc(c1.email)}</div></div>
+        <div style="flex:1;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-weight:700;font-size:13px">${esc(c2.name)}</div><div style="font-size:11px;color:var(--text3)">${esc(c2.company)}</div><div style="font-size:11px;color:var(--text3)">${esc(c2.email)}</div></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn bsm bd" style="flex:1" onclick="confirmAction('Delete ${esc(c2.name)}?',function(){delC('${c2.id}');cM();showDups()})">Delete #2</button>
+        <button class="btn bsm bd" style="flex:1" onclick="confirmAction('Delete ${esc(c1.name)}?',function(){delC('${c1.id}');cM();showDups()})">Delete #1</button>
+        <button class="btn bsm bs" style="flex:1" onclick="cM()">Keep Both</button>
+      </div></div>`;
+  });
+  h+=`</div></div>`;
+  document.getElementById('MR').innerHTML=h;
+}
+
+// ─── Bulk Actions ────────────────────────────────
+function uBulk(){document.getElementById('bInfo').textContent=sel.size?`${sel.size} contact${sel.size!==1?'s':''} selected`:'Select contacts in Contacts tab, or actions apply to all.'}
 function delSel(){C=C.filter(c=>!sel.has(c.id));sel.clear();sv();renderC();uBulk();toast('Deleted!')}
- 
+
 function openBulk(type){const cnt=sel.size||C.length;
   let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
     <div style="font-size:20px;font-weight:800;margin-bottom:6px">Bulk ${type==='email'?'Email (BCC)':'SMS'}</div>
@@ -272,24 +407,26 @@ function openBulk(type){const cnt=sel.size||C.length;
   h+=`<div class="er"><label class="lbl">Message</label><textarea class="inp" id="bBody" style="height:120px" placeholder="Hi! It was a pleasure meeting you..."></textarea></div>
     <button class="btn bp bf" onclick="sendB('${type}')">✈ Send ${type==='email'?'Email':'SMS'}</button></div></div>`;
   document.getElementById('MR').innerHTML=h}
- 
+
 function sendB(type){const list=sel.size?C.filter(c=>sel.has(c.id)):C,body=document.getElementById('bBody')?.value||'';
-  if(type==='email'){const em=list.map(c=>c.email).filter(Boolean).join(',');if(!em){toast('No emails');return}const subj=document.getElementById('bSubj')?.value||'',from=document.getElementById('bFrom')?.value||'';if(from)localStorage.setItem('cs_fe',from);window.location.href=`mailto:${from}?bcc=${encodeURIComponent(em)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;toast('Opening email with BCC...')}
+  if(type==='email'){const em=list.map(c=>c.email).filter(Boolean).join(',');if(!em){toast('No emails');return}const subj=document.getElementById('bSubj')?.value||'',from=document.getElementById('bFrom')?.value||'';if(from)localStorage.setItem('cs_fe',from);window.location.href=`mailto:${from}?bcc=${encodeURIComponent(em)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;toast('Opening email...')}
   else{const ph=list.map(c=>c.phone).filter(Boolean).join(',');if(!ph){toast('No phones');return}window.open(`sms:${ph}?body=${encodeURIComponent(body)}`);toast('Opening SMS...')}cM()}
- 
+
 function expCSV(){const list=sel.size?C.filter(c=>sel.has(c.id)):C;if(!list.length){toast('No contacts');return}
   const h=['Name','Title','Company','Email','Phone','Phone2','Website','Address','City','State','Country','Stars','Notes','Your Notes','Back Notes','Scanned'];
   const rows=list.map(c=>[c.name,c.title,c.company,c.email,c.phone,c.phone2,c.website,c.address,c.city,c.state,c.country,c.stars,c.notes,c.userNotes,c.backNotes,c.scannedAt].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
   const bl=new Blob([h.join(',')+'\n'+rows.join('\n')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`cards_${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('CSV downloaded!')}
- 
+
 async function expSheets(){const list=sel.size?C.filter(c=>sel.has(c.id)):C,nw=list.filter(c=>!c.sentToSheets);if(!nw.length){toast('All already in Sheets!');return}toast(`Sending ${nw.length} new...`);
-  try{await fetch('https://script.google.com/macros/s/AKfycbyfAnj2mpcfyPvuQbaw37-pjAmGuacPccixFAyolmbQUXQFms3N4v9IarC7QjiFNF-Fwg/exec',{method:'POST',body:JSON.stringify(nw),mode:'no-cors'});const ids=new Set(nw.map(c=>c.id));C=C.map(c=>ids.has(c.id)?{...c,sentToSheets:true}:c);sv();toast(`${nw.length} sent to Sheets!`)}catch(e){toast('Failed: '+e.message)}}
- 
-function backup(){if(!C.length){toast('No contacts');return}const bl=new Blob([JSON.stringify({contacts:C,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`cardscan_backup_${new Date().toISOString().split('T')[0]}.json`;a.click();toast(`Backed up ${C.length} contacts!`)}
-function restore(e){const f=e.target.files?.[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result),r=d.contacts||d;if(!Array.isArray(r))throw 0;const ex=new Set(C.map(c=>c.id)),nw=r.filter(c=>!ex.has(c.id));C.push(...nw);sv();renderC();toast(`Restored ${nw.length} new, ${r.length-nw.length} existed`)}catch{toast('Invalid file')}};fr.readAsText(f);e.target.value=''}
-function clearAll(){if(!confirm('Delete all contacts?'))return;C=[];sel.clear();sv();renderC();uBulk();toast('All cleared')}
+  try{const stripped=nw.map(({cardImage,...rest})=>rest);await fetch('https://script.google.com/macros/s/AKfycbyfAnj2mpcfyPvuQbaw37-pjAmGuacPccixFAyolmbQUXQFms3N4v9IarC7QjiFNF-Fwg/exec',{method:'POST',body:JSON.stringify(stripped),mode:'no-cors'});const ids=new Set(nw.map(c=>c.id));C=C.map(c=>ids.has(c.id)?{...c,sentToSheets:true}:c);sv();toast(`${nw.length} sent to Sheets!`)}catch(e){toast('Failed: '+e.message)}}
+
+// ─── Backup / Restore / Clear ────────────────────
+function backup(){if(!C.length){toast('No contacts');return}
+  const stripped=C.map(({cardImage,...rest})=>rest);// Don't include images in backup (too large)
+  const bl=new Blob([JSON.stringify({contacts:stripped,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`cardscan_backup_${new Date().toISOString().split('T')[0]}.json`;a.click();toast(`Backed up ${C.length} contacts!`)}
+function restore(e){const f=e.target.files?.[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result),r=d.contacts||d;if(!Array.isArray(r))throw 0;const ex=new Set(C.map(c=>c.id)),nw=r.filter(c=>!ex.has(c.id));C.push(...nw);sv();renderC();checkDups();toast(`Restored ${nw.length} new, ${r.length-nw.length} skipped (existed)`)}catch{toast('Invalid file')}};fr.readAsText(f);e.target.value=''}
+function clearAll(){C=[];sel.clear();sv();renderC();checkDups();toast('All cleared')}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 </script>
 </body>
 </html>
- 

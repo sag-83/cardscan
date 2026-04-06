@@ -15,116 +15,72 @@
   input,textarea,select,button{font-family:inherit}
   input:focus,textarea:focus,select:focus{border-color:#6ee7b7!important;outline:none}
   ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
-
   .app{max-width:480px;margin:0 auto;position:relative;min-height:100vh;padding-bottom:70px}
-
-  /* Header */
   .header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:linear-gradient(135deg,#141419,#0c0c0f);border-bottom:1px solid #1e1e28;position:sticky;top:0;z-index:50}
   .logo{font-size:20px;font-weight:700;background:linear-gradient(90deg,#6ee7b7,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
   .badge{background:#6ee7b7;color:#0c0c0f;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:700}
-
-  /* Nav */
   .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:#111117;border-top:1px solid #1e1e28;z-index:50}
   .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0;border:none;background:none;color:#555;font-size:10px;font-weight:600;cursor:pointer}
   .nav-btn.active{color:#6ee7b7}
   .nav-btn svg{width:20px;height:20px}
-
-  /* Screens */
   .screen{display:none;padding:0 16px}.screen.active{display:block}
-
-  /* Cards */
   .card{background:#16161d;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid #23232f;transition:all .15s}
   .card:active{transform:scale(.98);background:#1a1a24}
-
-  /* Buttons */
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all .15s}
   .btn:active{transform:scale(.97)}
   .btn-p{background:linear-gradient(135deg,#6ee7b7,#3b82f6);color:#0c0c0f}
   .btn-s{background:#23232f;color:#e8e8ed}
   .btn-d{background:#dc2626;color:#fff}
   .btn-full{width:100%}
-
-  /* Inputs */
   .inp{width:100%;padding:12px 14px;background:#1e1e28;border:1px solid #2d2d3a;border-radius:10px;color:#e8e8ed;font-size:14px}
   .lbl{font-size:12px;color:#888;margin-bottom:4px;display:block;font-weight:500}
   select.inp{appearance:auto}
   textarea.inp{resize:none}
-
-  /* Chips */
   .chip{padding:6px 14px;border-radius:99px;border:1px solid #2d2d3a;background:#1a1a24;color:#999;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-block}
   .chip.on{border-color:#6ee7b7;background:#6ee7b720;color:#6ee7b7}
-
-  /* Modal */
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:flex-end;justify-content:center}
   .modal{background:#16161d;border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:85vh;overflow:auto;padding:24px 20px 40px;animation:slideUp .3s ease}
-
-  /* Quick actions */
   .qlink{color:#3b82f6;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
-
-  /* Contact row */
   .crow{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
   .cbox{width:22px;height:22px;border-radius:6px;border:2px solid #333;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
   .cbox.on{border-color:#6ee7b7;background:#6ee7b720}
   .cname{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .csub{font-size:12px;color:#6ee7b7}
   .cactions{display:flex;gap:12px;margin-top:8px}
-
-  /* Stars */
   .stars{display:flex;gap:2px;cursor:pointer}
   .star{font-size:14px;color:#555}.star.on{color:#facc15}
-
-  /* Loading */
   .dots{display:flex;gap:8px;justify-content:center}
   .dot{width:10px;height:10px;border-radius:99px;background:#6ee7b7;animation:pulse 1.2s ease infinite}
   .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
-
-  /* Toast */
   .toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#6ee7b7;color:#0c0c0f;padding:10px 24px;border-radius:12px;font-weight:600;font-size:14px;z-index:200;animation:slideUp .3s ease;pointer-events:none}
-
-  /* Scan hero */
   .scan-icon{width:120px;height:120px;margin:0 auto 24px;border-radius:30px;background:linear-gradient(135deg,#6ee7b720,#3b82f620);display:flex;align-items:center;justify-content:center;border:2px dashed #6ee7b750}
   .scan-icon svg{width:48px;height:48px;stroke:#6ee7b7}
-
-  /* Stat box */
   .statbox{margin-top:32px;padding:16px;background:#16161d;border-radius:12px;border:1px solid #23232f;text-align:center}
   .statnum{font-size:28px;font-weight:700;color:#6ee7b7}
-
-  /* Filter bar */
   .fbar{display:flex;gap:8px;padding:16px 0 8px;position:sticky;top:57px;background:#0c0c0f;z-index:10}
   .fbar input{flex:1;padding-left:38px}
   .fbar .search-icon{position:absolute;left:12px;top:12px}
   .fchips{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 8px}
   .sel-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;color:#888}
   .sel-bar button{background:none;border:none;color:#6ee7b7;font-size:13px;font-weight:600;cursor:pointer}
-
-  /* Grid btns */
   .grid-btns{display:grid;gap:12px}
   .grid-btns .btn{padding:16px}
-
-  /* Edit rows */
   .erow{margin-bottom:12px}
-
   .hidden{display:none!important}
-
   @keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
   @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 </style>
 </head>
 <body>
 <div class="app" id="app">
-  <!-- Header -->
   <div class="header">
     <div class="logo">CardScan AI</div>
     <div id="headerBadge"></div>
   </div>
-
-  <!-- Toast -->
   <div class="toast hidden" id="toast"></div>
-
-  <!-- File input -->
   <input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none">
 
-  <!-- ═══ SCAN SCREEN ═══ -->
+  <!-- SCAN SCREEN -->
   <div class="screen active" id="screenScan" style="padding-top:24px">
     <div id="scanDefault" style="text-align:center;padding-top:40px">
       <div class="scan-icon">
@@ -136,9 +92,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         Scan Front Side
       </button>
-      <button class="btn btn-s btn-full hidden" id="btnBackScan" style="margin-top:12px;padding:14px" onclick="startBackScan()">
-        ↻ Scan Back Side (Last Card)
-      </button>
+      <button class="btn btn-s btn-full hidden" id="btnBackScan" style="margin-top:12px;padding:14px" onclick="startBackScan()">↻ Scan Back Side (Last Card)</button>
       <div class="statbox hidden" id="statBox">
         <div style="font-size:13px;color:#888">Total cards scanned</div>
         <div class="statnum" id="statNum">0</div>
@@ -152,7 +106,7 @@
     <div id="scanPreview" class="hidden"></div>
   </div>
 
-  <!-- ═══ CONTACTS SCREEN ═══ -->
+  <!-- CONTACTS SCREEN -->
   <div class="screen" id="screenContacts">
     <div class="fbar">
       <div style="flex:1;position:relative">
@@ -169,7 +123,7 @@
     <div id="contactList"></div>
   </div>
 
-  <!-- ═══ BULK SCREEN ═══ -->
+  <!-- BULK SCREEN -->
   <div class="screen" id="screenBulk" style="padding-top:20px">
     <div style="font-size:18px;font-weight:700;margin-bottom:4px">Bulk Actions</div>
     <div style="font-size:13px;color:#888;margin-bottom:20px" id="bulkInfo">Select contacts in Contacts tab, or actions apply to all.</div>
@@ -182,7 +136,7 @@
     <button class="btn btn-d btn-full hidden" id="btnDeleteSel" style="margin-top:20px;padding:14px" onclick="deleteSelected()">🗑 Delete Selected</button>
   </div>
 
-  <!-- ═══ SETTINGS SCREEN ═══ -->
+  <!-- SETTINGS SCREEN -->
   <div class="screen" id="screenSettings" style="padding-top:20px">
     <div style="font-size:18px;font-weight:700;margin-bottom:20px">Settings</div>
     <div class="card">
@@ -197,32 +151,25 @@
     </div>
   </div>
 
-  <!-- ═══ BOTTOM NAV ═══ -->
+  <!-- BOTTOM NAV -->
   <div class="nav">
     <button class="nav-btn active" data-tab="scan" onclick="switchTab('scan')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      Scan
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>Scan
     </button>
     <button class="nav-btn" data-tab="contacts" onclick="switchTab('contacts')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-      Contacts
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Contacts
     </button>
     <button class="nav-btn" data-tab="bulk" onclick="switchTab('bulk')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-      Bulk
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Bulk
     </button>
     <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-      Settings
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings
     </button>
   </div>
 </div>
-
-<!-- ═══ MODALS (injected dynamically) ═══ -->
 <div id="modalRoot"></div>
 
 <script>
-// ─── STATE ───
 let contacts = JSON.parse(localStorage.getItem('cs_contacts') || '[]');
 let selected = new Set();
 let apiKey = localStorage.getItem('cs_apikey') || '';
@@ -231,11 +178,9 @@ let filters = { star: false, state: '', city: '', search: '' };
 
 const PROMPT = `You are a business card data extractor. Analyze this image containing one or more business cards. For EACH business card visible, extract: name, title, company, email, phone, phone2, website, address, city, state, country, notes. Return ONLY valid JSON array like: [{"name":"John","title":"CEO","company":"Acme","email":"j@a.com","phone":"+1234","phone2":"","website":"","address":"","city":"","state":"","country":"","notes":""}]. If a field is not found, use empty string.`;
 
-// ─── INIT ───
 document.getElementById('apiKeyInput').value = apiKey;
 updateUI();
 
-// ─── PERSIST ───
 function save() {
   localStorage.setItem('cs_contacts', JSON.stringify(contacts));
   updateUI();
@@ -244,16 +189,12 @@ function saveApiKey() {
   apiKey = document.getElementById('apiKeyInput').value;
   localStorage.setItem('cs_apikey', apiKey);
 }
-
-// ─── TOAST ───
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 2500);
 }
-
-// ─── NAV ───
 function switchTab(tab) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
@@ -261,23 +202,17 @@ function switchTab(tab) {
   if (tab === 'contacts') renderContacts();
   if (tab === 'bulk') updateBulkUI();
 }
-
-// ─── UPDATE UI ───
 function updateUI() {
-  // Header badge
   document.getElementById('headerBadge').innerHTML = contacts.length ? `<span class="badge">${contacts.length}</span>` : '';
-  // Scan screen
   const bb = document.getElementById('btnBackScan');
   const sb = document.getElementById('statBox');
   if (contacts.length) { bb.classList.remove('hidden'); sb.classList.remove('hidden'); } else { bb.classList.add('hidden'); sb.classList.add('hidden'); }
   document.getElementById('statNum').textContent = contacts.length;
-  // Settings
   const dc = document.getElementById('dataCard');
   if (contacts.length) { dc.classList.remove('hidden'); document.getElementById('dataInfo').textContent = contacts.length + ' contacts stored on this device.'; }
   else dc.classList.add('hidden');
 }
 
-// ─── GEMINI API ───
 async function callGemini(base64, mime) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
@@ -296,7 +231,6 @@ async function callGemini(base64, mime) {
   return JSON.parse(m[0]);
 }
 
-// ─── SCAN ───
 function startScan(side) {
   if (!apiKey) { toast('Set your Gemini API key in Settings first'); switchTab('settings'); return; }
   document.getElementById('fileInput').onclick = null;
@@ -312,18 +246,14 @@ document.getElementById('fileInput').addEventListener('change', async function(e
   const file = e.target.files?.[0];
   if (!file) return;
   if (!apiKey) { toast('Set API key first'); return; }
-
-  // Show loading
   document.getElementById('scanDefault').classList.add('hidden');
   document.getElementById('scanPreview').classList.add('hidden');
   const ld = document.getElementById('scanLoading');
   ld.classList.remove('hidden');
   ld.style.display = 'flex';
-
   try {
     const base64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(file); });
     const results = await callGemini(base64, file.type);
-
     if (pendingBack) {
       const backText = results.map(r => Object.entries(r).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(', ')).join(' | ');
       contacts = contacts.map(c => c.id === pendingBack ? { ...c, backNotes: backText } : c);
@@ -356,7 +286,6 @@ function showPreview(cards) {
   document.getElementById('scanLoading').style.display = 'none';
   const el = document.getElementById('scanPreview');
   el.classList.remove('hidden');
-
   let html = `<div style="font-size:18px;font-weight:700;margin-bottom:16px">Found ${cards.length} card${cards.length>1?'s':''} ✨</div>`;
   cards.forEach(c => {
     html += `<div class="card">
@@ -371,7 +300,6 @@ function showPreview(cards) {
     <button class="btn btn-s" style="flex:1" onclick="cancelPreview()">Rescan</button>
     <button class="btn btn-p" style="flex:2" onclick="acceptPreview()">✓ Add All</button>
   </div>`;
-
   el.innerHTML = html;
   window._previewCards = cards;
 }
@@ -388,7 +316,6 @@ function cancelPreview() {
   document.getElementById('scanDefault').classList.remove('hidden');
 }
 
-// ─── CONTACTS ───
 function getFiltered() {
   const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
   return contacts.filter(c => {
@@ -404,11 +331,7 @@ function renderContacts() {
   const list = getFiltered();
   const el = document.getElementById('contactList');
   const hasFilters = filters.star || filters.state || filters.city;
-
-  // Filter dot
   document.getElementById('filterDot').classList.toggle('hidden', !hasFilters);
-
-  // Filter chips
   const fc = document.getElementById('filterChips');
   if (hasFilters) {
     fc.classList.remove('hidden');
@@ -418,20 +341,16 @@ function renderContacts() {
     if (filters.city) ch += `<span class="chip on" onclick="filters.city='';renderContacts()">${esc(filters.city)} ×</span>`;
     fc.innerHTML = ch;
   } else fc.classList.add('hidden');
-
-  // Select bar
   const sb = document.getElementById('selBar');
   if (list.length) {
     sb.classList.remove('hidden');
     const allSel = list.length > 0 && list.every(c => selected.has(c.id));
     sb.innerHTML = `<span>${list.length} contact${list.length!==1?'s':''}</span><button onclick="toggleSelectAll()">${allSel?'Deselect All':'Select All'}</button>`;
   } else sb.classList.add('hidden');
-
   if (!list.length) {
     el.innerHTML = `<div style="text-align:center;padding:60px 0;color:#555">${contacts.length?'No contacts match filters.':'No contacts yet. Scan some cards!'}</div>`;
     return;
   }
-
   el.innerHTML = list.map(c => `
     <div class="card crow" onclick="openEdit('${c.id}')">
       <div class="cbox ${selected.has(c.id)?'on':''}" onclick="event.stopPropagation();toggleSel('${c.id}')">
@@ -467,44 +386,34 @@ function cycleStar(id) {
   save(); renderContacts();
 }
 
-// ─── EDIT MODAL ───
 function openEdit(id) {
   const c = contacts.find(x => x.id === id);
   if (!c) return;
   const fields = [['name','Name'],['title','Title'],['company','Company'],['email','Email'],['phone','Phone'],['phone2','Phone 2'],['website','Website'],['address','Address'],['city','City'],['state','State'],['country','Country'],['notes','Notes']];
-
   let html = `<div class="modal-bg" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <div style="font-size:18px;font-weight:700">Edit Contact</div>
       <button style="background:none;border:none;color:#888;font-size:24px;cursor:pointer" onclick="closeModal()">×</button>
     </div>`;
-
   fields.forEach(([k,l]) => {
     html += `<div class="erow"><label class="lbl">${l}</label><input class="inp" id="edit_${k}" value="${esc(c[k]||'')}"></div>`;
   });
-
   if (c.backNotes) {
     html += `<div class="erow"><label class="lbl">Back Side Notes</label><div class="inp" style="background:#1a1a24;white-space:pre-wrap;font-size:13px">${esc(c.backNotes)}</div></div>`;
   }
-
-  // Stars
   html += `<div class="erow"><label class="lbl">Priority</label><div class="stars" style="gap:6px;margin-top:4px" id="editStars">
     ${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}" style="font-size:28px;cursor:pointer" onclick="setEditStar('${id}',${n})">\u2605</span>`).join('')}
   </div></div>`;
-
-  // Action buttons
   html += `<div style="display:flex;gap:8px;flex-wrap:wrap">`;
   if (c.phone) html += `<a href="tel:${esc(c.phone)}" class="btn btn-p" style="flex:1;text-decoration:none">📞 Call</a>`;
   if (c.email) html += `<a href="mailto:${esc(c.email)}" class="btn btn-p" style="flex:1;text-decoration:none">✉ Email</a>`;
   if (c.address||c.city) html += `<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" class="btn btn-s" style="flex:1;text-decoration:none">📍 Maps</a>`;
   html += `</div>`;
-
   html += `<div style="display:flex;gap:8px;margin-top:12px">
     <button class="btn btn-p" style="flex:1" onclick="saveEdit('${id}')">✓ Save</button>
     <button class="btn btn-s" style="flex:1" onclick="pendingBack='${id}';closeModal();switchTab('scan');startScan('back')">↻ Scan Back</button>
     <button class="btn btn-d" style="flex:1" onclick="deleteContact('${id}')">🗑 Delete</button>
   </div>`;
-
   html += `</div></div>`;
   document.getElementById('modalRoot').innerHTML = html;
 }
@@ -521,7 +430,7 @@ function saveEdit(id) {
 }
 function setEditStar(id, n) {
   contacts = contacts.map(c => c.id === id ? { ...c, stars: c.stars === n ? 0 : n } : c);
-  save(); openEdit(id); // re-render modal
+  save(); openEdit(id);
 }
 function deleteContact(id) {
   contacts = contacts.filter(c => c.id !== id);
@@ -530,11 +439,9 @@ function deleteContact(id) {
 }
 function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
 
-// ─── FILTER MODAL ───
 function showFilterModal() {
   const states = [...new Set(contacts.map(c=>c.state).filter(Boolean))].sort();
   const cities = [...new Set(contacts.map(c=>c.city).filter(Boolean))].sort();
-
   let html = `<div class="modal-bg" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">
     <div style="font-size:18px;font-weight:700;margin-bottom:20px">Filters</div>
     <div style="margin-bottom:20px"><label class="lbl">Priority</label>
@@ -561,7 +468,6 @@ function applyFilters() {
   closeModal(); renderContacts();
 }
 
-// ─── BULK ───
 function updateBulkUI() {
   document.getElementById('bulkInfo').textContent = selected.size ? `${selected.size} selected` : 'Select contacts in Contacts tab, or actions apply to all.';
   document.getElementById('btnDeleteSel').classList.toggle('hidden', !selected.size);
@@ -601,7 +507,6 @@ function sendBulk(type) {
   closeModal();
 }
 
-// ─── EXPORT ───
 function exportCSV() {
   const list = selected.size ? contacts.filter(c=>selected.has(c.id)) : contacts;
   if (!list.length) { toast('No contacts'); return; }
@@ -615,10 +520,17 @@ function exportCSV() {
 async function exportSheets() {
   const list = selected.size ? contacts.filter(c=>selected.has(c.id)) : contacts;
   if (!list.length) { toast('No contacts'); return; }
-  const h = ['Name','Title','Company','Email','Phone','City','State','Stars'];
-  const rows = list.map(c=>[c.name,c.title,c.company,c.email,c.phone,c.city,c.state,c.stars].join('\t'));
-  try { await navigator.clipboard.writeText(h.join('\t')+'\n'+rows.join('\n')); toast('Copied! Paste into Google Sheets'); } catch { toast('Opening Google Sheets...'); }
-  window.open('https://docs.google.com/spreadsheets/create','_blank');
+  toast('Sending to Google Sheets...');
+  try {
+    await fetch('https://script.google.com/macros/s/AKfycbyfAnj2mpcfyPvuQbaw37-pjAmGuacPccixFAyolmbQUXQFms3N4v9IarC7QjiFNF-Fwg/exec', {
+      method: 'POST',
+      body: JSON.stringify(list),
+      mode: 'no-cors'
+    });
+    toast('Sent to Google Sheets!');
+  } catch (err) {
+    toast('Failed: ' + err.message);
+  }
 }
 
 function clearAll() {
@@ -626,7 +538,6 @@ function clearAll() {
   contacts = []; selected.clear(); save(); renderContacts(); updateBulkUI(); toast('All cleared');
 }
 
-// ─── UTIL ───
 function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
 </script>
 </body>

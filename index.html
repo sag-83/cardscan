@@ -5,291 +5,696 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#08080c" id="metaTheme">
+<meta name="theme-color" content="#06060a">
 <title>CardScan AI</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#08080c;--bg2:#111118;--bg3:#1a1a24;--bg4:#23232f;--border:#2a2a38;--text:#f0f0f5;--text2:#a0a0b0;--text3:#666680;--accent:#34d399;--accent2:#3b82f6;--accentG:linear-gradient(135deg,#34d399,#3b82f6);--danger:#ef4444;--star:#fbbf24;--shadow:0 2px 12px rgba(0,0,0,.3);--modal-bg:rgba(0,0,0,.8);--r:14px;--rs:10px}
-[data-theme="light"]{--bg:#f4f4f7;--bg2:#ffffff;--bg3:#eeeef3;--bg4:#e0e0e8;--border:#d5d5de;--text:#1a1a2e;--text2:#555570;--text3:#888898;--shadow:0 2px 12px rgba(0,0,0,.06);--modal-bg:rgba(0,0,0,.35)}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-input,textarea,select,button{font-family:inherit;color:var(--text)}
-input:focus,textarea:focus,select:focus{border-color:var(--accent)!important;outline:none;box-shadow:0 0 0 3px rgba(52,211,153,.12)}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
-.app{max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:80px}
-.header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(20px)}
-.logo{font-size:21px;font-weight:800;background:var(--accentG);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.3px}
-.hdr-r{display:flex;align-items:center;gap:10px}
-.badge{background:var(--accent);color:#000;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:800}
-.tbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:16px}
-.tbtn:active{transform:scale(.88)}
-.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:var(--bg2);border-top:1px solid var(--border);z-index:50;padding:4px 0;backdrop-filter:blur(20px)}
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border:none;background:none;color:var(--text3);font-size:10px;font-weight:600;cursor:pointer;transition:all .2s;position:relative}
-.nb.on{color:var(--accent)}
-.nb.on::before{content:'';position:absolute;top:-4px;width:20px;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
-.nb svg{width:20px;height:20px}
-.scr{display:none;padding:0 16px}.scr.on{display:block;animation:fi .3s ease}
-.cd{background:var(--bg2);border-radius:var(--r);padding:16px;margin-bottom:10px;border:1px solid var(--border);transition:all .2s;box-shadow:var(--shadow)}
-.cd:active{transform:scale(.985)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:var(--rs);border:none;font-weight:700;font-size:14px;cursor:pointer;transition:all .2s;letter-spacing:-.1px}
-.btn:active{transform:scale(.96)}
-.bp{background:var(--accentG);color:#000;box-shadow:0 4px 16px rgba(52,211,153,.2)}
-.bs{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
-.bd{background:var(--danger);color:#fff}
-.bf{width:100%}
-.bsm{padding:8px 14px;font-size:13px;border-radius:8px}
-.inp{width:100%;padding:12px 14px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-size:14px;transition:all .2s}
-.lbl{font-size:11px;color:var(--text3);margin-bottom:5px;display:block;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
-select.inp{appearance:auto}
-textarea.inp{resize:none}
-.chip{padding:6px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text3);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;transition:all .2s}
-.chip.on{border-color:var(--accent);background:rgba(52,211,153,.1);color:var(--accent)}
-.chip:active{transform:scale(.95)}
-.mbg{position:fixed;inset:0;background:var(--modal-bg);z-index:100;display:flex;align-items:flex-end;justify-content:center;animation:fi .2s ease}
-.mdl{background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow:auto;padding:20px 20px 40px;animation:su .35s cubic-bezier(.16,1,.3,1)}
-.mh{width:36px;height:4px;border-radius:4px;background:var(--bg4);margin:0 auto 14px}
-.ql{color:var(--accent2);font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:600}
-.ql:active{opacity:.6}
-.crow{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
-.cb{width:22px;height:22px;border-radius:7px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:all .2s}
-.cb.on{border-color:var(--accent);background:rgba(52,211,153,.12)}
-.cn{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cs{font-size:12px;color:var(--accent);font-weight:600}
-.ca{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
-.stars{display:flex;gap:1px;cursor:pointer}
-.star{font-size:14px;color:var(--bg4);transition:all .15s}.star.on{color:var(--star)}
-.dots{display:flex;gap:8px;justify-content:center}
-.dot{width:12px;height:12px;border-radius:99px;background:var(--accent);animation:bn 1.4s ease infinite}
-.dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
-.toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--accent);color:#000;padding:10px 24px;border-radius:var(--rs);font-weight:700;font-size:14px;z-index:200;animation:ti .35s cubic-bezier(.16,1,.3,1) forwards;pointer-events:none;box-shadow:0 8px 24px rgba(52,211,153,.25)}
-.si{width:130px;height:130px;margin:0 auto 28px;border-radius:32px;background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(59,130,246,.08));display:flex;align-items:center;justify-content:center;border:2px dashed rgba(52,211,153,.3);animation:pg 3s ease infinite}
-.si svg{width:52px;height:52px;stroke:var(--accent)}
-.sb{margin-top:32px;padding:20px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);text-align:center;box-shadow:var(--shadow)}
-.sn{font-size:32px;font-weight:800;background:var(--accentG);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.fb{display:flex;gap:8px;padding:16px 0 8px;position:sticky;top:57px;background:var(--bg);z-index:10}
-.fb input{flex:1;padding-left:40px}
-.fb .si2{position:absolute;left:14px;top:14px}
-.fc{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 8px}
-.slb{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;color:var(--text3)}
-.slb button{background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer}
-.gb{display:grid;gap:10px}.gb .btn{padding:16px}
-.er{margin-bottom:14px}
-.ap{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:var(--rs);background:var(--bg3);border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:13px;font-weight:600;transition:all .2s;flex:1;justify-content:center;min-width:0}
-.ap:active{transform:scale(.95);background:var(--bg4)}
-.st{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin:18px 0 10px;padding:0 2px}
-.hid{display:none!important}
-@keyframes fi{from{opacity:0}to{opacity:1}}
-@keyframes su{from{transform:translateY(100%)}to{transform:translateY(0)}}
-@keyframes ti{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-@keyframes bn{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-12px)}}
-@keyframes pg{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}50%{box-shadow:0 0 30px 4px rgba(52,211,153,.08)}}
-@keyframes ci{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}html,body{font-family:'Outfit',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}#root{min-height:100vh}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 </head>
 <body>
-<div class="app">
-  <div class="header">
-    <div class="logo">CardScan AI</div>
-    <div class="hdr-r"><div id="hBadge"></div><button class="tbtn" onclick="toggleTheme()" id="tBtn">☀️</button></div>
-  </div>
-  <div class="toast hid" id="toast"></div>
-  <input type="file" accept="image/*" capture="environment" id="fInp" style="display:none">
- 
-  <div class="scr on" id="sScan" style="padding-top:24px">
-    <div id="sDef" style="text-align:center;padding-top:36px">
-      <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
-      <div style="font-size:24px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px">Scan Business Cards</div>
-      <div style="font-size:14px;color:var(--text2);margin-bottom:36px;line-height:1.6">Spread your cards out, snap a photo.<br>AI extracts all contacts instantly.</div>
-      <button class="btn bp bf" style="padding:16px;font-size:15px" onclick="startScan()">📸 Scan Front Side</button>
-      <button class="btn bs bf hid" id="bBack" style="margin-top:10px;padding:14px" onclick="startBackScan()">↻ Scan Back Side (Last Card)</button>
-      <div class="sb hid" id="sBox"><div style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Total Scanned</div><div class="sn" id="sNum">0</div></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+
+// ═══════════════════════════════════════════════════════════
+// CARDSCAN AI v3 — React + Supabase
+// ═══════════════════════════════════════════════════════════
+
+const SB_URL = "https://wtuytlgwyxfvybxwxfhz.supabase.co";
+const SB_KEY = "sb_publishable_cPzZiLbs1hF16ZX0J6ylVg_8_Fc0BOo";
+const SHEETS_URL = "https://script.google.com/macros/s/AKfycbyfAnj2mpcfyPvuQbaw37-pjAmGuacPccixFAyolmbQUXQFms3N4v9IarC7QjiFNF-Fwg/exec";
+
+const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
+
+const GEMINI_PROMPT = `You are a business card data extractor. For EACH card in the image extract these fields:
+- name (full name)
+- title (job title)
+- company (business/company name)
+- email
+- phone_mobile (mobile/cell number - if only one phone found, put it here)
+- phone_work (office/work number)
+- phone_fax (fax number)
+- website (website or primary social URL)
+- address (street address)
+- city
+- state
+- zip (zip/postal code)
+- country
+- notes (any other info: social media handles, LinkedIn URLs, etc)
+
+Return ONLY valid JSON array. Example:
+[{"name":"JOHN DOE","title":"CEO","company":"ACME INC","email":"john@acme.com","phone_mobile":"+12125551234","phone_work":"+12125555678","phone_fax":"","website":"acme.com","address":"123 MAIN ST","city":"NEW YORK","state":"NY","zip":"10001","country":"USA","notes":"LinkedIn: linkedin.com/in/johndoe"}]
+IMPORTANT: Return ALL text values in UPPERCASE. Empty string for missing fields.`;
+
+// ─── Supabase helpers ───
+const sb = {
+  async getAll() {
+    const r = await fetch(`${SB_URL}/rest/v1/contacts?order=created_at.desc`, { headers: { ...sbHeaders, Prefer: "return=representation" } });
+    return r.ok ? r.json() : [];
+  },
+  async upsert(contacts) {
+    const r = await fetch(`${SB_URL}/rest/v1/contacts`, {
+      method: "POST", headers: { ...sbHeaders, Prefer: "return=representation,resolution=merge-duplicates" },
+      body: JSON.stringify(contacts)
+    });
+    return r.ok;
+  },
+  async update(id, data) {
+    const r = await fetch(`${SB_URL}/rest/v1/contacts?id=eq.${id}`, {
+      method: "PATCH", headers: { ...sbHeaders, Prefer: "return=representation" },
+      body: JSON.stringify(data)
+    });
+    return r.ok;
+  },
+  async remove(id) {
+    return (await fetch(`${SB_URL}/rest/v1/contacts?id=eq.${id}`, { method: "DELETE", headers: sbHeaders })).ok;
+  },
+  async uploadPhoto(file, contactId, side) {
+    const ext = file.name?.split(".").pop() || "jpg";
+    const path = `${contactId}_${side}.${ext}`;
+    const r = await fetch(`${SB_URL}/storage/v1/object/card-photos/${path}`, {
+      method: "POST", headers: { ...sbHeaders, "Content-Type": file.type, "x-upsert": "true" },
+      body: file
+    });
+    return r.ok ? `${SB_URL}/storage/v1/object/public/card-photos/${path}` : null;
+  }
+};
+
+// ─── Utils ───
+const uid = () => Math.random().toString(36).slice(2, 10);
+const today = () => new Date().toISOString().split("T")[0];
+const up = (s) => (s || "").toString().toUpperCase().trim();
+const makeUrl = (u) => u && !u.match(/^https?:\/\//) ? "https://" + u : u;
+
+function extractSocials(text) {
+  if (!text) return [];
+  const s = [], t = text.toLowerCase();
+  if (t.includes("linkedin")) { const m = text.match(/(https?:\/\/)?(www\.)?linkedin\.com\/\S+/i); s.push({ icon: "💼", label: "LinkedIn", url: m ? makeUrl(m[0]) : "https://linkedin.com" }); }
+  if (t.includes("twitter") || t.includes("x.com")) { const m = text.match(/(https?:\/\/)?(www\.)?(twitter|x)\.com\/\S+/i); s.push({ icon: "𝕏", label: "X", url: m ? makeUrl(m[0]) : "https://x.com" }); }
+  if (t.includes("instagram")) { const m = text.match(/(https?:\/\/)?(www\.)?instagram\.com\/\S+/i); s.push({ icon: "📸", label: "Instagram", url: m ? makeUrl(m[0]) : "https://instagram.com" }); }
+  if (t.includes("facebook")) { const m = text.match(/(https?:\/\/)?(www\.)?facebook\.com\/\S+/i); s.push({ icon: "📘", label: "Facebook", url: m ? makeUrl(m[0]) : "https://facebook.com" }); }
+  return s;
+}
+
+function makeVCard(c) {
+  return `BEGIN:VCARD\nVERSION:3.0\nFN:${c.name}\nN:${(c.name || "").split(" ").reverse().join(";")}\nORG:${c.company}\nTITLE:${c.title}\n${c.phone_mobile ? "TEL;TYPE=CELL:" + c.phone_mobile + "\n" : ""}${c.phone_work ? "TEL;TYPE=WORK:" + c.phone_work + "\n" : ""}${c.phone_fax ? "TEL;TYPE=FAX:" + c.phone_fax + "\n" : ""}${c.email ? "EMAIL:" + c.email + "\n" : ""}ADR;TYPE=WORK:;;${c.address};${c.city};${c.state};${c.zip};${c.country}\n${c.website ? "URL:" + c.website + "\n" : ""}${c.user_notes ? "NOTE:" + c.user_notes + "\n" : ""}END:VCARD`;
+}
+
+// ─── Icons ───
+const I = {
+  scan: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+  contacts: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+  bulk: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+  settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  filter: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>,
+  x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>,
+  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  back: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>,
+};
+
+// ═══════════════════════════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════════════════════════
+function CardScanAI() {
+  const [tab, setTab] = useState("scan");
+  const [contacts, setContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [viewContact, setViewContact] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState({});
+  const [filterModal, setFilterModal] = useState(false);
+  const [bulkModal, setBulkModal] = useState(null);
+  const [filters, setFilters] = useState({ star: 0, state: "", city: "", q: "" });
+  const [selected, setSelected] = useState(new Set());
+  const [toast, setToast] = useState("");
+  const [theme, setTheme] = useState(() => localStorage.getItem("cs_theme") || "dark");
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("cs_gemini") || "");
+  const fileRef = useRef();
+  const backFileRef = useRef();
+
+  const isDark = theme === "dark";
+
+  // ─── Theme CSS vars ───
+  const T = isDark ? {
+    bg: "#06060a", bg2: "#0f0f16", bg3: "#181822", bg4: "#22222e",
+    border: "#2a2a3a", text: "#eeeef5", text2: "#9999aa", text3: "#5a5a70",
+    accent: "#34d399", accent2: "#60a5fa", shadow: "0 4px 20px rgba(0,0,0,.4)",
+    modalBg: "rgba(0,0,0,.75)", cardBg: "linear-gradient(135deg, #0f0f18, #141420)"
+  } : {
+    bg: "#f2f2f5", bg2: "#ffffff", bg3: "#eaeaef", bg4: "#dddde5",
+    border: "#d0d0da", text: "#1a1a2e", text2: "#5a5a70", text3: "#8888a0",
+    accent: "#059669", accent2: "#2563eb", shadow: "0 4px 20px rgba(0,0,0,.06)",
+    modalBg: "rgba(0,0,0,.3)", cardBg: "linear-gradient(135deg, #ffffff, #f8f8fc)"
+  };
+
+  const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
+
+  // ─── Load from Supabase ───
+  useEffect(() => { sb.getAll().then(c => { setContacts(c); setLoading(false); }).catch(() => setLoading(false)); }, []);
+
+  // ─── Save theme ───
+  useEffect(() => { localStorage.setItem("cs_theme", theme); }, [theme]);
+  useEffect(() => { localStorage.setItem("cs_gemini", geminiKey); }, [geminiKey]);
+
+  // ─── Gemini call ───
+  const callGemini = async (base64, mime) => {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } })
+    });
+    if (!r.ok) throw new Error("API error " + r.status);
+    const d = await r.json(), t = d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const m = t.match(/\[[\s\S]*\]/);
+    if (!m) throw new Error("No data found");
+    return JSON.parse(m[0]);
+  };
+
+  // ─── Scan handler ───
+  const handleScan = async (e, existingId) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!geminiKey) { showToast("Set Gemini API key in Settings"); setTab("settings"); return; }
+    setScanning(true);
+    try {
+      const base64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(",")[1]); fr.readAsDataURL(file); });
+      const results = await callGemini(base64, file.type);
+
+      if (existingId) {
+        // Back scan
+        const photoUrl = await sb.uploadPhoto(file, existingId, "back");
+        const backText = results.map(r => Object.entries(r).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(", ")).join(" | ");
+        await sb.update(existingId, { back_notes: up(backText), back_photo: photoUrl });
+        const updated = await sb.getAll();
+        setContacts(updated);
+        showToast("Back side merged!");
+      } else {
+        const enriched = await Promise.all(results.map(async (c) => {
+          const id = uid();
+          const photoUrl = await sb.uploadPhoto(file, id, "front");
+          return {
+            id, stars: 0, user_notes: "", scanned_at: today(), back_notes: "", sent_to_sheets: false,
+            front_photo: photoUrl, back_photo: null,
+            name: up(c.name), title: up(c.title), company: up(c.company), email: (c.email || "").toLowerCase(),
+            phone_mobile: c.phone_mobile || "", phone_work: c.phone_work || "", phone_fax: c.phone_fax || "",
+            website: c.website || "", address: up(c.address), city: up(c.city), state: up(c.state),
+            zip: c.zip || "", country: up(c.country), notes: up(c.notes)
+          };
+        }));
+        setPreview(enriched);
+      }
+    } catch (err) { showToast("Scan failed: " + err.message); }
+    setScanning(false);
+    e.target.value = "";
+  };
+
+  const acceptPreview = async () => {
+    await sb.upsert(preview);
+    const all = await sb.getAll();
+    setContacts(all);
+    showToast(`${preview.length} card(s) saved!`);
+    setPreview(null);
+    setTab("contacts");
+  };
+
+  // ─── Filtering ───
+  const uniqueStates = [...new Set(contacts.map(c => c.state).filter(Boolean))].sort();
+  const uniqueCities = [...new Set(contacts.map(c => c.city).filter(Boolean))].sort();
+  const filtered = contacts.filter(c => {
+    if (filters.star > 0 && c.stars !== filters.star) return false;
+    if (filters.state && c.state !== filters.state) return false;
+    if (filters.city && c.city !== filters.city) return false;
+    if (filters.q && !(c.name + c.company + c.email + c.phone_mobile).toLowerCase().includes(filters.q.toLowerCase())) return false;
+    return true;
+  });
+
+  // ─── Selection ───
+  const toggleSel = (id) => setSelected(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selAll = () => setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
+
+  // ─── Export ───
+  const exportCSV = () => {
+    const list = selected.size ? contacts.filter(c => selected.has(c.id)) : contacts;
+    if (!list.length) return showToast("No contacts");
+    const h = ["Name","Title","Company","Email","Mobile","Work","Fax","Website","Address","City","State","Zip","Country","Stars","Notes","Your Notes"];
+    const rows = list.map(c => [c.name,c.title,c.company,c.email,c.phone_mobile,c.phone_work,c.phone_fax,c.website,c.address,c.city,c.state,c.zip,c.country,c.stars,c.notes,c.user_notes].map(v => `"${(v||"").toString().replace(/"/g,'""')}"`).join(","));
+    const blob = new Blob([h.join(",") + "\n" + rows.join("\n")], { type: "text/csv" });
+    Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `cards_${today()}.csv` }).click();
+    showToast("CSV downloaded!");
+  };
+
+  const exportSheets = async () => {
+    const list = selected.size ? contacts.filter(c => selected.has(c.id)) : contacts;
+    const nw = list.filter(c => !c.sent_to_sheets);
+    if (!nw.length) return showToast("All already in Sheets!");
+    showToast(`Sending ${nw.length}...`);
+    try {
+      await fetch(SHEETS_URL, { method: "POST", body: JSON.stringify(nw), mode: "no-cors" });
+      for (const c of nw) await sb.update(c.id, { sent_to_sheets: true });
+      setContacts(await sb.getAll());
+      showToast(`${nw.length} sent to Sheets!`);
+    } catch (e) { showToast("Failed"); }
+  };
+
+  const saveContact = async () => {
+    const d = { ...editData };
+    ["name","title","company","address","city","state","country","notes"].forEach(k => d[k] = up(d[k]));
+    d.email = (d.email || "").toLowerCase();
+    await sb.update(d.id, d);
+    setContacts(await sb.getAll());
+    setEditMode(false);
+    setViewContact(d);
+    showToast("Saved!");
+  };
+
+  const deleteContact = async (id) => {
+    await sb.remove(id);
+    setContacts(await sb.getAll());
+    setViewContact(null); setEditMode(false);
+    showToast("Deleted");
+  };
+
+  const saveToPhone = (c) => {
+    const blob = new Blob([makeVCard(c)], { type: "text/vcard" });
+    Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${(c.name || "contact").replace(/\s+/g, "_")}.vcf` }).click();
+    showToast("Open .vcf to save contact!");
+  };
+
+  // ─── Styles ───
+  const css = {
+    app: { fontFamily: "'Outfit', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", paddingBottom: 80, position: "relative" },
+    header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", background: T.bg2, borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50, backdropFilter: "blur(20px)" },
+    logo: { fontSize: 22, fontWeight: 800, background: "linear-gradient(135deg,#34d399,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: -0.5 },
+    nav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, display: "flex", background: T.bg2, borderTop: `1px solid ${T.border}`, zIndex: 50, padding: "4px 0" },
+    navBtn: (active) => ({ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 0", border: "none", background: "none", color: active ? T.accent : T.text3, fontSize: 10, fontWeight: 700, cursor: "pointer" }),
+    navIcon: { width: 20, height: 20 },
+    card: { background: T.cardBg, borderRadius: 16, padding: "14px 16px", marginBottom: 8, border: `1px solid ${T.border}`, boxShadow: T.shadow, cursor: "pointer", transition: "transform .15s" },
+    btn: (variant) => ({
+      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+      padding: variant === "sm" ? "8px 14px" : "12px 20px", borderRadius: 12, border: "none",
+      fontWeight: 700, fontSize: variant === "sm" ? 13 : 14, cursor: "pointer", transition: "all .15s",
+      ...(variant === "primary" ? { background: "linear-gradient(135deg,#34d399,#60a5fa)", color: "#000" } :
+        variant === "danger" ? { background: "#ef4444", color: "#fff" } :
+        { background: T.bg3, color: T.text, border: `1px solid ${T.border}` })
+    }),
+    input: { width: "100%", padding: "12px 14px", background: T.bg3, border: `1.5px solid ${T.border}`, borderRadius: 10, color: T.text, fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" },
+    label: { fontSize: 11, fontWeight: 700, color: T.text3, marginBottom: 4, display: "block", textTransform: "uppercase", letterSpacing: 0.5 },
+    modal: { position: "fixed", inset: 0, background: T.modalBg, zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" },
+    modalContent: { background: T.bg2, borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "90vh", overflow: "auto", padding: "20px 20px 40px" },
+    handle: { width: 36, height: 4, borderRadius: 4, background: T.bg4, margin: "0 auto 14px" },
+    section: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: T.text3, margin: "18px 0 8px" },
+    pill: { display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, background: T.bg3, border: `1px solid ${T.border}`, color: T.text, textDecoration: "none", fontSize: 13, fontWeight: 600, flex: 1, justifyContent: "center", minWidth: 0 },
+    chip: (on) => ({ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${on ? T.accent : T.border}`, background: on ? (isDark ? "rgba(52,211,153,.1)" : "rgba(5,150,105,.08)") : T.bg3, color: on ? T.accent : T.text3, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", display: "inline-block" }),
+    badge: { background: T.accent, color: "#000", borderRadius: 99, padding: "2px 9px", fontSize: 11, fontWeight: 800 },
+    toast: { position: "fixed", top: 72, left: "50%", transform: "translateX(-50%)", background: T.accent, color: "#000", padding: "10px 24px", borderRadius: 12, fontWeight: 700, fontSize: 14, zIndex: 200, boxShadow: "0 8px 24px rgba(52,211,153,.3)", pointerEvents: "none" },
+    viewField: { marginBottom: 12 },
+    viewLabel: { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: T.text3, marginBottom: 2 },
+    viewValue: { fontSize: 15, fontWeight: 600, color: T.text, wordBreak: "break-word" },
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
+  return (
+    <div style={css.app}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}input:focus,textarea:focus,select:focus{border-color:${T.accent}!important;outline:none}::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:${T.bg4};border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-14px)}}@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}50%{box-shadow:0 0 40px rgba(52,211,153,.08)}}`}</style>
+
+      {/* HEADER */}
+      <div style={css.header}>
+        {viewContact ? (
+          <button style={{ background: "none", border: "none", color: T.text, cursor: "pointer", padding: 4 }} onClick={() => { setViewContact(null); setEditMode(false); }}>
+            <div style={css.navIcon}>{I.back}</div>
+          </button>
+        ) : <div style={css.logo}>CardScan</div>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {contacts.length > 0 && !viewContact && <span style={css.badge}>{contacts.length}</span>}
+          <button style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${T.border}`, background: T.bg3, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: T.text }} onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}>
+            {isDark ? "☀️" : "🌙"}
+          </button>
+        </div>
+      </div>
+
+      {/* TOAST */}
+      {toast && <div style={css.toast}>{toast}</div>}
+
+      {/* FILE INPUTS */}
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => handleScan(e)} />
+      <input ref={backFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => handleScan(e, backFileRef.current?.dataset?.contactId)} />
+
+      {/* ═══ CONTACT VIEW/EDIT ═══ */}
+      {viewContact && !editMode && (
+        <div style={{ padding: "20px 16px 100px" }}>
+          {/* Photos */}
+          {(viewContact.front_photo || viewContact.back_photo) && (
+            <div style={{ display: "flex", gap: 10, marginBottom: 20, overflowX: "auto" }}>
+              {viewContact.front_photo && <img src={viewContact.front_photo} alt="Front" style={{ height: 120, borderRadius: 12, border: `1px solid ${T.border}` }} />}
+              {viewContact.back_photo && <img src={viewContact.back_photo} alt="Back" style={{ height: 120, borderRadius: 12, border: `1px solid ${T.border}` }} />}
+            </div>
+          )}
+
+          {/* Name & Company */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>{viewContact.company}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5 }}>{viewContact.name || "UNKNOWN"}</div>
+            {viewContact.title && <div style={{ fontSize: 14, color: T.text2, fontWeight: 500, marginTop: 2 }}>{viewContact.title}</div>}
+          </div>
+
+          {/* Stars */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+            {[1,2,3].map(n => (
+              <span key={n} style={{ fontSize: 24, cursor: "pointer", color: viewContact.stars >= n ? "#fbbf24" : T.bg4 }}
+                onClick={async () => { const s = viewContact.stars === n ? 0 : n; await sb.update(viewContact.id, { stars: s }); setViewContact({...viewContact, stars: s}); setContacts(await sb.getAll()); }}>★</span>
+            ))}
+          </div>
+
+          {/* Action pills */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+            {viewContact.phone_mobile && <a href={`tel:${viewContact.phone_mobile}`} style={css.pill}>📞 Call</a>}
+            {viewContact.email && <a href={`mailto:${viewContact.email}`} style={css.pill}>✉ Email</a>}
+            {(viewContact.address || viewContact.city) && <a href={`https://maps.google.com/?q=${encodeURIComponent([viewContact.address,viewContact.city,viewContact.state,viewContact.zip].filter(Boolean).join(", "))}`} target="_blank" style={css.pill}>📍 Maps</a>}
+            {viewContact.website && <a href={makeUrl(viewContact.website)} target="_blank" style={css.pill}>🌐 Web</a>}
+            <a href="#" onClick={(e) => { e.preventDefault(); saveToPhone(viewContact); }} style={css.pill}>👤 Save</a>
+          </div>
+
+          {/* Social */}
+          {extractSocials(viewContact.notes + " " + viewContact.website).length > 0 && (
+            <>
+              <div style={css.section}>Social</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                {extractSocials(viewContact.notes + " " + viewContact.website).map((s,i) => (
+                  <a key={i} href={s.url} target="_blank" style={{ ...css.chip(true), textDecoration: "none" }}>{s.icon} {s.label}</a>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Contact Details */}
+          <div style={css.section}>Contact Details</div>
+          {[["Email", viewContact.email], ["Mobile", viewContact.phone_mobile], ["Work", viewContact.phone_work], ["Fax", viewContact.phone_fax], ["Website", viewContact.website]].filter(([,v]) => v).map(([l,v]) => (
+            <div key={l} style={css.viewField}><div style={css.viewLabel}>{l}</div><div style={css.viewValue}>{v}</div></div>
+          ))}
+
+          <div style={css.section}>Location</div>
+          {[["Address", viewContact.address], ["City", viewContact.city], ["State", viewContact.state], ["Zip", viewContact.zip], ["Country", viewContact.country]].filter(([,v]) => v).map(([l,v]) => (
+            <div key={l} style={css.viewField}><div style={css.viewLabel}>{l}</div><div style={css.viewValue}>{v}</div></div>
+          ))}
+
+          {viewContact.user_notes && <><div style={css.section}>Your Notes</div><div style={{ ...css.viewValue, fontSize: 14 }}>{viewContact.user_notes}</div></>}
+          {viewContact.back_notes && <><div style={css.section}>Back Side</div><div style={{ fontSize: 13, color: T.text2, lineHeight: 1.5 }}>{viewContact.back_notes}</div></>}
+
+          {/* BOTTOM ACTIONS */}
+          <div style={{ display: "flex", gap: 8, marginTop: 28 }}>
+            <button style={{ ...css.btn("primary"), flex: 2 }} onClick={() => { setEditData({...viewContact}); setEditMode(true); }}>
+              <span style={css.navIcon}>{I.edit}</span> Edit Contact
+            </button>
+            <button style={{ ...css.btn("secondary"), flex: 1 }} onClick={() => { backFileRef.current.dataset.contactId = viewContact.id; backFileRef.current.click(); }}>
+              📷 Back
+            </button>
+            <button style={{ ...css.btn("danger"), flex: 1, padding: "12px 14px" }} onClick={() => deleteContact(viewContact.id)}>🗑</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ EDIT MODE ═══ */}
+      {viewContact && editMode && (
+        <div style={{ padding: "20px 16px 100px" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Edit Contact</div>
+          {[["name","Name"],["title","Job Title"],["company","Company"],["email","Email"],["phone_mobile","Mobile Phone"],["phone_work","Work Phone"],["phone_fax","Fax"],["website","Website / Social"],["address","Address"],["city","City"],["state","State"],["zip","Zip Code"],["country","Country"],["notes","Extracted Notes"],["user_notes","Your Notes"]].map(([k,l]) => (
+            <div key={k} style={{ marginBottom: 12 }}>
+              <label style={css.label}>{l}</label>
+              {k === "user_notes" ? (
+                <textarea style={{ ...css.input, height: 80, resize: "none" }} value={editData[k] || ""} onChange={e => setEditData(d => ({...d, [k]: e.target.value}))} placeholder="Your personal notes..." />
+              ) : (
+                <input style={css.input} value={editData[k] || ""} onChange={e => setEditData(d => ({...d, [k]: e.target.value}))} />
+              )}
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+            <button style={{ ...css.btn("primary"), flex: 2 }} onClick={saveContact}>✓ Save</button>
+            <button style={{ ...css.btn("secondary"), flex: 1 }} onClick={() => setEditMode(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SCAN TAB ═══ */}
+      {!viewContact && tab === "scan" && (
+        <div style={{ padding: "24px 16px" }}>
+          {scanning ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 60 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[0,1,2].map(i => <div key={i} style={{ width: 12, height: 12, borderRadius: 99, background: T.accent, animation: `bounce 1.4s ease ${i*.15}s infinite` }} />)}
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>Extracting contacts...</div>
+              <div style={{ fontSize: 13, color: T.text3 }}>Gemini AI is reading your cards</div>
+            </div>
+          ) : preview ? (
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 16 }}>Found {preview.length} card{preview.length > 1 ? "s" : ""} ✨</div>
+              {preview.map((c, i) => (
+                <div key={i} style={{ ...css.card, animation: `fadeUp .4s ease ${i*.08}s both`, cursor: "default" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{c.company}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{c.name || "UNKNOWN"}</div>
+                  <div style={{ fontSize: 12, color: T.text2, fontWeight: 500 }}>{c.title}</div>
+                  {c.email && <div style={{ fontSize: 12, color: T.text2, marginTop: 4 }}>✉ {c.email}</div>}
+                  {c.phone_mobile && <div style={{ fontSize: 12, color: T.text2 }}>📞 {c.phone_mobile}</div>}
+                  {c.city && <div style={{ fontSize: 12, color: T.text2 }}>📍 {c.city}{c.state ? ", " + c.state : ""} {c.zip}</div>}
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button style={{ ...css.btn("secondary"), flex: 1 }} onClick={() => setPreview(null)}>Rescan</button>
+                <button style={{ ...css.btn("primary"), flex: 2 }} onClick={acceptPreview}>✓ Save All</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", paddingTop: 40 }}>
+              <div style={{ width: 130, height: 130, margin: "0 auto 28px", borderRadius: 32, background: `linear-gradient(135deg, ${isDark ? "rgba(52,211,153,.06)" : "rgba(5,150,105,.06)"}, ${isDark ? "rgba(96,165,250,.06)" : "rgba(37,99,235,.06)"})`, display: "flex", alignItems: "center", justifyContent: "center", border: `2px dashed ${isDark ? "rgba(52,211,153,.25)" : "rgba(5,150,105,.2)"}`, animation: "glow 3s ease infinite" }}>
+                <div style={{ width: 52, height: 52, color: T.accent }}>{I.scan}</div>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8, letterSpacing: -0.5 }}>Scan Business Cards</div>
+              <div style={{ fontSize: 14, color: T.text2, marginBottom: 36, lineHeight: 1.6 }}>Spread your cards, snap a photo.<br/>AI extracts everything instantly.</div>
+              <button style={{ ...css.btn("primary"), width: "100%", padding: 16, fontSize: 15 }} onClick={() => fileRef.current?.click()}>📸 Scan Front Side</button>
+              {contacts.length > 0 && <button style={{ ...css.btn("secondary"), width: "100%", marginTop: 10, padding: 14 }} onClick={() => { backFileRef.current.dataset.contactId = contacts[0]?.id; backFileRef.current?.click(); }}>↻ Scan Back Side (Latest)</button>}
+              {contacts.length > 0 && (
+                <div style={{ marginTop: 32, padding: 20, background: T.bg2, borderRadius: 16, border: `1px solid ${T.border}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Scanned</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, background: "linear-gradient(135deg,#34d399,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{contacts.length}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ CONTACTS TAB ═══ */}
+      {!viewContact && tab === "contacts" && (
+        <div style={{ padding: "0 16px" }}>
+          {/* Search */}
+          <div style={{ display: "flex", gap: 8, padding: "14px 0 8px", position: "sticky", top: 55, background: T.bg, zIndex: 10 }}>
+            <div style={{ flex: 1, position: "relative" }}>
+              <input style={{ ...css.input, paddingLeft: 38 }} placeholder="Search name, company..." value={filters.q} onChange={e => setFilters(f => ({...f, q: e.target.value}))} />
+              <div style={{ position: "absolute", left: 12, top: 13, width: 16, height: 16, color: T.text3 }}>{I.search}</div>
+            </div>
+            <button style={{ ...css.btn("secondary"), padding: "0 14px", position: "relative" }} onClick={() => setFilterModal(true)}>
+              <div style={{ width: 18, height: 18 }}>{I.filter}</div>
+              {(filters.star > 0 || filters.state || filters.city) && <span style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 99, background: T.accent }} />}
+            </button>
+          </div>
+
+          {/* Chips */}
+          {(filters.star > 0 || filters.state || filters.city) && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "4px 0 8px" }}>
+              {filters.star > 0 && <span style={css.chip(true)} onClick={() => setFilters(f => ({...f, star: 0}))}>{"★".repeat(filters.star)} {filters.star}-Star ×</span>}
+              {filters.state && <span style={css.chip(true)} onClick={() => setFilters(f => ({...f, state: ""}))}>{filters.state} ×</span>}
+              {filters.city && <span style={css.chip(true)} onClick={() => setFilters(f => ({...f, city: ""}))}>{filters.city} ×</span>}
+            </div>
+          )}
+
+          {/* Select bar */}
+          {filtered.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 13, color: T.text3 }}>
+              <span><strong style={{ color: T.text }}>{filtered.length}</strong> contact{filtered.length !== 1 ? "s" : ""}</span>
+              <button style={{ background: "none", border: "none", color: T.accent, fontSize: 13, fontWeight: 700, cursor: "pointer" }} onClick={selAll}>{selected.size === filtered.length ? "Deselect All" : "Select All"}</button>
+            </div>
+          )}
+
+          {/* Contact List */}
+          {loading ? <div style={{ textAlign: "center", padding: 60, color: T.text3 }}>Loading...</div> :
+            filtered.length === 0 ? <div style={{ textAlign: "center", padding: 60, color: T.text3 }}>{contacts.length ? "No matches" : "No contacts yet"}</div> :
+            filtered.map((c, i) => (
+              <div key={c.id} style={{ ...css.card, display: "flex", gap: 12, alignItems: "flex-start", animation: `fadeUp .3s ease ${i*.03}s both` }} onClick={() => setViewContact(c)}>
+                <div style={{ width: 22, height: 22, borderRadius: 7, border: `2px solid ${selected.has(c.id) ? T.accent : T.border}`, background: selected.has(c.id) ? (isDark ? "rgba(52,211,153,.12)" : "rgba(5,150,105,.08)") : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}
+                  onClick={(e) => { e.stopPropagation(); toggleSel(c.id); }}>
+                  {selected.has(c.id) && <div style={{ width: 14, height: 14, color: T.accent }}>{I.check}</div>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: 0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company || "—"}</div>
+                    <div style={{ display: "flex", gap: 1 }}>
+                      {[1,2,3].map(n => <span key={n} style={{ fontSize: 12, color: c.stars >= n ? "#fbbf24" : T.bg4 }}>★</span>)}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "UNKNOWN"}</div>
+                  {c.title && <div style={{ fontSize: 12, color: T.text2, fontWeight: 500 }}>{c.title}</div>}
+                  <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                    {c.phone_mobile && <a href={`tel:${c.phone_mobile}`} onClick={e => e.stopPropagation()} style={{ color: T.accent2, fontSize: 11, textDecoration: "none", fontWeight: 600 }}>📞 Call</a>}
+                    {c.email && <a href={`mailto:${c.email}`} onClick={e => e.stopPropagation()} style={{ color: T.accent2, fontSize: 11, textDecoration: "none", fontWeight: 600 }}>✉ Email</a>}
+                    {c.website && <a href={makeUrl(c.website)} target="_blank" onClick={e => e.stopPropagation()} style={{ color: T.accent2, fontSize: 11, textDecoration: "none", fontWeight: 600 }}>🌐 Web</a>}
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* ═══ BULK TAB ═══ */}
+      {!viewContact && tab === "bulk" && (
+        <div style={{ padding: "20px 16px" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Bulk Actions</div>
+          <div style={{ fontSize: 13, color: T.text3, marginBottom: 20, fontWeight: 500 }}>{selected.size ? `${selected.size} selected` : "Select in Contacts tab, or actions apply to all"}</div>
+          <div style={{ display: "grid", gap: 10 }}>
+            <button style={{ ...css.btn("secondary"), width: "100%", padding: 16 }} onClick={() => setBulkModal("email")}>✉ Bulk Email (BCC)</button>
+            <button style={{ ...css.btn("secondary"), width: "100%", padding: 16 }} onClick={() => setBulkModal("sms")}>💬 Bulk SMS</button>
+            <button style={{ ...css.btn("secondary"), width: "100%", padding: 16 }} onClick={exportCSV}>⬇ Export CSV</button>
+            <button style={{ ...css.btn("secondary"), width: "100%", padding: 16 }} onClick={exportSheets}>📊 Google Sheets</button>
+          </div>
+          {selected.size > 0 && <button style={{ ...css.btn("danger"), width: "100%", marginTop: 16, padding: 14 }} onClick={async () => { for (const id of selected) await sb.remove(id); setContacts(await sb.getAll()); setSelected(new Set()); showToast("Deleted!"); }}>🗑 Delete Selected ({selected.size})</button>}
+        </div>
+      )}
+
+      {/* ═══ SETTINGS TAB ═══ */}
+      {!viewContact && tab === "settings" && (
+        <div style={{ padding: "20px 16px" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Settings</div>
+          <div style={{ ...css.card, cursor: "default" }}>
+            <label style={css.label}>Gemini API Key</label>
+            <input style={css.input} type="password" placeholder="Paste key..." value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
+            <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>Free from <a href="https://aistudio.google.com/apikey" target="_blank" style={{ color: T.accent, fontWeight: 600 }}>Google AI Studio</a></div>
+          </div>
+          <div style={{ ...css.card, cursor: "default", marginTop: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Appearance</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button style={{ ...css.btn("sm"), flex: 1, background: !isDark ? T.accent : T.bg3, color: !isDark ? "#000" : T.text }} onClick={() => setTheme("light")}>☀️ Light</button>
+              <button style={{ ...css.btn("sm"), flex: 1, background: isDark ? T.accent : T.bg3, color: isDark ? "#000" : T.text }} onClick={() => setTheme("dark")}>🌙 Dark</button>
+            </div>
+          </div>
+          <div style={{ ...css.card, cursor: "default", marginTop: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Backup & Restore</div>
+            <div style={{ fontSize: 13, color: T.text3, marginBottom: 12 }}>Data is saved in Supabase cloud. Use backup for a local copy.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...css.btn("sm"), flex: 1, background: T.accent, color: "#000" }} onClick={() => {
+                const blob = new Blob([JSON.stringify({ contacts, exportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" });
+                Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `cardscan_${today()}.json` }).click();
+                showToast("Backed up!");
+              }}>⬇ Backup</button>
+              <button style={{ ...css.btn("sm"), flex: 1 }} onClick={() => document.getElementById("restoreInput")?.click()}>⬆ Restore</button>
+            </div>
+            <input id="restoreInput" type="file" accept=".json" style={{ display: "none" }} onChange={async (e) => {
+              const file = e.target.files?.[0]; if (!file) return;
+              const text = await file.text();
+              const data = JSON.parse(text);
+              const arr = data.contacts || data;
+              if (!Array.isArray(arr)) return showToast("Invalid file");
+              await sb.upsert(arr);
+              setContacts(await sb.getAll());
+              showToast("Restored!");
+              e.target.value = "";
+            }} />
+          </div>
+          <div style={{ ...css.card, cursor: "default", marginTop: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Supabase</div>
+            <div style={{ fontSize: 12, color: T.text3 }}>✅ Connected to cloud database</div>
+            <div style={{ fontSize: 11, color: T.text3, marginTop: 4 }}>{contacts.length} contacts synced</div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ FILTER MODAL ═══ */}
+      {filterModal && (
+        <div style={css.modal} onClick={() => setFilterModal(false)}>
+          <div style={{ ...css.modalContent, animation: "slideUp .35s cubic-bezier(.16,1,.3,1)" }} onClick={e => e.stopPropagation()}>
+            <div style={css.handle} />
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Filters</div>
+            <div style={{ marginBottom: 20 }}>
+              <div style={css.label}>Star Rating</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[{v:0,l:"All"},{v:1,l:"★ 1"},{v:2,l:"★★ 2"},{v:3,l:"★★★ 3"}].map(o => (
+                  <span key={o.v} style={css.chip(filters.star === o.v)} onClick={() => setFilters(f => ({...f, star: o.v}))}>{o.l}</span>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={css.label}>State</label>
+              <select style={css.input} value={filters.state} onChange={e => setFilters(f => ({...f, state: e.target.value}))}>
+                <option value="">All States</option>
+                {uniqueStates.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={css.label}>City</label>
+              <select style={css.input} value={filters.city} onChange={e => setFilters(f => ({...f, city: e.target.value}))}>
+                <option value="">All Cities</option>
+                {uniqueCities.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button style={{ ...css.btn("secondary"), flex: 1 }} onClick={() => { setFilters({ star: 0, state: "", city: "", q: "" }); setFilterModal(false); }}>Clear All</button>
+              <button style={{ ...css.btn("primary"), flex: 1 }} onClick={() => setFilterModal(false)}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BULK MODAL ═══ */}
+      {bulkModal && (
+        <div style={css.modal} onClick={() => setBulkModal(null)}>
+          <div style={{ ...css.modalContent, animation: "slideUp .35s cubic-bezier(.16,1,.3,1)" }} onClick={e => e.stopPropagation()}>
+            <div style={css.handle} />
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>Bulk {bulkModal === "email" ? "Email (BCC)" : "SMS"}</div>
+            <div style={{ fontSize: 13, color: T.text3, marginBottom: 16 }}>Sending to <strong>{selected.size || contacts.length}</strong> contacts</div>
+            {bulkModal === "email" && <>
+              <div style={{ marginBottom: 12 }}><label style={css.label}>Your Email</label><input id="bFrom" style={css.input} placeholder="you@email.com" defaultValue={localStorage.getItem("cs_fe") || ""} /></div>
+              <div style={{ marginBottom: 12 }}><label style={css.label}>Subject</label><input id="bSubj" style={css.input} placeholder="Great meeting you..." /></div>
+            </>}
+            <div style={{ marginBottom: 16 }}><label style={css.label}>Message</label><textarea id="bBody" style={{ ...css.input, height: 120, resize: "none" }} placeholder="Hi! It was great connecting..." /></div>
+            <button style={{ ...css.btn("primary"), width: "100%" }} onClick={() => {
+              const list = selected.size ? contacts.filter(c => selected.has(c.id)) : contacts;
+              const body = document.getElementById("bBody")?.value || "";
+              if (bulkModal === "email") {
+                const em = list.map(c => c.email).filter(Boolean).join(",");
+                const from = document.getElementById("bFrom")?.value || "";
+                if (from) localStorage.setItem("cs_fe", from);
+                window.location.href = `mailto:${from}?bcc=${encodeURIComponent(em)}&subject=${encodeURIComponent(document.getElementById("bSubj")?.value || "")}&body=${encodeURIComponent(body)}`;
+              } else {
+                const ph = list.map(c => c.phone_mobile).filter(Boolean).join(",");
+                window.open(`sms:${ph}?body=${encodeURIComponent(body)}`);
+              }
+              setBulkModal(null);
+            }}>✈ Send</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BOTTOM NAV ═══ */}
+      {!viewContact && (
+        <div style={css.nav}>
+          {[["scan", I.scan, "Scan"], ["contacts", I.contacts, "Contacts"], ["bulk", I.bulk, "Bulk"], ["settings", I.settings, "Settings"]].map(([key, icon, label]) => (
+            <button key={key} style={css.navBtn(tab === key)} onClick={() => setTab(key)}>
+              <div style={css.navIcon}>{icon}</div>{label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
-    <div id="sLoad" class="hid" style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:50px 20px">
-      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-      <div style="font-size:17px;font-weight:700">Extracting contacts...</div>
-      <div style="font-size:13px;color:var(--text3)">Gemini AI is reading your cards</div>
-    </div>
-    <div id="sPrev" class="hid"></div>
-  </div>
- 
-  <div class="scr" id="sContacts">
-    <div class="fb"><div style="flex:1;position:relative"><input class="inp" placeholder="Search name, company, email..." id="sInp" oninput="renderC()"><svg class="si2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
-      <button class="btn bs" style="padding:0 14px;position:relative" onclick="showFilt()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span class="hid" id="fDot" style="position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:99px;background:var(--accent)"></span></button>
-    </div>
-    <div id="fChips" class="fc hid"></div>
-    <div id="selBar" class="slb hid"></div>
-    <div id="cList"></div>
-  </div>
- 
-  <div class="scr" id="sBulk" style="padding-top:20px">
-    <div style="font-size:20px;font-weight:800;margin-bottom:4px">Bulk Actions</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:20px;font-weight:500" id="bInfo">Select contacts in Contacts tab, or actions apply to all.</div>
-    <div class="gb">
-      <button class="btn bs bf" onclick="openBulk('email')">✉ Bulk Email (BCC)</button>
-      <button class="btn bs bf" onclick="openBulk('sms')">💬 Bulk SMS</button>
-      <button class="btn bs bf" onclick="expCSV()">⬇ Export CSV</button>
-      <button class="btn bs bf" onclick="expSheets()">📊 Google Sheets</button>
-    </div>
-    <button class="btn bd bf hid" id="bDel" style="margin-top:16px;padding:14px" onclick="delSel()">🗑 Delete Selected</button>
-  </div>
- 
-  <div class="scr" id="sSettings" style="padding-top:20px">
-    <div style="font-size:20px;font-weight:800;margin-bottom:20px">Settings</div>
-    <div class="cd"><label class="lbl">Gemini API Key</label><input class="inp" type="password" placeholder="Paste your Gemini API key..." id="akInp" oninput="saveAK()"><div style="font-size:11px;color:var(--text3);margin-top:8px">Free from <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);font-weight:600">Google AI Studio</a></div></div>
-    <div class="cd" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Appearance</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn bsm bs" style="flex:1" onclick="setTh('light')">☀️ Light</button><button class="btn bsm bs" style="flex:1" onclick="setTh('dark')">🌙 Dark</button></div></div>
-    <div class="cd" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Backup & Restore</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px">Save contacts to a file. Restore anytime.</div><div style="display:flex;gap:8px"><button class="btn bsm bp" style="flex:1" onclick="backup()">⬇ Backup</button><button class="btn bsm bs" style="flex:1" onclick="document.getElementById('rInp').click()">⬆ Restore</button></div><input type="file" accept=".json" id="rInp" style="display:none" onchange="restore(event)"></div>
-    <div class="cd hid" id="dCard" style="margin-top:10px"><div style="font-size:14px;font-weight:700;margin-bottom:4px">Data</div><div style="font-size:13px;color:var(--text3);margin-bottom:12px" id="dInfo"></div><button class="btn bsm bd" onclick="clearAll()">Clear All Data</button></div>
-  </div>
- 
-  <div class="nav">
-    <button class="nb on" data-t="scan" onclick="sw('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>Scan</button>
-    <button class="nb" data-t="contacts" onclick="sw('contacts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts</button>
-    <button class="nb" data-t="bulk" onclick="sw('bulk')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Bulk</button>
-    <button class="nb" data-t="settings" onclick="sw('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</button>
-  </div>
-</div>
-<div id="MR"></div>
-<script>
-let C=JSON.parse(localStorage.getItem('cs_c')||'[]'),sel=new Set,ak=localStorage.getItem('cs_ak')||'',pB=null,F={sl:0,st:'',ci:'',q:''},th=localStorage.getItem('cs_th')||'dark';
-const PR=`You are a business card data extractor. Analyze this image containing one or more business cards. For EACH card extract: name, title, company, email, phone, phone2, website, address, city, state, country, notes (include social media URLs/handles here). Return ONLY valid JSON array like: [{"name":"John","title":"CEO","company":"Acme","email":"j@a.com","phone":"+1234","phone2":"","website":"acme.com","address":"","city":"","state":"","country":"","notes":"LinkedIn: linkedin.com/in/john"}]. Empty string for missing fields.`;
- 
-document.getElementById('akInp').value=ak;apTh();uUI();
- 
-function apTh(){document.documentElement.setAttribute('data-theme',th);document.getElementById('tBtn').textContent=th==='dark'?'☀️':'🌙';document.getElementById('metaTheme').content=th==='dark'?'#08080c':'#f4f4f7'}
-function toggleTheme(){th=th==='dark'?'light':'dark';localStorage.setItem('cs_th',th);apTh()}
-function setTh(t){th=t;localStorage.setItem('cs_th',th);apTh()}
-function sv(){localStorage.setItem('cs_c',JSON.stringify(C));uUI()}
-function saveAK(){ak=document.getElementById('akInp').value;localStorage.setItem('cs_ak',ak)}
-function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.remove('hid');setTimeout(()=>e.classList.add('hid'),2800)}
-function sw(t){const map={scan:'sScan',contacts:'sContacts',bulk:'sBulk',settings:'sSettings'};document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));document.getElementById(map[t]).classList.add('on');document.querySelectorAll('.nb').forEach(b=>b.classList.toggle('on',b.dataset.t===t));if(t==='contacts')renderC();if(t==='bulk')uBulk()}
-function uUI(){document.getElementById('hBadge').innerHTML=C.length?`<span class="badge">${C.length}</span>`:'';const b=document.getElementById('bBack'),s=document.getElementById('sBox');if(C.length){b.classList.remove('hid');s.classList.remove('hid')}else{b.classList.add('hid');s.classList.add('hid')}document.getElementById('sNum').textContent=C.length;const d=document.getElementById('dCard');if(C.length){d.classList.remove('hid');document.getElementById('dInfo').textContent=C.length+' contacts on device.'}else d.classList.add('hid')}
- 
-async function callG(b64,mime){const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${ak}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:PR},{inline_data:{mime_type:mime,data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:4096}})});if(!r.ok)throw new Error('API error: '+r.status);const d=await r.json(),t=d.candidates?.[0]?.content?.parts?.[0]?.text||'',m=t.match(/\[[\s\S]*\]/);if(!m)throw new Error('No data found');return JSON.parse(m[0])}
- 
-function startScan(){if(!ak){toast('Set API key in Settings');sw('settings');return}document.getElementById('fInp').click()}
-function startBackScan(){if(!C.length)return;pB=C[C.length-1].id;startScan()}
- 
-document.getElementById('fInp').addEventListener('change',async function(e){
-  const f=e.target.files?.[0];if(!f||!ak)return;
-  document.getElementById('sDef').classList.add('hid');document.getElementById('sPrev').classList.add('hid');
-  const ld=document.getElementById('sLoad');ld.classList.remove('hid');ld.style.display='flex';
-  try{
-    const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f)});
-    const res=await callG(b64,f.type);
-    if(pB){const bt=res.map(r=>Object.entries(r).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(', ')).join(' | ');C=C.map(c=>c.id===pB?{...c,backNotes:bt}:c);pB=null;sv();toast('Back side merged!');ld.classList.add('hid');document.getElementById('sDef').classList.remove('hid')}
-    else{const en=res.map(c=>({id:Math.random().toString(36).slice(2,10),stars:0,userNotes:'',scannedAt:new Date().toISOString().split('T')[0],backNotes:'',sentToSheets:false,name:c.name||'',title:c.title||'',company:c.company||'',email:c.email||'',phone:c.phone||'',phone2:c.phone2||'',website:c.website||'',address:c.address||'',city:c.city||'',state:c.state||'',country:c.country||'',notes:c.notes||''}));showPrev(en)}
-  }catch(err){toast('Scan failed: '+err.message);ld.classList.add('hid');document.getElementById('sDef').classList.remove('hid')}
-  e.target.value='';
-});
- 
-function showPrev(cards){document.getElementById('sLoad').classList.add('hid');document.getElementById('sLoad').style.display='none';const el=document.getElementById('sPrev');el.classList.remove('hid');
-  let h=`<div style="font-size:20px;font-weight:800;margin-bottom:16px">Found ${cards.length} card${cards.length>1?'s':''} ✨</div>`;
-  cards.forEach((c,i)=>{h+=`<div class="cd" style="animation:ci .4s ease ${i*.08}s both"><div style="font-weight:700;font-size:16px">${esc(c.name)||'Unknown'}</div><div style="color:var(--accent);font-size:13px;font-weight:600">${esc(c.title)}${c.company?' @ '+esc(c.company):''}</div>${c.email?`<div style="font-size:13px;color:var(--text2);margin-top:4px">✉ ${esc(c.email)}</div>`:''}${c.phone?`<div style="font-size:13px;color:var(--text2)">📞 ${esc(c.phone)}</div>`:''}${c.city?`<div style="font-size:13px;color:var(--text2)">📍 ${esc(c.city)}${c.state?', '+esc(c.state):''}</div>`:''}${c.website?`<div style="font-size:13px;color:var(--text2)">🌐 ${esc(c.website)}</div>`:''}</div>`});
-  h+=`<div style="display:flex;gap:10px;margin-top:16px"><button class="btn bs" style="flex:1" onclick="canPrev()">Rescan</button><button class="btn bp" style="flex:2" onclick="accPrev()">✓ Add All</button></div>`;
-  el.innerHTML=h;window._pc=cards}
-function accPrev(){C.push(...window._pc);sv();toast(window._pc.length+' card(s) added!');canPrev();sw('contacts')}
-function canPrev(){document.getElementById('sPrev').classList.add('hid');document.getElementById('sPrev').innerHTML='';document.getElementById('sDef').classList.remove('hid')}
- 
-function getF(){const q=(document.getElementById('sInp')?.value||'').toLowerCase();return C.filter(c=>{if(F.sl>0&&c.stars!==F.sl)return false;if(F.st&&c.state!==F.st)return false;if(F.ci&&c.city!==F.ci)return false;if(q&&!(c.name+c.company+c.email+c.phone).toLowerCase().includes(q))return false;return true})}
- 
-function renderC(){const list=getF(),el=document.getElementById('cList'),hf=F.sl>0||F.st||F.ci;
-  document.getElementById('fDot').classList.toggle('hid',!hf);
-  const fc=document.getElementById('fChips');
-  if(hf){fc.classList.remove('hid');let ch='';if(F.sl>0)ch+=`<span class="chip on" onclick="F.sl=0;renderC()">${'★'.repeat(F.sl)} ${F.sl}-Star ×</span>`;if(F.st)ch+=`<span class="chip on" onclick="F.st='';renderC()">${esc(F.st)} ×</span>`;if(F.ci)ch+=`<span class="chip on" onclick="F.ci='';renderC()">${esc(F.ci)} ×</span>`;fc.innerHTML=ch}else fc.classList.add('hid');
-  const sb=document.getElementById('selBar');
-  if(list.length){sb.classList.remove('hid');const a=list.every(c=>sel.has(c.id));sb.innerHTML=`<span><strong>${list.length}</strong> contact${list.length!==1?'s':''}</span><button onclick="togAll()">${a?'Deselect All':'Select All'}</button>`}else sb.classList.add('hid');
-  if(!list.length){el.innerHTML=`<div style="text-align:center;padding:60px 0;color:var(--text3)">${C.length?'No matches.':'No contacts yet.'}</div>`;return}
-  el.innerHTML=list.map((c,i)=>`<div class="cd crow" onclick="oEdit('${c.id}')" style="animation:ci .3s ease ${i*.04}s both"><div class="cb ${sel.has(c.id)?'on':''}" onclick="event.stopPropagation();togS('${c.id}')">${sel.has(c.id)?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>':''}</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center"><div class="cn">${esc(c.name)||'Unknown'}</div><div class="stars" onclick="event.stopPropagation();cyS('${c.id}')">${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}">★</span>`).join('')}</div></div><div class="cs">${esc(c.title)}${c.company?' · '+esc(c.company):''}</div><div class="ca">${c.phone?`<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" class="ql">📞 Call</a>`:''}${c.email?`<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" class="ql">✉ Email</a>`:''}${(c.address||c.city)?`<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" onclick="event.stopPropagation()" class="ql">📍 Map</a>`:''}${c.website?`<a href="${mUrl(c.website)}" target="_blank" onclick="event.stopPropagation()" class="ql">🌐 Web</a>`:''}</div></div></div>`).join('')}
- 
-function mUrl(u){return u&&!u.match(/^https?:\/\//)?'https://'+u:u}
-function togS(id){sel.has(id)?sel.delete(id):sel.add(id);renderC();uBulk()}
-function togAll(){const l=getF(),a=l.every(c=>sel.has(c.id));l.forEach(c=>a?sel.delete(c.id):sel.add(c.id));renderC();uBulk()}
-function cyS(id){C=C.map(c=>c.id===id?{...c,stars:c.stars>=3?0:c.stars+1}:c);sv();renderC()}
- 
-function oEdit(id){const c=C.find(x=>x.id===id);if(!c)return;
-  const flds=[['name','Name'],['title','Job Title'],['company','Company'],['email','Email'],['phone','Phone'],['phone2','Phone 2'],['website','Website / Social'],['address','Address'],['city','City'],['state','State'],['country','Country'],['notes','Extracted Notes']];
-  let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:20px;font-weight:800">${esc(c.name)||'Edit Contact'}</div><button style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px 8px" onclick="cM()">✕</button></div>`;
-  // Action pills
-  h+=`<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">`;
-  if(c.phone)h+=`<a href="tel:${esc(c.phone)}" class="ap">📞 Call</a>`;
-  if(c.email)h+=`<a href="mailto:${esc(c.email)}" class="ap">✉ Email</a>`;
-  if(c.address||c.city)h+=`<a href="https://maps.google.com/?q=${encodeURIComponent([c.address,c.city,c.state].filter(Boolean).join(', '))}" target="_blank" class="ap">📍 Maps</a>`;
-  if(c.website)h+=`<a href="${mUrl(esc(c.website))}" target="_blank" class="ap">🌐 Web</a>`;
-  h+=`<a href="#" onclick="event.preventDefault();sPhone('${id}')" class="ap">👤 Save to Phone</a></div>`;
-  // Socials
-  const soc=exSoc(c.notes+' '+c.website);
-  if(soc.length){h+=`<div class="st">Social Media</div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">`;soc.forEach(s=>{h+=`<a href="${s.url}" target="_blank" class="chip on" style="text-decoration:none">${s.ic} ${s.lb}</a>`});h+=`</div>`}
-  // Stars
-  h+=`<div class="st">Priority</div><div class="stars" style="gap:8px;margin-bottom:14px">${[1,2,3].map(n=>`<span class="star ${c.stars>=n?'on':''}" style="font-size:28px;cursor:pointer" onclick="eStar('${id}',${n})">★</span>`).join('')}</div>`;
-  // User notes
-  h+=`<div class="st">Your Notes</div><div class="er"><textarea class="inp" id="e_un" style="height:80px" placeholder="Add personal notes...">${esc(c.userNotes||'')}</textarea></div>`;
-  // Fields
-  h+=`<div class="st">Contact Details</div>`;
-  flds.forEach(([k,l])=>{h+=`<div class="er"><label class="lbl">${l}</label><input class="inp" id="e_${k}" value="${esc(c[k]||'')}"></div>`});
-  if(c.backNotes)h+=`<div class="st">Back Side</div><div class="inp" style="background:var(--bg3);white-space:pre-wrap;font-size:13px;margin-bottom:14px">${esc(c.backNotes)}</div>`;
-  h+=`<div style="display:flex;gap:8px;margin-top:20px"><button class="btn bp" style="flex:2" onclick="sEdit('${id}')">✓ Save</button><button class="btn bs" style="flex:1" onclick="pB='${id}';cM();sw('scan');startScan()">↻ Back</button><button class="btn bd" style="flex:1" onclick="delC('${id}')">🗑</button></div></div></div>`;
-  document.getElementById('MR').innerHTML=h}
- 
-function exSoc(t){const s=[];if(!t)return s;const l=t.toLowerCase();
-  if(l.includes('linkedin')){const m=t.match(/(https?:\/\/)?(www\.)?linkedin\.com\/\S+/i);s.push({ic:'💼',lb:'LinkedIn',url:m?mUrl(m[0]):'https://linkedin.com'})}
-  if(l.includes('twitter')||l.includes('x.com')){const m=t.match(/(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/\S+/i);s.push({ic:'𝕏',lb:'Twitter/X',url:m?mUrl(m[0]):'https://x.com'})}
-  if(l.includes('instagram')){const m=t.match(/(https?:\/\/)?(www\.)?instagram\.com\/\S+/i);s.push({ic:'📸',lb:'Instagram',url:m?mUrl(m[0]):'https://instagram.com'})}
-  if(l.includes('facebook')){const m=t.match(/(https?:\/\/)?(www\.)?facebook\.com\/\S+/i);s.push({ic:'📘',lb:'Facebook',url:m?mUrl(m[0]):'https://facebook.com'})}
-  return s}
- 
-function sPhone(id){const c=C.find(x=>x.id===id);if(!c)return;
-  const vc=`BEGIN:VCARD\nVERSION:3.0\nFN:${c.name}\nORG:${c.company}\nTITLE:${c.title}\nTEL;TYPE=CELL:${c.phone}\n${c.phone2?'TEL;TYPE=WORK:'+c.phone2+'\n':''}EMAIL:${c.email}\nADR;TYPE=WORK:;;${c.address};${c.city};${c.state};;${c.country}\nURL:${c.website}\nNOTE:${c.userNotes||c.notes}\nEND:VCARD`;
-  const bl=new Blob([vc],{type:'text/vcard'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`${(c.name||'contact').replace(/\s+/g,'_')}.vcf`;a.click();toast('Open the .vcf file to save contact!')}
- 
-function sEdit(id){const flds=['name','title','company','email','phone','phone2','website','address','city','state','country','notes'];
-  C=C.map(c=>{if(c.id!==id)return c;const u={...c,userNotes:document.getElementById('e_un')?.value||''};flds.forEach(f=>{u[f]=document.getElementById('e_'+f)?.value||''});return u});sv();cM();renderC();toast('Saved!')}
-function eStar(id,n){C=C.map(c=>c.id===id?{...c,stars:c.stars===n?0:n}:c);sv();oEdit(id)}
-function delC(id){C=C.filter(c=>c.id!==id);sel.delete(id);sv();cM();renderC();toast('Deleted')}
-function cM(){document.getElementById('MR').innerHTML=''}
- 
-function showFilt(){const sts=[...new Set(C.map(c=>c.state).filter(Boolean))].sort(),cis=[...new Set(C.map(c=>c.city).filter(Boolean))].sort();
-  let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
-    <div style="font-size:20px;font-weight:800;margin-bottom:20px">Filters</div>
-    <div style="margin-bottom:20px"><label class="lbl">Star Rating</label><div style="display:flex;gap:8px;flex-wrap:wrap">
-      <span class="chip ${F.sl===0?'on':''}" onclick="document.getElementById('fs').value=0;document.querySelectorAll('#fStars .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on')">All</span>
-      ${[1,2,3].map(n=>`<span class="chip ${F.sl===n?'on':''}" onclick="document.getElementById('fs').value=${n};document.querySelectorAll('#fStars .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on')">${'★'.repeat(n)} ${n}-Star</span>`).join('')}
-    </div><input type="hidden" id="fs" value="${F.sl}"><div id="fStars"></div></div>
-    <div style="margin-bottom:16px"><label class="lbl">State</label><select class="inp" id="fst"><option value="">All States</option>${sts.map(s=>`<option value="${esc(s)}" ${F.st===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
-    <div style="margin-bottom:16px"><label class="lbl">City</label><select class="inp" id="fci"><option value="">All Cities</option>${cis.map(s=>`<option value="${esc(s)}" ${F.ci===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
-    <div style="display:flex;gap:10px;margin-top:20px"><button class="btn bs" style="flex:1" onclick="F={sl:0,st:'',ci:'',q:''};document.getElementById('sInp').value='';cM();renderC()">Clear All</button><button class="btn bp" style="flex:1" onclick="apF()">Apply Filters</button></div></div></div>`;
-  document.getElementById('MR').innerHTML=h}
-function apF(){F.sl=parseInt(document.getElementById('fs').value)||0;F.st=document.getElementById('fst').value;F.ci=document.getElementById('fci').value;cM();renderC()}
- 
-function uBulk(){document.getElementById('bInfo').textContent=sel.size?`${sel.size} contact${sel.size!==1?'s':''} selected`:'Select contacts in Contacts tab, or actions apply to all.';document.getElementById('bDel').classList.toggle('hid',!sel.size);document.getElementById('bDel').innerHTML=`🗑 Delete Selected (${sel.size})`}
-function delSel(){C=C.filter(c=>!sel.has(c.id));sel.clear();sv();renderC();uBulk();toast('Deleted!')}
- 
-function openBulk(type){const cnt=sel.size||C.length;
-  let h=`<div class="mbg" onclick="cM()"><div class="mdl" onclick="event.stopPropagation()"><div class="mh"></div>
-    <div style="font-size:20px;font-weight:800;margin-bottom:6px">Bulk ${type==='email'?'Email (BCC)':'SMS'}</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Sending to <strong>${cnt}</strong> contact${cnt!==1?'s':''}</div>`;
-  if(type==='email'){h+=`<div class="er"><label class="lbl">Your Email (From)</label><input class="inp" id="bFrom" placeholder="you@email.com" value="${localStorage.getItem('cs_fe')||''}"></div>`;h+=`<div class="er"><label class="lbl">Subject</label><input class="inp" id="bSubj" placeholder="Great meeting you at..."></div>`}
-  h+=`<div class="er"><label class="lbl">Message</label><textarea class="inp" id="bBody" style="height:120px" placeholder="Hi! It was a pleasure meeting you..."></textarea></div>
-    <button class="btn bp bf" onclick="sendB('${type}')">✈ Send ${type==='email'?'Email':'SMS'}</button></div></div>`;
-  document.getElementById('MR').innerHTML=h}
- 
-function sendB(type){const list=sel.size?C.filter(c=>sel.has(c.id)):C,body=document.getElementById('bBody')?.value||'';
-  if(type==='email'){const em=list.map(c=>c.email).filter(Boolean).join(',');if(!em){toast('No emails');return}const subj=document.getElementById('bSubj')?.value||'',from=document.getElementById('bFrom')?.value||'';if(from)localStorage.setItem('cs_fe',from);window.location.href=`mailto:${from}?bcc=${encodeURIComponent(em)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;toast('Opening email with BCC...')}
-  else{const ph=list.map(c=>c.phone).filter(Boolean).join(',');if(!ph){toast('No phones');return}window.open(`sms:${ph}?body=${encodeURIComponent(body)}`);toast('Opening SMS...')}cM()}
- 
-function expCSV(){const list=sel.size?C.filter(c=>sel.has(c.id)):C;if(!list.length){toast('No contacts');return}
-  const h=['Name','Title','Company','Email','Phone','Phone2','Website','Address','City','State','Country','Stars','Notes','Your Notes','Back Notes','Scanned'];
-  const rows=list.map(c=>[c.name,c.title,c.company,c.email,c.phone,c.phone2,c.website,c.address,c.city,c.state,c.country,c.stars,c.notes,c.userNotes,c.backNotes,c.scannedAt].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
-  const bl=new Blob([h.join(',')+'\n'+rows.join('\n')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`cards_${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('CSV downloaded!')}
- 
-async function expSheets(){const list=sel.size?C.filter(c=>sel.has(c.id)):C,nw=list.filter(c=>!c.sentToSheets);if(!nw.length){toast('All already in Sheets!');return}toast(`Sending ${nw.length} new...`);
-  try{await fetch('https://script.google.com/macros/s/AKfycbyfAnj2mpcfyPvuQbaw37-pjAmGuacPccixFAyolmbQUXQFms3N4v9IarC7QjiFNF-Fwg/exec',{method:'POST',body:JSON.stringify(nw),mode:'no-cors'});const ids=new Set(nw.map(c=>c.id));C=C.map(c=>ids.has(c.id)?{...c,sentToSheets:true}:c);sv();toast(`${nw.length} sent to Sheets!`)}catch(e){toast('Failed: '+e.message)}}
- 
-function backup(){if(!C.length){toast('No contacts');return}const bl=new Blob([JSON.stringify({contacts:C,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=`cardscan_backup_${new Date().toISOString().split('T')[0]}.json`;a.click();toast(`Backed up ${C.length} contacts!`)}
-function restore(e){const f=e.target.files?.[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result),r=d.contacts||d;if(!Array.isArray(r))throw 0;const ex=new Set(C.map(c=>c.id)),nw=r.filter(c=>!ex.has(c.id));C.push(...nw);sv();renderC();toast(`Restored ${nw.length} new, ${r.length-nw.length} existed`)}catch{toast('Invalid file')}};fr.readAsText(f);e.target.value=''}
-function clearAll(){if(!confirm('Delete all contacts?'))return;C=[];sel.clear();sv();renderC();uBulk();toast('All cleared')}
-function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<CardScanAI />);
 </script>
 </body>
 </html>
- 

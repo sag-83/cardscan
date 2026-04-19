@@ -54,9 +54,17 @@ export function ContactDetail() {
       {/* Dark header */}
       <div style={{ background: 'var(--hdr)', padding: '56px 16px 18px', position: 'relative' }}>
         <button onClick={() => setDetailContactId(null)} style={hdrBtnStyle}>‹</button>
-        <button onClick={handleStarCycle} style={{ ...hdrBtnStyle, right: 50, left: 'auto' }}>
-          {c.stars > 0 ? '★' : '☆'}
-        </button>
+        <div style={{
+          position: 'absolute', right: 46, top: 10,
+          display: 'flex', gap: 2,
+        }}>
+          {[1, 2, 3, 4].map((n) => (
+            <span key={n} onClick={handleStarCycle}
+              style={{ fontSize: 20, cursor: 'pointer', color: c.stars >= n ? '#ffd700' : 'rgba(255,255,255,0.35)', lineHeight: 1 }}>
+              ★
+            </span>
+          ))}
+        </div>
         <button onClick={() => setMenuContactId(c.id)} style={{ ...hdrBtnStyle, right: 12, left: 'auto' }}>
           ···
         </button>
@@ -99,7 +107,10 @@ export function ContactDetail() {
         )}
         {(c.address || c.city) && (
           <ActionBtn icon="📍" bg="#fff3e0" label="Map"
-            onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`, '_blank')} />
+            onClick={() => {
+              const q = [c.company, fullAddress].filter(Boolean).join(' ')
+              window.open(`https://maps.google.com/?q=${encodeURIComponent(q)}`, '_blank')
+            }} />
         )}
         {c.email && (
           <ActionBtn icon="✉️" bg="#ede7f6" label="Email"
@@ -191,19 +202,9 @@ export function ContactDetail() {
         </>
       )}
 
-      {/* 4-star priority */}
       <SectionTitle>Info</SectionTitle>
       <Section>
         <SimpleRow icon="📅" bg="#8e8e93" value={c.scanned_at || '—'} label="Scanned On" />
-        <DetailRow icon="⭐" bg="#ff9500">
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[1, 2, 3, 4].map((n) => (
-              <span key={n} onClick={handleStarCycle}
-                style={{ fontSize: 22, cursor: 'pointer', color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
-            ))}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Priority (1–4)</div>
-        </DetailRow>
       </Section>
 
       <div style={{ height: 20 }} />

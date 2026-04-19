@@ -39,18 +39,24 @@ function isQuotaError(err: unknown): boolean {
 export async function callGemini(
   b64: string,
   mime: string,
-  apiKey: string,
-  apiKey2?: string
+  keys: string[]
 ): Promise<Record<string, string>[]> {
-  try {
-    return await callWithKey(b64, mime, apiKey)
-  } catch (err) {
-    if (apiKey2 && isQuotaError(err)) {
-      console.warn('Primary Gemini key hit quota, trying backup key')
-      return await callWithKey(b64, mime, apiKey2)
+  const validKeys = keys.filter(Boolean)
+  if (!validKeys.length) throw new Error('No Gemini API key configured')
+  let lastErr: unknown
+  for (let i = 0; i < validKeys.length; i++) {
+    try {
+      return await callWithKey(b64, mime, validKeys[i])
+    } catch (err) {
+      lastErr = err
+      if (isQuotaError(err) && i < validKeys.length - 1) {
+        console.warn(`Gemini key ${i + 1} hit quota, trying key ${i + 2}`)
+        continue
+      }
+      throw err
     }
-    throw err
   }
+  throw lastErr
 }
 
 export async function fileToBase64(file: File): Promise<string> {
@@ -73,7 +79,7 @@ export async function resizeImage(b64: string, mime: string, maxWidth: number): 
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
       resolve(canvas.toDataURL('image/jpeg', 0.78).split(',')[1])
     }
-    img.onerror = () => resolve(b64)
+    img.onerror = () => resolve(b64) // fallback: send original if resize fails
     img.src = `data:${mime};base64,${b64}`
   })
 }

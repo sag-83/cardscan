@@ -14,6 +14,7 @@ export function ScanScreen() {
     contacts,
     apiKey,
     apiKey2,
+    apiKey3,
     isScanning,
     setIsScanning,
     previewCards,
@@ -30,6 +31,7 @@ export function ScanScreen() {
     contacts: s.contacts,
     apiKey: s.apiKey,
     apiKey2: s.apiKey2,
+    apiKey3: s.apiKey3,
     isScanning: s.isScanning,
     setIsScanning: s.setIsScanning,
     previewCards: s.previewCards,
@@ -88,10 +90,23 @@ export function ScanScreen() {
       // Medium-size image for OCR/API call to reduce request size
       const scanB64 = await resizeImage(b64, file.type, 1600)
 
-      const extracted = await callGemini(scanB64, 'image/jpeg', apiKey, apiKey2)
+      const extracted = await callGemini(scanB64, 'image/jpeg', [apiKey, apiKey2, apiKey3])
+
+      if (!extracted.length) {
+        showToast('No card detected — try a clearer photo')
+        setIsScanning(false)
+        return
+      }
 
       if (side === 'back' && pendingBackId) {
         const target = contacts.find((c) => c.id === pendingBackId)
+
+        if (!target) {
+          showToast('Original contact not found — try again')
+          setPendingBackId(null)
+          setIsScanning(false)
+          return
+        }
 
         if (target) {
           const bd = (extracted[0] ?? {}) as Record<string, string>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
@@ -5,6 +6,7 @@ import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
 
 export function ContactDetail() {
+  const [isSendingSheets, setIsSendingSheets] = useState(false)
   const detailContactId = useStore((s) => s.detailContactId)
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
@@ -29,11 +31,15 @@ export function ContactDetail() {
   }
 
   const handleSendToSheets = async () => {
+    if (isSendingSheets) return
+    setIsSendingSheets(true)
     try {
       await sendToGoogleSheets([c])
-      showToast('Sent to Google Sheets!')
+      showToast('✅ Sent to Google Sheets!')
     } catch {
-      showToast('Sheets webhook not configured')
+      showToast('❌ Sheets webhook not configured')
+    } finally {
+      setIsSendingSheets(false)
     }
   }
 
@@ -55,7 +61,7 @@ export function ContactDetail() {
       <div style={{ background: 'var(--hdr)', padding: '56px 16px 18px', position: 'relative' }}>
         <button onClick={() => setDetailContactId(null)} style={hdrBtnStyle}>‹</button>
         <div style={{
-          position: 'absolute', right: 46, top: 10,
+          position: 'absolute', right: 96, top: 10,
           display: 'flex', gap: 2,
         }}>
           {[1, 2, 3, 4].map((n) => (
@@ -116,7 +122,7 @@ export function ContactDetail() {
           <ActionBtn icon="✉️" bg="#ede7f6" label="Email"
             onClick={() => window.location.href = `mailto:${c.email}`} />
         )}
-        <ActionBtn icon="📊" bg="#e8f5e9" label="Sheets" onClick={handleSendToSheets} />
+        <ActionBtn icon={isSendingSheets ? '⏳' : '📊'} bg="#e8f5e9" label={isSendingSheets ? 'Sending…' : 'Sheets'} onClick={handleSendToSheets} />
         <ActionBtn icon="✏️" bg="#f5f5f5" label="Edit"
           onClick={() => setEditModal({ contact: c, isNew: false })} />
       </div>

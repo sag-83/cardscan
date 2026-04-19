@@ -27,8 +27,10 @@ interface AppState {
   // ─── Settings ────────────────────────────────────────────────────
   apiKey: string
   apiKey2: string
+  apiKey3: string
   setApiKey: (key: string) => void
   setApiKey2: (key: string) => void
+  setApiKey3: (key: string) => void
 
   sbUrl: string
   setSbUrl: (url: string) => void
@@ -112,9 +114,11 @@ export const useStore = create<AppState>()(
       // ─── Settings ──────────────────────────────────────────────
       apiKey: (import.meta.env.VITE_GEMINI_KEY as string) ?? '',
       apiKey2: (import.meta.env.VITE_GEMINI_KEY2 as string) ?? '',
+      apiKey3: (import.meta.env.VITE_GEMINI_KEY3 as string) ?? '',
 
       setApiKey: (apiKey) => set({ apiKey }),
       setApiKey2: (apiKey2) => set({ apiKey2 }),
+      setApiKey3: (apiKey3) => set({ apiKey3 }),
 
       sbUrl: (import.meta.env.VITE_SUPABASE_URL as string) ?? '',
       setSbUrl: (sbUrl) => set({ sbUrl }),
@@ -184,6 +188,7 @@ export const useStore = create<AppState>()(
         contacts: s.contacts.map(stripImages),
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,
+        apiKey3: s.apiKey3,
         sbUrl: s.sbUrl,
         sbKey: s.sbKey,
         theme: s.theme,

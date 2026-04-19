@@ -11,6 +11,7 @@ export function SettingsScreen() {
   const {
     apiKey, setApiKey,
     apiKey2, setApiKey2,
+    apiKey3, setApiKey3,
     sbUrl, setSbUrl,
     sbKey, setSbKey,
     contacts, setContacts, showToast,
@@ -19,6 +20,8 @@ export function SettingsScreen() {
     setApiKey: s.setApiKey,
     apiKey2: s.apiKey2,
     setApiKey2: s.setApiKey2,
+    apiKey3: s.apiKey3,
+    setApiKey3: s.setApiKey3,
     sbUrl: s.sbUrl,
     setSbUrl: s.setSbUrl,
     sbKey: s.sbKey,
@@ -76,9 +79,15 @@ export function SettingsScreen() {
         </div>
         <Divider />
         <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-          <label style={labelStyle}>Backup API Key <span style={{ color: 'var(--accent)', fontWeight: 600 }}>(auto-switches if primary runs out)</span></label>
+          <label style={labelStyle}>Backup Key 2 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>(auto-switches on quota)</span></label>
           <input type="password" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)}
             placeholder="AIza... (second key)" style={inputStyle} />
+        </div>
+        <Divider />
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <label style={labelStyle}>Backup Key 3 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>(final fallback)</span></label>
+          <input type="password" value={apiKey3} onChange={(e) => setApiKey3(e.target.value)}
+            placeholder="AIza... (third key)" style={inputStyle} />
         </div>
       </SettingsGroup>
 

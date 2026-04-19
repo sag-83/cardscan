@@ -2,6 +2,7 @@ import { useStore } from '../store/useStore'
 import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
+import { sendToGoogleSheets } from '../lib/export'
 
 export function ContactDetail() {
   const detailContactId = useStore((s) => s.detailContactId)
@@ -25,6 +26,15 @@ export function ContactDetail() {
   const handleSaveToPhone = () => {
     downloadVCard(c)
     showToast('Open the .vcf file to save!')
+  }
+
+  const handleSendToSheets = async () => {
+    try {
+      await sendToGoogleSheets([c])
+      showToast('Sent to Google Sheets!')
+    } catch {
+      showToast('Sheets webhook not configured')
+    }
   }
 
   const handleSMS = () => {
@@ -95,6 +105,7 @@ export function ContactDetail() {
           <ActionBtn icon="✉️" bg="#ede7f6" label="Email"
             onClick={() => window.location.href = `mailto:${c.email}`} />
         )}
+        <ActionBtn icon="📊" bg="#e8f5e9" label="Sheets" onClick={handleSendToSheets} />
         <ActionBtn icon="✏️" bg="#f5f5f5" label="Edit"
           onClick={() => setEditModal({ contact: c, isNew: false })} />
       </div>

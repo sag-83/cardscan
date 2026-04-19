@@ -201,9 +201,7 @@ export function ScanScreen() {
       setPreviewCards([])
       setActiveScreen('contacts')
     } catch (err) {
-      showToast('Saved locally, but cloud sync failed: ' + (err as Error).message)
-      setPreviewCards([])
-      setActiveScreen('contacts')
+      showToast('Saved locally — cloud sync failed, tap Add to retry')
     } finally {
       setIsSavingPreview(false)
     }

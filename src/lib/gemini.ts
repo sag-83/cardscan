@@ -20,7 +20,11 @@ async function callWithKey(
       }),
     }
   )
-  if (!res.ok) throw new Error('API error ' + res.status)
+  if (!res.ok) {
+    const err = new Error('API error ' + res.status) as Error & { status: number }
+    err.status = res.status
+    throw err
+  }
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   const match = text.match(/\[[\s\S]*\]/)
@@ -28,9 +32,10 @@ async function callWithKey(
   return JSON.parse(match[0]) as Record<string, string>[]
 }
 
-/**
- * Tries apiKey first. If it fails (quota/error), automatically falls back to apiKey2.
- */
+function isQuotaError(err: unknown): boolean {
+  return err instanceof Error && 'status' in err && (err as { status: number }).status === 429
+}
+
 export async function callGemini(
   b64: string,
   mime: string,
@@ -40,8 +45,8 @@ export async function callGemini(
   try {
     return await callWithKey(b64, mime, apiKey)
   } catch (err) {
-    if (apiKey2) {
-      console.warn('Primary Gemini key failed, trying backup key:', err)
+    if (apiKey2 && isQuotaError(err)) {
+      console.warn('Primary Gemini key hit quota, trying backup key')
       return await callWithKey(b64, mime, apiKey2)
     }
     throw err
@@ -49,9 +54,10 @@ export async function callGemini(
 }
 
 export async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = () => reject(new Error('Failed to read file'))
     reader.readAsDataURL(file)
   })
 }

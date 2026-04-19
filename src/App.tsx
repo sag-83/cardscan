@@ -24,8 +24,11 @@ export default function App() {
 
   // Initialize Supabase and sync on mount
   useEffect(() => {
-    if (sbUrl && sbKey) {
-      initSupabase(sbUrl, sbKey)
+    // Prefer env vars — persisted Zustand values may be stale/empty
+    const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
+    const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
+    if (effectiveUrl && effectiveKey) {
+      initSupabase(effectiveUrl, effectiveKey)
       syncContactsFromDB()
         .then((dbContacts) => {
           if (!dbContacts.length) return

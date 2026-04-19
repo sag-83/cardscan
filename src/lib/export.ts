@@ -46,14 +46,17 @@ function toSheetsRow(c: Contact) {
     email:     c.email,
     phone:     c.phone_mobile,
     phone2:    c.phone_work,
+    fax:       c.phone_fax,
     website:   c.website,
     address:   c.address,
     city:      c.city,
     state:     c.state,
+    zip:       c.zip,
     country:   c.country,
     stars:     c.stars,
     notes:     c.notes,
     backNotes: c.back_notes,
+    userNotes: c.user_notes,
     scannedAt: c.scanned_at,
   }
 }

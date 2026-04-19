@@ -89,12 +89,14 @@ using (bucket_id = 'card-photos' and auth.uid()::text = (storage.foldername(name
 
 let client: SupabaseClient | null = null
 
-function sanitizeContactForDB(contact: Contact, userId: string): Contact {
+function sanitizeContactForDB(contact: Contact, userId: string) {
+  const { front_image, back_image, ...rest } = contact
+  void front_image
+  void back_image
+
   return {
-    ...contact,
+    ...rest,
     user_id: userId,
-    front_image: '',
-    back_image: '',
   }
 }
 

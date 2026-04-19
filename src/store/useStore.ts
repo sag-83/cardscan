@@ -3,6 +3,14 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
 import { normalizeContact } from '../lib/utils'
 
+function stripImages(contact: Contact): Contact {
+  return {
+    ...contact,
+    front_image: '',
+    back_image: '',
+  }
+}
+
 interface EditModalState {
   contact: Contact
   isNew: boolean
@@ -21,10 +29,12 @@ interface AppState {
   apiKey2: string
   setApiKey: (key: string) => void
   setApiKey2: (key: string) => void
+
   sbUrl: string
   setSbUrl: (url: string) => void
   sbKey: string
   setSbKey: (key: string) => void
+
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
@@ -78,30 +88,40 @@ export const useStore = create<AppState>()(
     (set) => ({
       // ─── Contacts ──────────────────────────────────────────────
       contacts: [],
+
       addContacts: (newContacts) =>
-        set((s) => ({ contacts: [...newContacts, ...s.contacts] })),
+        set((s) => ({
+          contacts: [...newContacts, ...s.contacts],
+        })),
+
       updateContact: (id, updates) =>
         set((s) => ({
           contacts: s.contacts.map((c) =>
             c.id === id ? normalizeContact({ ...c, ...updates }) : c
           ),
         })),
+
       deleteContact: (id) =>
         set((s) => ({
           contacts: s.contacts.filter((c) => c.id !== id),
           selectedIds: s.selectedIds.filter((x) => x !== id),
         })),
+
       setContacts: (contacts) => set({ contacts }),
 
       // ─── Settings ──────────────────────────────────────────────
       apiKey: (import.meta.env.VITE_GEMINI_KEY as string) ?? '',
       apiKey2: (import.meta.env.VITE_GEMINI_KEY2 as string) ?? '',
+
       setApiKey: (apiKey) => set({ apiKey }),
       setApiKey2: (apiKey2) => set({ apiKey2 }),
+
       sbUrl: (import.meta.env.VITE_SUPABASE_URL as string) ?? '',
       setSbUrl: (sbUrl) => set({ sbUrl }),
+
       sbKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? '',
       setSbKey: (sbKey) => set({ sbKey }),
+
       theme: 'light',
       setTheme: (theme) => set({ theme }),
 
@@ -112,20 +132,26 @@ export const useStore = create<AppState>()(
       // ─── Overlays ──────────────────────────────────────────────
       detailContactId: null,
       setDetailContactId: (detailContactId) => set({ detailContactId }),
+
       editModal: null,
       setEditModal: (editModal) => set({ editModal }),
+
       menuContactId: null,
       setMenuContactId: (menuContactId) => set({ menuContactId }),
+
       bulkMessageType: null,
       setBulkMessageType: (bulkMessageType) => set({ bulkMessageType }),
 
       // ─── Scan ──────────────────────────────────────────────────
       isScanning: false,
       setIsScanning: (isScanning) => set({ isScanning }),
+
       previewCards: [],
       setPreviewCards: (previewCards) => set({ previewCards }),
+
       pendingBackId: null,
       setPendingBackId: (pendingBackId) => set({ pendingBackId }),
+
       triggerBackScan: false,
       setTriggerBackScan: (triggerBackScan) => set({ triggerBackScan }),
 
@@ -137,6 +163,7 @@ export const useStore = create<AppState>()(
             ? s.selectedIds.filter((x) => x !== id)
             : [...s.selectedIds, id],
         })),
+
       clearSelected: () => set({ selectedIds: [] }),
 
       // ─── Toast ─────────────────────────────────────────────────
@@ -151,9 +178,10 @@ export const useStore = create<AppState>()(
     {
       name: 'cs_store_v2',
       storage: createJSONStorage(() => localStorage),
+
       // Only persist data that should survive a page refresh
       partialize: (s) => ({
-        contacts: s.contacts,
+        contacts: s.contacts.map(stripImages),
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,
         sbUrl: s.sbUrl,

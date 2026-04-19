@@ -1,6 +1,33 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
 
+export const SUPABASE_SCHEMA_SQL = `create table if not exists contacts (
+  id text primary key,
+  name text default '',
+  title text default '',
+  company text default '',
+  email text default '',
+  phone_mobile text default '',
+  phone_work text default '',
+  phone_fax text default '',
+  website text default '',
+  address text default '',
+  city text default '',
+  state text default '',
+  zip text default '',
+  country text default '',
+  notes text default '',
+  back_notes text default '',
+  user_notes text default '',
+  front_image text default '',
+  back_image text default '',
+  front_image_url text default '',
+  back_image_url text default '',
+  stars integer default 0,
+  scanned_at text default '',
+  created_at timestamptz default now()
+);`
+
 let client: SupabaseClient | null = null
 
 export function initSupabase(url: string, key: string): void {

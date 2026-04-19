@@ -40,7 +40,7 @@ export function ContactMenuModal() {
   const handleDelete = () => {
     if (!confirm(`Delete ${contact.name || contact.company || 'this contact'}?`)) return
     deleteContact(contact.id)
-    void deleteContactFromDB(contact.id)
+    deleteContactFromDB(contact.id)
     close()
     setDetailContactId(null)
     showToast('Deleted')

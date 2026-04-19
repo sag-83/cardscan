@@ -1,12 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from './store/useStore'
-import {
-  initSupabase,
-  isSupabaseConfigured,
-  getCurrentUser,
-  onAuthStateChange,
-  syncContactsFromDB,
-} from './lib/supabase'
+import { initSupabase, syncContactsFromDB } from './lib/supabase'
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
@@ -23,57 +17,32 @@ import { SettingsScreen } from './components/screens/SettingsScreen'
 
 export default function App() {
   const activeScreen = useStore((s) => s.activeScreen)
+  const sbUrl = useStore((s) => s.sbUrl)
+  const sbKey = useStore((s) => s.sbKey)
+  const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
   const showToast = useStore((s) => s.showToast)
-  const setAuthState = useStore((s) => s.setAuthState)
 
+  // Initialize Supabase and sync on mount
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      setAuthState(null, false)
-      return
+    // Prefer env vars — persisted Zustand values may be stale/empty
+    const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
+    const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
+    if (effectiveUrl && effectiveKey) {
+      initSupabase(effectiveUrl, effectiveKey)
+      syncContactsFromDB()
+        .then((dbContacts) => {
+          if (!dbContacts.length) return
+          const dbMap = new Map(dbContacts.map((c) => [c.id, c]))
+          const merged = contacts.map((c) => dbMap.get(c.id) ?? c)
+          const localIds = new Set(contacts.map((c) => c.id))
+          dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
+          setContacts(merged)
+        })
+        .catch((err) => { console.error('Supabase sync failed:', err); showToast('Cloud sync failed — using local data') })
     }
-
-    initSupabase()
-
-    let cancelled = false
-
-    const syncForUser = async () => {
-      try {
-        const user = await getCurrentUser()
-        if (cancelled) return
-
-        setAuthState(user?.id ?? null, false)
-
-        if (!user) {
-          setContacts([])
-          return
-        }
-
-        const dbContacts = await syncContactsFromDB()
-        if (cancelled) return
-        setContacts(dbContacts)
-      } catch (err) {
-        console.error('Supabase sync failed:', err)
-        if (!cancelled) {
-          setAuthState(null, false)
-          setContacts([])
-          showToast('Cloud sync failed')
-        }
-      }
-    }
-
-    void syncForUser()
-
-    const unsubscribe = onAuthStateChange(() => {
-      setAuthState(null, true)
-      void syncForUser()
-    })
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [setAuthState, setContacts, showToast])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>

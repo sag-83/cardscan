@@ -1,6 +1,6 @@
 import { useStore } from '../../store/useStore'
 import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
-import { deleteContactFromDB, saveContactToDB } from '../../lib/supabase'
+import { deleteContactFromDB } from '../../lib/supabase'
 
 export function BulkScreen() {
   const {
@@ -33,15 +33,7 @@ export function BulkScreen() {
     try {
       await sendToGoogleSheets(unsent)
       const sentIds = new Set(unsent.map((c) => c.id))
-      const updatedContacts = contacts.map((c) =>
-        sentIds.has(c.id) ? { ...c, sent_to_sheets: true } : c
-      )
-      setContacts(updatedContacts)
-      await Promise.all(
-        updatedContacts
-          .filter((c) => sentIds.has(c.id))
-          .map((c) => saveContactToDB(c))
-      )
+      setContacts(contacts.map((c) => sentIds.has(c.id) ? { ...c, sent_to_sheets: true } : c))
       showToast(`${unsent.length} sent to Sheets!`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)

@@ -1,6 +1,6 @@
 # CardScan AI — React + TypeScript
 
-A mobile-first business card scanner powered by Gemini AI. The public-demo-safe version uses Vercel API routes for OCR and Google Sheets export, plus Supabase auth + RLS for per-user data isolation.
+A mobile-first business card scanner powered by Gemini AI. Rebuilt from a single HTML file into a proper full-stack React project.
 
 ## Tech Stack
 
@@ -8,11 +8,10 @@ A mobile-first business card scanner powered by Gemini AI. The public-demo-safe 
 |---|---|---|
 | Framework | **React 18 + TypeScript** | Component model, type safety |
 | Build tool | **Vite** | Instant dev server, fast HMR |
-| State | **Zustand** | Simple client state; only theme persists locally |
+| State | **Zustand** | Simple, no boilerplate, persists to localStorage |
 | Styling | **Tailwind CSS + CSS variables** | Utility classes + theme-aware variables |
 | Cloud | **Supabase** | Optional Postgres sync |
 | AI | **Gemini 2.5 Flash** | OCR extraction via Google AI |
-| Server | **Vercel API Routes** | Keeps Gemini and Sheets secrets off the client |
 
 ## Project Structure
 
@@ -24,16 +23,12 @@ src/
 │   └── useStore.ts         # Zustand global store (contacts, settings, UI state)
 ├── lib/
 │   ├── utils.ts            # Pure helpers: uid, norm, formatDate, initials…
-│   ├── gemini.ts           # Client -> /api/scan wrapper + image resize
-│   ├── supabase.ts         # Auth-aware DB/storage client + secure schema SQL
+│   ├── gemini.ts           # Gemini API calls + image resize
+│   ├── supabase.ts         # DB client, CRUD, schema SQL
 │   ├── vcard.ts            # .vcf download
-│   └── export.ts           # CSV, JSON backup/restore, /api/sheets wrapper
+│   └── export.ts           # CSV, Google Sheets, JSON backup/restore
 ├── hooks/
 │   └── useTheme.ts         # Applies light/dark theme to <html>
-├── api/
-│   ├── scan.js             # Server-side Gemini OCR + auth + rate limit
-│   ├── sheets.js           # Server-side Sheets export + auth + rate limit
-│   └── _shared.js          # Shared auth/rate-limit helpers
 └── components/
     ├── Header.tsx           # Sticky top bar
     ├── NavBar.tsx           # Fixed bottom nav
@@ -61,34 +56,37 @@ Then open http://localhost:5173
 
 ## First-time Setup
 
-1. Copy `.env.example` into an untracked local env file.
-2. Add client-safe Supabase values:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-3. Add server-only values in Vercel or your local server env:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `GEMINI_API_KEY` (and optional fallback keys)
-   - `SHEETS_WEBHOOK_URL`
-4. Create a Supabase project and apply the SQL shown in Settings.
-5. Start a secure demo session from the app before scanning.
+1. Get a **free Gemini API key** at https://aistudio.google.com/apikey
+2. Open the app → **Settings** → paste your key under "Gemini API Key"
+3. (Optional) Set up Supabase for cloud sync:
+   - Create a project at https://supabase.com
+   - Run the SQL schema shown in Settings → "SQL" section
+   - Add your project URL and anon key
 
 ## Supabase Schema
 
-Run the secure SQL shown in-app under Settings. It adds:
+Run this once in your Supabase SQL Editor (also shown in-app under Settings):
 
-- `user_id` ownership on every contact row
-- Row Level Security for select/insert/update/delete
-- Private Supabase storage bucket policies for card photos
-- Per-user storage paths and signed URL access
+```sql
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  name TEXT, title TEXT, company TEXT, email TEXT,
+  phone_mobile TEXT, phone_work TEXT, phone_fax TEXT,
+  website TEXT, address TEXT, city TEXT,
+  state TEXT, zip TEXT, country TEXT,
+  notes TEXT, user_notes TEXT, back_notes TEXT,
+  stars INT DEFAULT 0, scanned_at TEXT,
+  front_image TEXT, back_image TEXT,
+  front_image_url TEXT, back_image_url TEXT,
+  sent_to_sheets BOOL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-## Public Demo Checklist
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "all" ON contacts FOR ALL USING (true) WITH CHECK (true);
+```
 
-- Keep Gemini and Google Sheets secrets in server-only env vars.
-- Rotate any keys that were previously committed or bundled.
-- Apply the secure Supabase SQL before deploying.
-- Remove old `dist/` artifacts from git and rebuild after secrets are rotated.
-- Deploy with Vercel so `/api/scan` and `/api/sheets` are available.
+> **Note:** Card images (base64) are stored locally only — they are stripped before Supabase sync since they can be several MB each.
 
 ## Build for Production
 

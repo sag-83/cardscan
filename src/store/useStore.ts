@@ -3,6 +3,14 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
 import { normalizeContact } from '../lib/utils'
 
+function stripImages(contact: Contact): Contact {
+  return {
+    ...contact,
+    front_image: '',
+    back_image: '',
+  }
+}
+
 interface EditModalState {
   contact: Contact
   isNew: boolean
@@ -16,12 +24,21 @@ interface AppState {
   deleteContact: (id: string) => void
   setContacts: (contacts: Contact[]) => void
 
+  // ─── Settings ────────────────────────────────────────────────────
+  apiKey: string
+  apiKey2: string
+  apiKey3: string
+  setApiKey: (key: string) => void
+  setApiKey2: (key: string) => void
+  setApiKey3: (key: string) => void
+
+  sbUrl: string
+  setSbUrl: (url: string) => void
+  sbKey: string
+  setSbKey: (key: string) => void
+
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
-
-  authUserId: string | null
-  authLoading: boolean
-  setAuthState: (userId: string | null, loading: boolean) => void
 
   // ─── Navigation ──────────────────────────────────────────────────
   activeScreen: Screen
@@ -94,12 +111,23 @@ export const useStore = create<AppState>()(
 
       setContacts: (contacts) => set({ contacts }),
 
+      // ─── Settings ──────────────────────────────────────────────
+      apiKey: (import.meta.env.VITE_GEMINI_KEY as string) ?? '',
+      apiKey2: (import.meta.env.VITE_GEMINI_KEY2 as string) ?? '',
+      apiKey3: (import.meta.env.VITE_GEMINI_KEY3 as string) ?? '',
+
+      setApiKey: (apiKey) => set({ apiKey }),
+      setApiKey2: (apiKey2) => set({ apiKey2 }),
+      setApiKey3: (apiKey3) => set({ apiKey3 }),
+
+      sbUrl: (import.meta.env.VITE_SUPABASE_URL as string) ?? '',
+      setSbUrl: (sbUrl) => set({ sbUrl }),
+
+      sbKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? '',
+      setSbKey: (sbKey) => set({ sbKey }),
+
       theme: 'light',
       setTheme: (theme) => set({ theme }),
-
-      authUserId: null,
-      authLoading: true,
-      setAuthState: (authUserId, authLoading) => set({ authUserId, authLoading }),
 
       // ─── Navigation ────────────────────────────────────────────
       activeScreen: 'scan',
@@ -152,9 +180,17 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: 'cs_store_v3',
+      name: 'cs_store_v2',
       storage: createJSONStorage(() => localStorage),
+
+      // Only persist data that should survive a page refresh
       partialize: (s) => ({
+        contacts: s.contacts.map(stripImages),
+        apiKey: s.apiKey,
+        apiKey2: s.apiKey2,
+        apiKey3: s.apiKey3,
+        sbUrl: s.sbUrl,
+        sbKey: s.sbKey,
         theme: s.theme,
       }),
     }

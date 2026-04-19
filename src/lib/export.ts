@@ -1,5 +1,7 @@
 import { Contact } from '../types/contact'
-import { getAccessToken } from './supabase'
+
+// Reads from .env (VITE_SHEETS_WEBHOOK) — set this in Vercel dashboard too
+const SHEETS_WEBHOOK = import.meta.env.VITE_SHEETS_WEBHOOK as string
 
 const CSV_HEADERS = [
   'Name', 'Title', 'Company', 'Email', 'Mobile', 'Work Phone', 'Fax',
@@ -60,22 +62,12 @@ function toSheetsRow(c: Contact) {
 }
 
 export async function sendToGoogleSheets(contacts: Contact[]): Promise<void> {
-  const accessToken = await getAccessToken()
-  if (!accessToken) throw new Error('Sign in required before exporting')
-
-  const res = await fetch('/api/sheets', {
+  if (!SHEETS_WEBHOOK) throw new Error('Sheets webhook URL not configured')
+  await fetch(SHEETS_WEBHOOK, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ contacts: contacts.map(toSheetsRow) }),
+    body: JSON.stringify(contacts.map(toSheetsRow)),
+    mode: 'no-cors',
   })
-
-  if (!res.ok) {
-    const payload = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new Error(payload?.error || `Sheets export failed with status ${res.status}`)
-  }
 }
 
 export function backupToJSON(contacts: Contact[]): void {

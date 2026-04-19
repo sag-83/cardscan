@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store/useStore'
 import { formatDate, initials, groupByDate } from '../../lib/utils'
 import { Contact } from '../../types/contact'
-import { StoredCardImage } from '../StoredCardImage'
 
 export function ContactsScreen() {
   const [query, setQuery] = useState('')
@@ -134,13 +133,9 @@ function ContactRow({ contact: c, onClick, onMenu }: {
       borderBottom: '1px solid var(--border2)', cursor: 'pointer',
     }}>
       {(c.front_image || c.front_image_url) ? (
-        <StoredCardImage
-          base64={c.front_image}
-          storagePath={c.front_image_url}
-          alt=""
+        <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
           style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
-            flexShrink: 0, border: '1px solid var(--border2)', background: 'var(--bg3)' }}
-        />
+            flexShrink: 0, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="" />
       ) : (
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--hdr)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -84,21 +84,35 @@ export async function testSupabaseConnection(): Promise<void> {
   if (error) throw error
 }
 
-export const SUPABASE_SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS contacts (
-  id TEXT PRIMARY KEY,
-  name TEXT, title TEXT, company TEXT, email TEXT,
-  phone_mobile TEXT, phone_work TEXT, phone_fax TEXT,
-  website TEXT, address TEXT, city TEXT,
-  state TEXT, zip TEXT, country TEXT,
-  notes TEXT, user_notes TEXT, back_notes TEXT,
-  stars INT DEFAULT 0, scanned_at TEXT,
-  front_image TEXT, back_image TEXT,
-  front_image_url TEXT, back_image_url TEXT,
-  sent_to_sheets BOOL DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+export async function uploadCardPhoto(
+  contactId: string,
+  side: 'front' | 'back',
+  base64: string,
+  mimeType = 'image/jpeg'
+): Promise<string | null> {
+  if (!client || !base64) return null
+  try {
+    const byteChars = atob(base64)
+    const byteArray = new Uint8Array(byteChars.length)
+    for (let i = 0; i < byteChars.length; i++) {
+      byteArray[i] = byteChars.charCodeAt(i)
+    }
+    const blob = new Blob([byteArray], { type: mimeType })
+    const path = `${contactId}_${side}.jpg`
 
-ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+    const { error } = await client.storage
+      .from('card-photos')
+      .upload(path, blob, { upsert: true, contentType: mimeType })
 
-CREATE POLICY "all" ON contacts
- FOR ALL USING (true) WITH CHECK (true);`
+    if (error) {
+      console.warn('Photo upload error:', error)
+      return null
+    }
+
+    const { data } = client.storage.from('card-photos').getPublicUrl(path)
+    return data?.publicUrl ?? null
+  } catch (err) {
+    console.warn('Photo upload failed:', err)
+    return null
+  }
+}

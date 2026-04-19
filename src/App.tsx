@@ -29,11 +29,13 @@ export default function App() {
       syncContactsFromDB()
         .then((dbContacts) => {
           if (!dbContacts.length) return
+          const dbMap = new Map(dbContacts.map((c) => [c.id, c]))
+          const merged = contacts.map((c) => dbMap.get(c.id) ?? c)
           const localIds = new Set(contacts.map((c) => c.id))
-          const remoteOnly = dbContacts.filter((c) => !localIds.has(c.id))
-          if (remoteOnly.length) setContacts([...remoteOnly, ...contacts])
+          dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
+          setContacts(merged)
         })
-        .catch(console.warn)
+        .catch((err) => console.error('Supabase sync failed:', err))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

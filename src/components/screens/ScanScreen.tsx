@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } fro
 import { useStore } from '../../store/useStore'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
 import { normalizeContact, uid, blankContact } from '../../lib/utils'
-import { saveContactToDB } from '../../lib/supabase'
+import { saveContactToDB, uploadCardPhoto } from '../../lib/supabase'
 import type { Contact } from '../../types/contact'
 
 export function ScanScreen() {
@@ -96,9 +96,12 @@ export function ScanScreen() {
         if (target) {
           const bd = (extracted[0] ?? {}) as Record<string, string>
 
+          const backUrl = await uploadCardPhoto(pendingBackId, 'back', thumb)
+
           const merged: Contact = {
             ...target,
             back_image: thumb,
+            ...(backUrl ? { back_image_url: backUrl } : {}),
           }
 
           const newPhones = [bd.phone_mobile, bd.phone_work, bd.phone_fax].filter(Boolean)
@@ -182,9 +185,19 @@ export function ScanScreen() {
     setIsSavingPreview(true)
 
     try {
-      addContacts(previewCards)
-      await Promise.all(previewCards.map((c) => saveContactToDB(c)))
-      showToast(`${previewCards.length} contact(s) added!`)
+      const enriched = await Promise.all(
+        previewCards.map(async (c) => {
+          if (c.front_image) {
+            const url = await uploadCardPhoto(c.id, 'front', c.front_image)
+            if (url) return { ...c, front_image_url: url }
+          }
+          return c
+        })
+      )
+
+      addContacts(enriched)
+      await Promise.all(enriched.map((c) => saveContactToDB(c)))
+      showToast(`${enriched.length} contact(s) added!`)
       setPreviewCards([])
       setActiveScreen('contacts')
     } catch (err) {

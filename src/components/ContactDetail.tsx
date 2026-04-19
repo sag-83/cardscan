@@ -100,22 +100,22 @@ export function ContactDetail() {
       </div>
 
       {/* Card images */}
-      {(c.front_image || c.back_image) && (
+      {(c.front_image || c.front_image_url || c.back_image || c.back_image_url) && (
         <>
           <SectionTitle>Card Images</SectionTitle>
           <Section>
-            {c.front_image && (
+            {(c.front_image || c.front_image_url) && (
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Front Side</div>
-                <img src={`data:image/jpeg;base64,${c.front_image}`}
+                <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
                     maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card front" />
               </DetailRow>
             )}
-            {c.back_image && (
+            {(c.back_image || c.back_image_url) && (
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Back Side</div>
-                <img src={`data:image/jpeg;base64,${c.back_image}`}
+                <img src={c.back_image ? `data:image/jpeg;base64,${c.back_image}` : c.back_image_url}
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
                     maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card back" />
               </DetailRow>

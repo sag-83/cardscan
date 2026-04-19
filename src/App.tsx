@@ -21,6 +21,7 @@ export default function App() {
   const sbKey = useStore((s) => s.sbKey)
   const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
+  const showToast = useStore((s) => s.showToast)
 
   // Initialize Supabase and sync on mount
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function App() {
           dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
           setContacts(merged)
         })
-        .catch((err) => console.error('Supabase sync failed:', err))
+        .catch((err) => { console.error('Supabase sync failed:', err); showToast('Cloud sync failed — using local data') })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

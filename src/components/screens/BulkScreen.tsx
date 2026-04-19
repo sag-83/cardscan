@@ -45,7 +45,7 @@ export function BulkScreen() {
     if (!confirm(`Delete ${selectedIds.length} contact(s)?`)) return
     selectedIds.forEach((id) => {
       deleteContact(id)
-      deleteContactFromDB(id)
+      deleteContactFromDB(id).catch((err) => console.error('DB delete failed:', err))
     })
     clearSelected()
     showToast('Deleted!')

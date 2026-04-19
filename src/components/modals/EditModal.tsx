@@ -63,8 +63,6 @@ export function EditModal() {
     showToast('Deleted')
   }
 
-  void contacts // used indirectly
-
   return (
     <div
       onClick={() => setEditModal(null)}

@@ -10,7 +10,7 @@ const CSV_HEADERS = [
 ]
 
 function csvQuote(val: string | number | boolean | undefined | null): string {
-  return `"${(val ?? '').toString().replace(/"/g, '""')}"`
+  return `"${(val ?? '').toString().replace(/"/g, '""').replace(/\n/g, ' ')}"`
 }
 
 export function exportToCSV(contacts: Contact[]): void {

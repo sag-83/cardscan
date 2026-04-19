@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
@@ -16,6 +16,13 @@ export function ContactDetail() {
   const showToast = useStore((s) => s.showToast)
 
   const contact = contacts.find((c) => c.id === detailContactId)
+
+  useEffect(() => {
+    if (detailContactId && !contacts.find((c) => c.id === detailContactId)) {
+      setDetailContactId(null)
+    }
+  }, [contacts, detailContactId, setDetailContactId])
+
   if (!contact) return null
   const c = contact
 
@@ -136,6 +143,7 @@ export function ContactDetail() {
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Front Side</div>
                 <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
                     maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card front" />
               </DetailRow>
@@ -144,6 +152,7 @@ export function ContactDetail() {
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Back Side</div>
                 <img src={c.back_image ? `data:image/jpeg;base64,${c.back_image}` : c.back_image_url}
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
                     maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card back" />
               </DetailRow>

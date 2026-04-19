@@ -23,7 +23,8 @@ export function Toast() {
         transition: '0.25s',
         maxWidth: '90%',
         textAlign: 'center',
-        whiteSpace: 'nowrap',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
       }}
     >
       {toastMessage}

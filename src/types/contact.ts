@@ -1,5 +1,6 @@
 export interface Contact {
   id: string
+  user_id: string
   name: string
   title: string
   company: string

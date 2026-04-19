@@ -49,6 +49,7 @@ export function normalizeContact(c: Contact): Contact {
 export function blankContact(): Contact {
   return {
     id: uid(),
+    user_id: '',
     name: '',
     title: '',
     company: '',

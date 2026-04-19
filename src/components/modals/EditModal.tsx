@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../../store/useStore'
 import { normalizeContact } from '../../lib/utils'
-import { saveContactToDB } from '../../lib/supabase'
+import { deleteContactFromDB, saveContactToDB } from '../../lib/supabase'
 import { Contact } from '../../types/contact'
 
 const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
@@ -41,12 +41,16 @@ export function EditModal() {
 
   const handleSave = async () => {
     const normalized = normalizeContact(form)
+    const ok = await saveContactToDB(normalized)
+    if (!ok) {
+      showToast('Cloud save failed')
+      return
+    }
     if (isNew) {
       addContacts([normalized])
     } else {
       updateContact(normalized.id, normalized)
     }
-    await saveContactToDB(normalized)
     setEditModal(null)
     showToast('Saved!')
     if (!isNew) {
@@ -58,6 +62,7 @@ export function EditModal() {
   const handleDelete = () => {
     if (!confirm('Delete this contact?')) return
     deleteContact(form.id)
+    void deleteContactFromDB(form.id)
     setEditModal(null)
     setDetailContactId(null)
     showToast('Deleted')

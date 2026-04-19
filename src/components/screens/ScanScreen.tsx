@@ -1,9 +1,17 @@
 import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } from 'react'
 import { useStore } from '../../store/useStore'
-import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
+import { fileToBase64, resizeImage, scanBusinessCard } from '../../lib/gemini'
 import { normalizeContact, uid, blankContact } from '../../lib/utils'
-import { saveContactToDB, uploadCardPhoto } from '../../lib/supabase'
+import {
+  saveContactToDB,
+  saveContactsToDB,
+  startDemoSession,
+  uploadCardPhoto,
+} from '../../lib/supabase'
 import type { Contact } from '../../types/contact'
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
 
 export function ScanScreen() {
   const frontInputRef = useRef<HTMLInputElement | null>(null)
@@ -12,9 +20,8 @@ export function ScanScreen() {
 
   const {
     contacts,
-    apiKey,
-    apiKey2,
-    apiKey3,
+    authUserId,
+    authLoading,
     isScanning,
     setIsScanning,
     previewCards,
@@ -29,9 +36,8 @@ export function ScanScreen() {
     showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
-    apiKey: s.apiKey,
-    apiKey2: s.apiKey2,
-    apiKey3: s.apiKey3,
+    authUserId: s.authUserId,
+    authLoading: s.authLoading,
     isScanning: s.isScanning,
     setIsScanning: s.setIsScanning,
     previewCards: s.previewCards,
@@ -47,15 +53,20 @@ export function ScanScreen() {
   }))
 
   useEffect(() => {
-    if (triggerBackScan) {
+    if (triggerBackScan && authUserId) {
       setTriggerBackScan(false)
       backInputRef.current?.click()
     }
-  }, [triggerBackScan, setTriggerBackScan])
+  }, [authUserId, triggerBackScan, setTriggerBackScan])
 
   const startScan = (side: 'front' | 'back') => {
-    if (!apiKey) {
-      showToast('Set Gemini API key in Settings ⚙️')
+    if (authLoading) {
+      showToast('Checking secure session...')
+      return
+    }
+
+    if (!authUserId) {
+      showToast('Start a secure demo session first')
       setActiveScreen('settings')
       return
     }
@@ -78,6 +89,24 @@ export function ScanScreen() {
   }
 
   const handleFile = async (file: File, side: 'front' | 'back') => {
+    if (!authUserId) {
+      showToast('Start a secure demo session first')
+      setActiveScreen('settings')
+      return
+    }
+
+    if (isScanning || isSavingPreview) return
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      showToast('Upload a JPG, PNG, WEBP, or HEIC image')
+      return
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showToast('Image must be 10 MB or smaller')
+      return
+    }
+
     setPreviewCards([])
     setIsScanning(true)
 
@@ -90,7 +119,7 @@ export function ScanScreen() {
       // Medium-size image for OCR/API call to reduce request size
       const scanB64 = await resizeImage(b64, file.type, 1600)
 
-      const extracted = await callGemini(scanB64, 'image/jpeg', [apiKey, apiKey2, apiKey3])
+      const extracted = await scanBusinessCard(scanB64, 'image/jpeg')
 
       if (!extracted.length) {
         showToast('No card detected — try a clearer photo')
@@ -115,6 +144,7 @@ export function ScanScreen() {
 
           const merged: Contact = {
             ...target,
+            user_id: authUserId,
             back_image: thumb,
             ...(backUrl ? { back_image_url: backUrl } : {}),
           }
@@ -154,8 +184,14 @@ export function ScanScreen() {
             merged.back_notes = [merged.back_notes, bd.notes].filter(Boolean).join(' | ')
           }
 
+          const saved = await saveContactToDB(merged)
+          if (!saved) {
+            showToast('Back image uploaded, but contact save failed. Apply the new Supabase SQL first.')
+            setIsScanning(false)
+            return
+          }
+
           updateContact(pendingBackId, merged)
-          await saveContactToDB(merged)
           showToast('Back side merged into contact!')
         }
 
@@ -168,6 +204,7 @@ export function ScanScreen() {
         normalizeContact({
           ...blankContact(),
           id: uid(),
+          user_id: authUserId,
           name: raw.name ?? '',
           title: raw.title ?? '',
           company: raw.company ?? '',
@@ -210,19 +247,38 @@ export function ScanScreen() {
         })
       )
 
+      const saveResult = await saveContactsToDB(
+        enriched.map((c) => ({ ...c, user_id: authUserId ?? c.user_id }))
+      )
+
+      if (saveResult.failed > 0) {
+        showToast(
+          `Images uploaded, but ${saveResult.failed} contact save(s) failed. Apply the new Supabase SQL first.`
+        )
+        return
+      }
+
       addContacts(enriched)
-      await Promise.all(enriched.map((c) => saveContactToDB(c)))
       showToast(`${enriched.length} contact(s) added!`)
       setPreviewCards([])
       setActiveScreen('contacts')
     } catch (err) {
-      showToast('Saved locally — cloud sync failed, tap Add to retry')
+      showToast((err as Error).message || 'Cloud save failed')
     } finally {
       setIsSavingPreview(false)
     }
   }
 
   const cancelPreview = () => setPreviewCards([])
+
+  const handleStartDemoSession = async () => {
+    try {
+      await startDemoSession()
+      showToast('Secure demo session started')
+    } catch (err) {
+      showToast((err as Error).message || 'Unable to start demo session')
+    }
+  }
 
   if (isScanning) {
     return <ScanningLoader />
@@ -302,7 +358,31 @@ export function ScanScreen() {
           </p>
         </div>
 
-        <button onClick={() => startScan('front')} style={btnStyle('primary')}>
+        {!authUserId && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: 12,
+              borderRadius: 12,
+              background: 'rgba(255,149,0,0.1)',
+              border: '1px solid rgba(255,149,0,0.25)',
+              color: 'var(--text2)',
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            Start a secure demo session before scanning. This assigns your uploads and contacts to your
+            own user account and enables server-side quota protection.
+          </div>
+        )}
+
+        {!authUserId && (
+          <button onClick={handleStartDemoSession} style={{ ...btnStyle('secondary'), marginBottom: 10 }}>
+            Start Secure Demo Session
+          </button>
+        )}
+
+        <button onClick={() => startScan('front')} style={btnStyle('primary')} disabled={!authUserId || authLoading}>
           Scan Card (Front)
         </button>
 

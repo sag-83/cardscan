@@ -4,6 +4,7 @@ import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
+import { StoredCardImage } from './StoredCardImage'
 
 export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
@@ -42,9 +43,11 @@ export function ContactDetail() {
     setIsSendingSheets(true)
     try {
       await sendToGoogleSheets([c])
+      updateContact(c.id, { sent_to_sheets: true })
+      void saveContactToDB({ ...c, sent_to_sheets: true })
       showToast('✅ Sent to Google Sheets!')
     } catch {
-      showToast('❌ Sheets webhook not configured')
+      showToast('❌ Sheets export failed')
     } finally {
       setIsSendingSheets(false)
     }
@@ -142,19 +145,25 @@ export function ContactDetail() {
             {(c.front_image || c.front_image_url) && (
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Front Side</div>
-                <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                <StoredCardImage
+                  base64={c.front_image}
+                  storagePath={c.front_image_url}
+                  alt="Card front"
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
-                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card front" />
+                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }}
+                />
               </DetailRow>
             )}
             {(c.back_image || c.back_image_url) && (
               <DetailRow icon="🖼" bg="#8e8e93">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Back Side</div>
-                <img src={c.back_image ? `data:image/jpeg;base64,${c.back_image}` : c.back_image_url}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                <StoredCardImage
+                  base64={c.back_image}
+                  storagePath={c.back_image_url}
+                  alt="Card back"
                   style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
-                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card back" />
+                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }}
+                />
               </DetailRow>
             )}
           </Section>

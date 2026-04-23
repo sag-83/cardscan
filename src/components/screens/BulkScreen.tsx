@@ -30,8 +30,8 @@ export function BulkScreen() {
     if (!targetContacts.length) { showToast('No contacts to send'); return }
     showToast(`Sending ${targetContacts.length}...`)
     try {
-      await sendToGoogleSheets(targetContacts)
-      showToast(`${targetContacts.length} sent to Sheets!`)
+      const sent = await sendToGoogleSheets(targetContacts)
+      showToast(`${sent} sent to Sheets!`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)
     }

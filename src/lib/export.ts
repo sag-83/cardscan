@@ -59,17 +59,18 @@ function toSheetsRow(c: Contact) {
   }
 }
 
-export async function sendToGoogleSheets(contacts: Contact[]): Promise<void> {
+export async function sendToGoogleSheets(contacts: Contact[]): Promise<number> {
   // Goes through /api/sheets (Vercel serverless) to avoid Safari CORS issues
   const res = await fetch('/api/sheets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(contacts.map(toSheetsRow)),
   })
+  const data = await res.json().catch(() => ({})) as { error?: string; sent?: number }
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { error?: string }
     throw new Error(data.error ?? `Server error ${res.status}`)
   }
+  return data.sent ?? contacts.length
 }
 
 export function backupToJSON(contacts: Contact[]): void {

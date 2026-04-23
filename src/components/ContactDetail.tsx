@@ -41,8 +41,8 @@ export function ContactDetail() {
     if (isSendingSheets) return
     setIsSendingSheets(true)
     try {
-      await sendToGoogleSheets([c])
-      showToast('✅ Sent to Google Sheets!')
+      const sent = await sendToGoogleSheets([c])
+      showToast(sent ? '✅ Sent to Google Sheets!' : '❌ Not sent')
     } catch (err) {
       showToast('❌ ' + (err as Error).message)
     } finally {

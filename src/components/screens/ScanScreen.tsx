@@ -13,6 +13,11 @@ import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+const SUPPORTED_SCAN_TYPES = ['application/pdf']
+
+function isSupportedScanFile(file: File): boolean {
+  return file.type.startsWith('image/') || SUPPORTED_SCAN_TYPES.includes(file.type)
+}
 
 async function filterUniqueAgainstLocalAndCloud(
   cards: Contact[],
@@ -122,8 +127,8 @@ export function ScanScreen() {
   }
 
   const handleFile = async (file: File, side: 'front' | 'back') => {
-    if (!file.type.startsWith('image/')) {
-      showToast('Please choose a photo/image file')
+    if (!isSupportedScanFile(file)) {
+      showToast('Please choose an image or PDF scan')
       return
     }
 
@@ -138,13 +143,15 @@ export function ScanScreen() {
     try {
       const b64 = await fileToBase64(file)
 
-      // Small preview image for UI
-      const thumb = await resizeImage(b64, file.type, side === 'front' ? 500 : 600)
+      const isPdf = file.type === 'application/pdf'
+
+      // Small preview image for UI. PDFs can be OCR'd directly, but cannot be shown in <img>.
+      const thumb = isPdf ? '' : await resizeImage(b64, file.type, side === 'front' ? 500 : 600)
 
       // Medium-size image for OCR/API call to reduce request size
-      const scanB64 = await resizeImage(b64, file.type, 1600)
+      const scanB64 = isPdf ? b64 : await resizeImage(b64, file.type, 1600)
 
-      const extracted = await callGemini(scanB64, 'image/jpeg', [apiKey, apiKey2, apiKey3])
+      const extracted = await callGemini(scanB64, isPdf ? 'application/pdf' : 'image/jpeg', [apiKey, apiKey2, apiKey3])
 
       if (!extracted.length) {
         showToast('No card detected — try a clearer photo')
@@ -397,7 +404,7 @@ export function ScanScreen() {
       <input
         ref={frontFileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf"
         style={{ display: 'none' }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           const f = e.target.files?.[0]
@@ -422,7 +429,7 @@ export function ScanScreen() {
       <input
         ref={backFileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf"
         style={{ display: 'none' }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           const f = e.target.files?.[0]

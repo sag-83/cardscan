@@ -187,7 +187,7 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: IS_DEMO_MODE ? 'cs_store_demo_v1' : 'cs_store_v2',
+      name: IS_DEMO_MODE ? 'cs_store_demo_v2' : 'cs_store_v2',
       storage: createJSONStorage(() => localStorage),
 
       // Only persist data that should survive a page refresh

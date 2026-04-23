@@ -13,6 +13,7 @@ import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+const MAX_PDF_BYTES = 6 * 1024 * 1024
 const SUPPORTED_SCAN_TYPES = ['application/pdf']
 
 function isSupportedScanFile(file: File): boolean {
@@ -129,6 +130,11 @@ export function ScanScreen() {
   const handleFile = async (file: File, side: 'front' | 'back') => {
     if (!isSupportedScanFile(file)) {
       showToast('Please choose an image or PDF scan')
+      return
+    }
+
+    if (file.type === 'application/pdf' && file.size > MAX_PDF_BYTES) {
+      showToast('PDF scan is too large — save/export one card as an image instead')
       return
     }
 

@@ -28,7 +28,19 @@ async function callWithKey(
   ).finally(() => window.clearTimeout(timeout))
 
   if (!res.ok) {
-    const err = new Error('API error ' + res.status) as Error & { status: number }
+    let message = `Gemini API error ${res.status}`
+    try {
+      const data = await res.json()
+      message = data?.error?.message || message
+    } catch {
+      // Keep the status-only message if Google does not return JSON.
+    }
+
+    if (res.status === 429) {
+      message = 'Gemini quota/rate limit reached. Try again later, use another Gemini key, or use a smaller image instead of a PDF scan.'
+    }
+
+    const err = new Error(message) as Error & { status: number }
     err.status = res.status
     throw err
   }
@@ -62,6 +74,9 @@ export async function callGemini(
       }
       throw err
     }
+  }
+  if (isQuotaError(lastErr)) {
+    throw new Error('All Gemini keys hit quota/rate limits. Try again later or add a fresh Gemini key in Settings.')
   }
   throw lastErr
 }

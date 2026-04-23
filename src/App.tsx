@@ -19,6 +19,7 @@ import { SettingsScreen } from './components/screens/SettingsScreen'
 
 const APP_PASSWORD = (import.meta.env.VITE_APP_PASSWORD as string) ?? ''
 const APP_UNLOCK_KEY = 'cardscan_app_unlocked'
+const INACTIVITY_LOCK_MS = 60_000
 
 export default function App() {
   const activeScreen = useStore((s) => s.activeScreen)
@@ -32,6 +33,36 @@ export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(() => {
     return !APP_PASSWORD || localStorage.getItem(APP_UNLOCK_KEY) === APP_PASSWORD
   })
+
+  useEffect(() => {
+    if (!APP_PASSWORD || !isUnlocked) return
+
+    let lockTimer: ReturnType<typeof setTimeout>
+
+    const lock = () => {
+      localStorage.removeItem(APP_UNLOCK_KEY)
+      setIsUnlocked(false)
+    }
+
+    const resetTimer = () => {
+      clearTimeout(lockTimer)
+      lockTimer = setTimeout(lock, INACTIVITY_LOCK_MS)
+    }
+
+    const activityEvents = ['click', 'keydown', 'touchstart', 'pointermove', 'scroll']
+
+    resetTimer()
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetTimer, { passive: true })
+    })
+
+    return () => {
+      clearTimeout(lockTimer)
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetTimer)
+      })
+    }
+  }, [isUnlocked])
 
   useEffect(() => {
     if (!isUnlocked) return

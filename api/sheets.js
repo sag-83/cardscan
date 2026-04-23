@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   // Accept either env var name (SHEETS_WEBHOOK or VITE_SHEETS_WEBHOOK)
-  const webhook = process.env.SHEETS_WEBHOOK || process.env.VITE_SHEETS_WEBHOOK
+  const webhook = process.env.SHEETS_WEBHOOK_URL || process.env.SHEETS_WEBHOOK || process.env.VITE_SHEETS_WEBHOOK
   if (!webhook) return res.status(500).json({ error: 'Sheets webhook not configured — set SHEETS_WEBHOOK in Vercel env vars' })
 
   try {

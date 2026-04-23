@@ -41,12 +41,17 @@ export function EditModal() {
 
   const handleSave = async () => {
     const normalized = normalizeContact(form)
+    const saved = await saveContactToDB(normalized)
+    if (!saved) {
+      showToast('Supabase backup failed — check Settings')
+      return
+    }
+
     if (isNew) {
       addContacts([normalized])
     } else {
       updateContact(normalized.id, normalized)
     }
-    await saveContactToDB(normalized)
     setEditModal(null)
     showToast('Saved!')
     if (!isNew) {

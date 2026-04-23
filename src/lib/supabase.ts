@@ -109,6 +109,12 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
   }
 }
 
+function withoutDedupeKey(row: Record<string, unknown>): Record<string, unknown> {
+  const { dedupe_key, ...rest } = row
+  void dedupe_key
+  return rest
+}
+
 export async function syncContactsFromDB(): Promise<Contact[]> {
   if (!client) return []
 
@@ -132,7 +138,12 @@ export async function saveContactToDB(contact: Contact): Promise<boolean> {
     .eq('dedupe_key', contactDedupKey(contact))
     .maybeSingle()
 
-  if (lookupError && lookupError.code !== 'PGRST116') {
+  const dedupeColumnMissing =
+    lookupError?.code === '42703' ||
+    lookupError?.code === 'PGRST204' ||
+    lookupError?.message?.toLowerCase().includes('dedupe_key')
+
+  if (lookupError && lookupError.code !== 'PGRST116' && !dedupeColumnMissing) {
     console.warn('Supabase duplicate lookup error:', lookupError)
   }
 
@@ -141,7 +152,9 @@ export async function saveContactToDB(contact: Contact): Promise<boolean> {
     row = sanitizeContactForDB({ ...merged, id: existing.id })
   }
 
-  const { error } = await client.from('contacts').upsert(row, { onConflict: 'id' })
+  const { error } = await client
+    .from('contacts')
+    .upsert(dedupeColumnMissing ? withoutDedupeKey(row) : row, { onConflict: 'id' })
 
   if (error) {
     console.warn('Supabase upsert error:', error)

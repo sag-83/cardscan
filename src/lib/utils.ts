@@ -139,8 +139,9 @@ export function dedupeContacts(contacts: Contact[]): Contact[] {
     const match = idMatch ?? fingerprintMatch
 
     if (match) {
-      const merged = mergeContact(match, normalized)
-      byId.set(merged.id, merged)
+      const merged = { ...mergeContact(match, normalized), id: match.id }
+      byId.set(match.id, merged)
+      if (normalized.id !== match.id) byId.delete(normalized.id)
       byFingerprint.set(contactDedupKey(merged), merged)
       return
     }

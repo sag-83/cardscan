@@ -2,11 +2,42 @@ import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } fro
 import { useStore } from '../../store/useStore'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
 import { findDuplicateContact, normalizeContact, uid, blankContact } from '../../lib/utils'
-import { getLastSupabaseError, saveContactToDB, saveContactsToDB, uploadCardPhoto } from '../../lib/supabase'
+import {
+  findDuplicateContactInDB,
+  getLastSupabaseError,
+  saveContactToDB,
+  saveContactsToDB,
+  uploadCardPhoto,
+} from '../../lib/supabase'
 import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
+async function filterUniqueAgainstLocalAndCloud(
+  cards: Contact[],
+  contacts: Contact[]
+): Promise<{ unique: Contact[]; duplicates: number }> {
+  const unique: Contact[] = []
+  let duplicates = 0
+
+  for (const card of cards) {
+    if (findDuplicateContact(card, contacts) || findDuplicateContact(card, unique)) {
+      duplicates += 1
+      continue
+    }
+
+    const cloudDuplicate = await findDuplicateContactInDB(card)
+    if (cloudDuplicate) {
+      duplicates += 1
+      continue
+    }
+
+    unique.push(card)
+  }
+
+  return { unique, duplicates }
+}
 
 export function ScanScreen() {
   const frontInputRef = useRef<HTMLInputElement | null>(null)
@@ -206,7 +237,10 @@ export function ScanScreen() {
         })
       )
 
-      const uniqueCards = newCards.filter((card) => !findDuplicateContact(card, contacts))
+      const { unique: uniqueCards, duplicates } = await filterUniqueAgainstLocalAndCloud(
+        newCards,
+        contacts
+      )
 
       setIsScanning(false)
 
@@ -215,8 +249,8 @@ export function ScanScreen() {
         return
       }
 
-      if (uniqueCards.length < newCards.length) {
-        showToast(`${newCards.length - uniqueCards.length} duplicate card(s) skipped`)
+      if (duplicates) {
+        showToast(`${duplicates} duplicate card(s) skipped`)
       }
 
       setPreviewCards(uniqueCards)
@@ -232,12 +266,19 @@ export function ScanScreen() {
     setIsSavingPreview(true)
 
     try {
-      const uniquePreviewCards = previewCards.filter((card) => !findDuplicateContact(card, contacts))
+      const { unique: uniquePreviewCards, duplicates } = await filterUniqueAgainstLocalAndCloud(
+        previewCards,
+        contacts
+      )
 
       if (!uniquePreviewCards.length) {
         showToast('Already saved — duplicate card skipped')
         setPreviewCards([])
         return
+      }
+
+      if (duplicates) {
+        showToast(`${duplicates} duplicate card(s) skipped`)
       }
 
       const enriched = await Promise.all(

@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
-import { contactDedupKey, mergeContact } from './utils'
+import { contactDedupKey, findDuplicateContact, mergeContact } from './utils'
 
 export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
 create table if not exists contacts (
@@ -202,6 +202,43 @@ export async function syncContactsFromDB(): Promise<Contact[]> {
     throw error
   }
   return (data ?? []) as Contact[]
+}
+
+export async function findDuplicateContactInDB(contact: Contact): Promise<Contact | null> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return null
+
+  const key = contactDedupKey(contact)
+  const { data, error } = await sb
+    .from('contacts')
+    .select('*')
+    .eq('dedupe_key', key)
+    .maybeSingle()
+
+  const dedupeColumnMissing = Boolean(
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    error?.message?.toLowerCase().includes('dedupe_key')
+  )
+
+  if (data) return data as Contact
+
+  if (error && error.code !== 'PGRST116' && !dedupeColumnMissing) {
+    rememberSupabaseError('Supabase duplicate check failed', error)
+    console.warn('Supabase duplicate check error:', error)
+    return null
+  }
+
+  if (!dedupeColumnMissing) return null
+
+  const fallback = await sb.from('contacts').select('*')
+  if (fallback.error) {
+    rememberSupabaseError('Supabase duplicate check failed', fallback.error)
+    console.warn('Supabase duplicate fallback error:', fallback.error)
+    return null
+  }
+
+  return findDuplicateContact(contact, (fallback.data ?? []) as Contact[]) ?? null
 }
 
 export async function saveContactToDB(contact: Contact): Promise<boolean> {

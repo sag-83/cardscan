@@ -3,6 +3,7 @@ import { useStore } from '../../store/useStore'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
 import { normalizeContact, uid, blankContact } from '../../lib/utils'
 import { saveContactToDB, uploadCardPhoto } from '../../lib/supabase'
+import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
 export function ScanScreen() {
@@ -111,6 +112,7 @@ export function ScanScreen() {
         if (target) {
           const bd = (extracted[0] ?? {}) as Record<string, string>
 
+          await saveImage(`${pendingBackId}_back`, thumb)
           const backUrl = await uploadCardPhoto(pendingBackId, 'back', thumb)
 
           const merged: Contact = {
@@ -203,6 +205,7 @@ export function ScanScreen() {
       const enriched = await Promise.all(
         previewCards.map(async (c) => {
           if (c.front_image) {
+            await saveImage(`${c.id}_front`, c.front_image)
             const url = await uploadCardPhoto(c.id, 'front', c.front_image)
             if (url) return { ...c, front_image_url: url }
           }

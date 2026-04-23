@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../../store/useStore'
 import { normalizeContact } from '../../lib/utils'
-import { saveContactToDB } from '../../lib/supabase'
+import { saveContactToDB, deleteContactFromDB } from '../../lib/supabase'
+import { deleteImages } from '../../lib/imageStore'
 import { Contact } from '../../types/contact'
 
 const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
@@ -19,7 +20,6 @@ const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
 export function EditModal() {
   const editModal = useStore((s) => s.editModal)
   const setEditModal = useStore((s) => s.setEditModal)
-  const contacts = useStore((s) => s.contacts)
   const addContacts = useStore((s) => s.addContacts)
   const updateContact = useStore((s) => s.updateContact)
   const deleteContact = useStore((s) => s.deleteContact)
@@ -58,6 +58,8 @@ export function EditModal() {
   const handleDelete = () => {
     if (!confirm('Delete this contact?')) return
     deleteContact(form.id)
+    deleteContactFromDB(form.id)
+    deleteImages([`${form.id}_front`, `${form.id}_back`])
     setEditModal(null)
     setDetailContactId(null)
     showToast('Deleted')

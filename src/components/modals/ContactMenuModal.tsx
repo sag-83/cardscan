@@ -1,5 +1,6 @@
 import { useStore } from '../../store/useStore'
 import { deleteContactFromDB } from '../../lib/supabase'
+import { deleteImages } from '../../lib/imageStore'
 import { blankContact } from '../../lib/utils'
 
 export function ContactMenuModal() {
@@ -41,6 +42,7 @@ export function ContactMenuModal() {
     if (!confirm(`Delete ${contact.name || contact.company || 'this contact'}?`)) return
     deleteContact(contact.id)
     deleteContactFromDB(contact.id)
+    deleteImages([`${contact.id}_front`, `${contact.id}_back`])
     close()
     setDetailContactId(null)
     showToast('Deleted')

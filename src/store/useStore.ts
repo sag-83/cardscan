@@ -37,6 +37,9 @@ interface AppState {
   sbKey: string
   setSbKey: (key: string) => void
 
+  sheetsWebhook: string
+  setSheetsWebhook: (url: string) => void
+
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
@@ -126,6 +129,9 @@ export const useStore = create<AppState>()(
       sbKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ?? '',
       setSbKey: (sbKey) => set({ sbKey }),
 
+      sheetsWebhook: (import.meta.env.VITE_SHEETS_WEBHOOK as string) ?? '',
+      setSheetsWebhook: (sheetsWebhook) => set({ sheetsWebhook }),
+
       theme: 'light',
       setTheme: (theme) => set({ theme }),
 
@@ -191,6 +197,7 @@ export const useStore = create<AppState>()(
         apiKey3: s.apiKey3,
         sbUrl: s.sbUrl,
         sbKey: s.sbKey,
+        sheetsWebhook: s.sheetsWebhook,
         theme: s.theme,
       }),
     }

@@ -14,6 +14,7 @@ export function ContactDetail() {
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
+  const sheetsWebhook = useStore((s) => s.sheetsWebhook)
 
   const contact = contacts.find((c) => c.id === detailContactId)
 
@@ -41,7 +42,7 @@ export function ContactDetail() {
     if (isSendingSheets) return
     setIsSendingSheets(true)
     try {
-      await sendToGoogleSheets([c])
+      await sendToGoogleSheets([c], sheetsWebhook || undefined)
       showToast('✅ Sent to Google Sheets!')
     } catch {
       showToast('❌ Sheets webhook not configured')

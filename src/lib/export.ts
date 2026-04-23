@@ -1,7 +1,5 @@
 import { Contact } from '../types/contact'
 
-// Reads from .env (VITE_SHEETS_WEBHOOK) — set this in Vercel dashboard too
-const SHEETS_WEBHOOK = import.meta.env.VITE_SHEETS_WEBHOOK as string
 
 const CSV_HEADERS = [
   'Name', 'Title', 'Company', 'Email', 'Mobile', 'Work Phone', 'Fax',
@@ -61,9 +59,10 @@ function toSheetsRow(c: Contact) {
   }
 }
 
-export async function sendToGoogleSheets(contacts: Contact[]): Promise<void> {
-  if (!SHEETS_WEBHOOK) throw new Error('Sheets webhook URL not configured')
-  await fetch(SHEETS_WEBHOOK, {
+export async function sendToGoogleSheets(contacts: Contact[], webhookUrl?: string): Promise<void> {
+  const url = webhookUrl || (import.meta.env.VITE_SHEETS_WEBHOOK as string)
+  if (!url) throw new Error('Sheets webhook URL not configured')
+  await fetch(url, {
     method: 'POST',
     body: JSON.stringify(contacts.map(toSheetsRow)),
     mode: 'no-cors',

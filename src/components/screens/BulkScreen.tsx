@@ -1,11 +1,12 @@
 import { useStore } from '../../store/useStore'
 import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
 import { deleteContactFromDB } from '../../lib/supabase'
+import { deleteImages } from '../../lib/imageStore'
 
 export function BulkScreen() {
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, setContacts, setBulkMessageType, showToast,
+    deleteContact, setContacts, setBulkMessageType, showToast, sheetsWebhook,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
@@ -14,6 +15,7 @@ export function BulkScreen() {
     setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
+    sheetsWebhook: s.sheetsWebhook,
   }))
 
   const targetContacts = selectedIds.length
@@ -31,7 +33,7 @@ export function BulkScreen() {
     if (!unsent.length) { showToast('All already in Sheets!'); return }
     showToast(`Sending ${unsent.length}...`)
     try {
-      await sendToGoogleSheets(unsent)
+      await sendToGoogleSheets(unsent, sheetsWebhook || undefined)
       const sentIds = new Set(unsent.map((c) => c.id))
       setContacts(contacts.map((c) => sentIds.has(c.id) ? { ...c, sent_to_sheets: true } : c))
       showToast(`${unsent.length} sent to Sheets!`)
@@ -43,10 +45,12 @@ export function BulkScreen() {
   const handleDeleteSelected = () => {
     if (!selectedIds.length) return
     if (!confirm(`Delete ${selectedIds.length} contact(s)?`)) return
+    const imageKeys = selectedIds.flatMap((id) => [`${id}_front`, `${id}_back`])
     selectedIds.forEach((id) => {
       deleteContact(id)
       deleteContactFromDB(id).catch((err) => console.error('DB delete failed:', err))
     })
+    deleteImages(imageKeys)
     clearSelected()
     showToast('Deleted!')
   }

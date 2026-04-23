@@ -14,6 +14,7 @@ export function SettingsScreen() {
     apiKey3, setApiKey3,
     sbUrl, setSbUrl,
     sbKey, setSbKey,
+    sheetsWebhook, setSheetsWebhook,
     contacts, setContacts, showToast,
   } = useStore((s) => ({
     apiKey: s.apiKey,
@@ -26,6 +27,8 @@ export function SettingsScreen() {
     setSbUrl: s.setSbUrl,
     sbKey: s.sbKey,
     setSbKey: s.setSbKey,
+    sheetsWebhook: s.sheetsWebhook,
+    setSheetsWebhook: s.setSheetsWebhook,
     contacts: s.contacts,
     setContacts: s.setContacts,
     showToast: s.showToast,
@@ -108,6 +111,25 @@ export function SettingsScreen() {
         <Divider />
         <div onClick={handleTestSB} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, color: 'var(--accent)', fontWeight: 600, fontSize: 15 }}>Test Connection</div>
+        </div>
+      </SettingsGroup>
+
+      {/* Google Sheets */}
+      <SectionTitle>Google Sheets Webhook</SectionTitle>
+      <SettingsGroup>
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <label style={labelStyle}>Apps Script Web App URL</label>
+          <input
+            type="url"
+            value={sheetsWebhook}
+            onChange={(e) => setSheetsWebhook(e.target.value)}
+            placeholder="https://script.google.com/macros/s/.../exec"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+            Deploy a Google Apps Script as a web app and paste its URL here.
+            The script receives a JSON array of contacts via POST.
+          </div>
         </div>
       </SettingsGroup>
 

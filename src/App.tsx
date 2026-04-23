@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useStore } from './store/useStore'
 import { initSupabase, syncContactsFromDB } from './lib/supabase'
+import { loadImages } from './lib/imageStore'
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
@@ -23,24 +24,57 @@ export default function App() {
   const setContacts = useStore((s) => s.setContacts)
   const showToast = useStore((s) => s.showToast)
 
-  // Initialize Supabase and sync on mount
+  // Initialize Supabase, sync from DB, then restore images from IndexedDB
   useEffect(() => {
-    // Prefer env vars — persisted Zustand values may be stale/empty
-    const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
-    const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
-    if (effectiveUrl && effectiveKey) {
-      initSupabase(effectiveUrl, effectiveKey)
-      syncContactsFromDB()
-        .then((dbContacts) => {
-          if (!dbContacts.length) return
-          const dbMap = new Map(dbContacts.map((c) => [c.id, c]))
-          const merged = contacts.map((c) => dbMap.get(c.id) ?? c)
-          const localIds = new Set(contacts.map((c) => c.id))
-          dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
-          setContacts(merged)
-        })
-        .catch((err) => { console.error('Supabase sync failed:', err); showToast('Cloud sync failed — using local data') })
+    async function init() {
+      let finalContacts = contacts
+
+      // Prefer env vars — persisted Zustand values may be stale/empty
+      const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
+      const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
+      if (effectiveUrl && effectiveKey) {
+        initSupabase(effectiveUrl, effectiveKey)
+        try {
+          const dbContacts = await syncContactsFromDB()
+          if (dbContacts.length) {
+            const dbMap = new Map(dbContacts.map((c) => [c.id, c]))
+            const merged = contacts.map((c) => dbMap.get(c.id) ?? c)
+            const localIds = new Set(contacts.map((c) => c.id))
+            dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
+            finalContacts = merged
+            setContacts(merged)
+          }
+        } catch (err) {
+          console.error('Supabase sync failed:', err)
+          showToast('Cloud sync failed — using local data')
+        }
+      }
+
+      // Restore card images from IndexedDB for contacts that lost their base64 on refresh
+      const keys: string[] = []
+      finalContacts.forEach((c) => {
+        if (!c.front_image && !c.front_image_url) keys.push(`${c.id}_front`)
+        if (!c.back_image && !c.back_image_url) keys.push(`${c.id}_back`)
+      })
+      if (keys.length) {
+        try {
+          const images = await loadImages(keys)
+          if (Object.keys(images).length) {
+            setContacts(
+              finalContacts.map((c) => ({
+                ...c,
+                front_image: images[`${c.id}_front`] ?? c.front_image,
+                back_image: images[`${c.id}_back`] ?? c.back_image,
+              }))
+            )
+          }
+        } catch (err) {
+          console.warn('IndexedDB image restore failed:', err)
+        }
+      }
     }
+
+    init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -15,16 +15,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No contacts to send' })
   }
 
+  const body = JSON.stringify(rows)
+
   try {
-    // Node.js fetch follows redirects by default (POST → GET after 302).
-    // Apps Script runs doPost() on the initial POST — redirect just delivers the response.
-    const upstream = await fetch(webhook, {
+    // Step 1: POST to Apps Script with redirect: manual so we control the follow
+    const r1 = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(rows),
+      body,
+      redirect: 'manual',
     })
 
-    const text = await upstream.text()
+    let text
+    if (r1.status >= 300 && r1.status < 400) {
+      // Apps Script returns 302 to a delivery URL — POST the body there too
+      const location = r1.headers.get('location')
+      if (!location) return res.status(502).json({ error: 'Redirect with no location header' })
+      const r2 = await fetch(location, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body,
+      })
+      text = await r2.text()
+    } else {
+      text = await r1.text()
+    }
 
     if (!text || text.toLowerCase().startsWith('error')) {
       return res.status(502).json({ error: text || 'Empty response from Apps Script' })

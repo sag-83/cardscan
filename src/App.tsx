@@ -23,10 +23,16 @@ export default function App() {
   const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
   const showToast = useStore((s) => s.showToast)
+  const sheetsWebhook = useStore((s) => s.sheetsWebhook)
+  const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
 
   // Initialize Supabase, sync from DB, then restore images from IndexedDB
   useEffect(() => {
     async function init() {
+      // If env var is set but localStorage has stale empty string, fix it
+      const envWebhook = import.meta.env.VITE_SHEETS_WEBHOOK as string
+      if (envWebhook && !sheetsWebhook) setSheetsWebhook(envWebhook)
+
       let finalContacts = contacts
 
       // Prefer env vars — persisted Zustand values may be stale/empty

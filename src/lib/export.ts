@@ -60,7 +60,8 @@ function toSheetsRow(c: Contact) {
 }
 
 export async function sendToGoogleSheets(contacts: Contact[], webhookUrl?: string): Promise<void> {
-  const url = webhookUrl || (import.meta.env.VITE_SHEETS_WEBHOOK as string)
+  // Env var always wins — prevents stale localStorage empty-string from blocking it
+  const url = (import.meta.env.VITE_SHEETS_WEBHOOK as string) || webhookUrl
   if (!url) throw new Error('Sheets webhook URL not configured')
   await fetch(url, {
     method: 'POST',

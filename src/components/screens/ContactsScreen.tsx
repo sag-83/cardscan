@@ -46,6 +46,22 @@ export function ContactsScreen() {
 
   const hasFilters = filterStars > 0 || filterState || filterCity
 
+  const jumpToLastAdded = () => {
+    if (!lastAddedId) return
+
+    setQuery('')
+    setFilterStars(0)
+    setFilterState('')
+    setFilterCity('')
+
+    window.setTimeout(() => {
+      document.getElementById(`contact-row-${lastAddedId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 50)
+  }
+
   return (
     <div>
       <div style={{
@@ -86,6 +102,24 @@ export function ContactsScreen() {
             {cities.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        {lastAddedId && (
+          <button
+            onClick={jumpToLastAdded}
+            style={{
+              alignSelf: 'flex-start',
+              padding: '7px 12px',
+              borderRadius: 999,
+              border: '1.5px solid var(--accent)',
+              background: 'rgba(0,122,255,0.1)',
+              color: 'var(--accent)',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            ★ Jump to Last Added
+          </button>
+        )}
         {hasFilters && (
           <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,
@@ -142,11 +176,12 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
 }) {
   return (
     <div onClick={onClick} style={{
+      scrollMarginTop: 170,
       display: 'flex', alignItems: 'center', gap: 14,
       padding: '10px 16px', background: 'var(--bg2)',
       borderBottom: '1px solid var(--border2)', cursor: 'pointer',
       borderLeft: isLastAdded ? '4px solid var(--accent)' : '4px solid transparent',
-    }}>
+    }} id={`contact-row-${c.id}`}>
       {(c.front_image || c.front_image_url) ? (
         <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
           style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',

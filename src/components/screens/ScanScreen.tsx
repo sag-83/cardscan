@@ -17,18 +17,19 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 async function filterUniqueAgainstLocalAndCloud(
   cards: Contact[],
   contacts: Contact[]
-): Promise<{ unique: Contact[]; localDuplicates: number; restoredFromCloud: Contact[] }> {
+): Promise<{ unique: Contact[]; localDuplicates: Contact[]; restoredFromCloud: Contact[] }> {
   const unique: Contact[] = []
+  const localDuplicates: Contact[] = []
   const restoredFromCloud: Contact[] = []
-  let localDuplicates = 0
 
   for (const card of cards) {
-    if (
-      findDuplicateContact(card, contacts) ||
-      findDuplicateContact(card, unique) ||
-      findDuplicateContact(card, restoredFromCloud)
-    ) {
-      localDuplicates += 1
+    const localDuplicate = findDuplicateContact(card, contacts)
+    if (localDuplicate) {
+      localDuplicates.push(localDuplicate)
+      continue
+    }
+
+    if (findDuplicateContact(card, unique) || findDuplicateContact(card, restoredFromCloud)) {
       continue
     }
 
@@ -46,7 +47,9 @@ async function filterUniqueAgainstLocalAndCloud(
 
 export function ScanScreen() {
   const frontInputRef = useRef<HTMLInputElement | null>(null)
+  const frontFileInputRef = useRef<HTMLInputElement | null>(null)
   const backInputRef = useRef<HTMLInputElement | null>(null)
+  const backFileInputRef = useRef<HTMLInputElement | null>(null)
   const [isSavingPreview, setIsSavingPreview] = useState(false)
 
   const {
@@ -65,6 +68,7 @@ export function ScanScreen() {
     triggerBackScan,
     setTriggerBackScan,
     setActiveScreen,
+    setDetailContactId,
     showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
@@ -82,6 +86,7 @@ export function ScanScreen() {
     triggerBackScan: s.triggerBackScan,
     setTriggerBackScan: s.setTriggerBackScan,
     setActiveScreen: s.setActiveScreen,
+    setDetailContactId: s.setDetailContactId,
     showToast: s.showToast,
   }))
 
@@ -92,7 +97,7 @@ export function ScanScreen() {
     }
   }, [triggerBackScan, setTriggerBackScan])
 
-  const startScan = (side: 'front' | 'back') => {
+  const startScan = (side: 'front' | 'back', source: 'camera' | 'files' = 'camera') => {
     if (!apiKey) {
       showToast('Set Gemini API key in Settings ⚙️')
       setActiveScreen('settings')
@@ -109,10 +114,10 @@ export function ScanScreen() {
         setPendingBackId(contacts[0].id)
       }
 
-      backInputRef.current?.click()
+      ;(source === 'files' ? backFileInputRef : backInputRef).current?.click()
     } else {
       setPendingBackId(null)
-      frontInputRef.current?.click()
+      ;(source === 'files' ? frontFileInputRef : frontInputRef).current?.click()
     }
   }
 
@@ -261,14 +266,19 @@ export function ScanScreen() {
         if (restoredFromCloud.length) {
           showToast('Already in Supabase — restored to app')
           setActiveScreen('contacts')
+          setDetailContactId(restoredFromCloud[0].id)
+        } else if (localDuplicates.length) {
+          showToast('Already saved — opening existing contact')
+          setActiveScreen('contacts')
+          setDetailContactId(localDuplicates[0].id)
         } else {
           showToast('Already saved — duplicate card skipped')
         }
         return
       }
 
-      if (localDuplicates) {
-        showToast(`${localDuplicates} duplicate card(s) skipped`)
+      if (localDuplicates.length) {
+        showToast(`${localDuplicates.length} duplicate card(s) skipped`)
       }
 
       setPreviewCards(uniqueCards)
@@ -301,6 +311,11 @@ export function ScanScreen() {
         if (restoredFromCloud.length) {
           showToast('Already in Supabase — restored to app')
           setActiveScreen('contacts')
+          setDetailContactId(restoredFromCloud[0].id)
+        } else if (localDuplicates.length) {
+          showToast('Already saved — opening existing contact')
+          setActiveScreen('contacts')
+          setDetailContactId(localDuplicates[0].id)
         } else {
           showToast('Already saved — duplicate card skipped')
         }
@@ -308,8 +323,8 @@ export function ScanScreen() {
         return
       }
 
-      if (localDuplicates) {
-        showToast(`${localDuplicates} duplicate card(s) skipped`)
+      if (localDuplicates.length) {
+        showToast(`${localDuplicates.length} duplicate card(s) skipped`)
       }
 
       const enriched = await Promise.all(
@@ -380,10 +395,34 @@ export function ScanScreen() {
       />
 
       <input
+        ref={frontFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          const f = e.target.files?.[0]
+          if (f) handleFile(f, 'front')
+          e.target.value = ''
+        }}
+      />
+
+      <input
         ref={backInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        style={{ display: 'none' }}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          const f = e.target.files?.[0]
+          if (f) handleFile(f, 'back')
+          e.target.value = ''
+        }}
+      />
+
+      <input
+        ref={backFileInputRef}
+        type="file"
+        accept="image/*"
         style={{ display: 'none' }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           const f = e.target.files?.[0]
@@ -424,6 +463,10 @@ export function ScanScreen() {
           Scan Card (Front)
         </button>
 
+        <button onClick={() => startScan('front', 'files')} style={{ ...btnStyle('secondary'), marginTop: 10 }}>
+          Choose Better Scan / Files
+        </button>
+
         {contacts.length > 0 && (
           <button
             onClick={() => startScan('back')}
@@ -432,6 +475,19 @@ export function ScanScreen() {
             ↩ Scan Back of Last Card
           </button>
         )}
+
+        {contacts.length > 0 && (
+          <button
+            onClick={() => startScan('back', 'files')}
+            style={{ ...btnStyle('secondary'), marginTop: 10 }}
+          >
+            Choose Back from Files
+          </button>
+        )}
+
+        <div style={{ marginTop: 12, color: 'var(--muted)', fontSize: 12, lineHeight: 1.45, textAlign: 'center' }}>
+          Tip: for iPhone document scan quality, scan in Files first, then use “Choose Better Scan / Files.”
+        </div>
 
         {contacts.length > 0 && (
           <div

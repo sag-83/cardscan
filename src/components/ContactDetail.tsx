@@ -44,8 +44,8 @@ export function ContactDetail() {
     try {
       await sendToGoogleSheets([c], sheetsWebhook || undefined)
       showToast('✅ Sent to Google Sheets!')
-    } catch {
-      showToast('❌ Sheets webhook not configured')
+    } catch (err) {
+      showToast('❌ ' + (err as Error).message)
     } finally {
       setIsSendingSheets(false)
     }

@@ -6,13 +6,12 @@ import { deleteImages } from '../../lib/imageStore'
 export function BulkScreen() {
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, setContacts, setBulkMessageType, showToast,
+    deleteContact, setBulkMessageType, showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
     clearSelected: s.clearSelected,
     deleteContact: s.deleteContact,
-    setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
   }))
@@ -28,14 +27,11 @@ export function BulkScreen() {
   }
 
   const handleSendToSheets = async () => {
-    const unsent = targetContacts.filter((c) => !c.sent_to_sheets)
-    if (!unsent.length) { showToast('All already in Sheets!'); return }
-    showToast(`Sending ${unsent.length}...`)
+    if (!targetContacts.length) { showToast('No contacts to send'); return }
+    showToast(`Sending ${targetContacts.length}...`)
     try {
-      await sendToGoogleSheets(unsent)
-      const sentIds = new Set(unsent.map((c) => c.id))
-      setContacts(contacts.map((c) => sentIds.has(c.id) ? { ...c, sent_to_sheets: true } : c))
-      showToast(`${unsent.length} sent to Sheets!`)
+      await sendToGoogleSheets(targetContacts)
+      showToast(`${targetContacts.length} sent to Sheets!`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)
     }

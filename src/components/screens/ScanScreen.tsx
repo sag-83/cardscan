@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } fro
 import { useStore } from '../../store/useStore'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
 import { findDuplicateContact, normalizeContact, uid, blankContact } from '../../lib/utils'
-import { saveContactToDB, saveContactsToDB, uploadCardPhoto } from '../../lib/supabase'
+import { getLastSupabaseError, saveContactToDB, saveContactsToDB, uploadCardPhoto } from '../../lib/supabase'
 import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
@@ -170,7 +170,7 @@ export function ScanScreen() {
 
           const saved = await saveContactToDB(merged)
           if (!saved) {
-            showToast('Back scanned locally, but Supabase backup failed')
+            showToast(getLastSupabaseError() || 'Back scanned locally, but Supabase backup failed')
             setIsScanning(false)
             return
           }
@@ -253,7 +253,7 @@ export function ScanScreen() {
 
       const saved = await saveContactsToDB(enriched)
       if (saved.failed > 0) {
-        showToast(`${saved.failed} contact backup(s) failed — check Supabase settings`)
+        showToast(saved.error || `${saved.failed} contact backup(s) failed — check Supabase settings`)
         return
       }
 
@@ -262,7 +262,7 @@ export function ScanScreen() {
       setPreviewCards([])
       setActiveScreen('contacts')
     } catch (err) {
-      showToast('Saved locally — cloud sync failed, tap Add to retry')
+      showToast('Cloud save failed: ' + (err as Error).message)
     } finally {
       setIsSavingPreview(false)
     }

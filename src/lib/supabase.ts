@@ -70,13 +70,44 @@ where dedupe_key <> '';
 alter table contacts disable row level security;`
 
 let client: SupabaseClient | null = null
+let lastError = ''
 
 export function initSupabase(url: string, key: string): void {
   client = url && key ? createClient(url, key) : null
+  lastError = client ? '' : 'Supabase URL or anon key is missing'
 }
 
 export function getSupabaseClient(): SupabaseClient | null {
   return client
+}
+
+export function getLastSupabaseError(): string {
+  return lastError
+}
+
+function rememberSupabaseError(prefix: string, err: unknown): void {
+  const message =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message?: unknown }).message)
+      : String(err)
+
+  lastError = `${prefix}: ${message}`
+}
+
+function ensureSupabaseClient(): SupabaseClient | null {
+  if (client) return client
+
+  const url = import.meta.env.VITE_SUPABASE_URL as string
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+  if (url && key) {
+    client = createClient(url, key)
+    lastError = ''
+    return client
+  }
+
+  lastError = 'Supabase env is missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.'
+  return null
 }
 
 function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
@@ -115,33 +146,81 @@ function withoutDedupeKey(row: Record<string, unknown>): Record<string, unknown>
   return rest
 }
 
-export async function syncContactsFromDB(): Promise<Contact[]> {
-  if (!client) return []
+function missingColumnFromError(error: { message?: string } | null): string | null {
+  const message = error?.message ?? ''
+  const quotedColumn = message.match(/'([^']+)' column/)
+  if (quotedColumn?.[1]) return quotedColumn[1]
 
-  const { data, error } = await client
+  const plainColumn = message.match(/column "([^"]+)"/)
+  if (plainColumn?.[1]) return plainColumn[1]
+
+  return null
+}
+
+async function upsertContactRow(
+  sb: SupabaseClient,
+  row: Record<string, unknown>,
+  omitDedupeKey: boolean
+): Promise<boolean> {
+  let nextRow = omitDedupeKey ? withoutDedupeKey(row) : row
+  const removedColumns = new Set<string>()
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const { error } = await sb.from('contacts').upsert(nextRow, { onConflict: 'id' })
+
+    if (!error) return true
+
+    const missingColumn = missingColumnFromError(error)
+    if (missingColumn && missingColumn in nextRow && !removedColumns.has(missingColumn)) {
+      const { [missingColumn]: _removed, ...rest } = nextRow
+      void _removed
+      nextRow = rest
+      removedColumns.add(missingColumn)
+      continue
+    }
+
+    rememberSupabaseError('Supabase save failed', error)
+    console.warn('Supabase upsert error:', error)
+    return false
+  }
+
+  lastError = 'Supabase save failed: too many table schema mismatches. Run the SQL in Settings.'
+  return false
+}
+
+export async function syncContactsFromDB(): Promise<Contact[]> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return []
+
+  const { data, error } = await sb
     .from('contacts')
     .select('*')
     .order('created_at', { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    rememberSupabaseError('Supabase sync failed', error)
+    throw error
+  }
   return (data ?? []) as Contact[]
 }
 
 export async function saveContactToDB(contact: Contact): Promise<boolean> {
-  if (!client) return false
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
 
   let row = sanitizeContactForDB(contact)
 
-  const { data: existing, error: lookupError } = await client
+  const { data: existing, error: lookupError } = await sb
     .from('contacts')
     .select('*')
     .eq('dedupe_key', contactDedupKey(contact))
     .maybeSingle()
 
-  const dedupeColumnMissing =
+  const dedupeColumnMissing = Boolean(
     lookupError?.code === '42703' ||
     lookupError?.code === 'PGRST204' ||
     lookupError?.message?.toLowerCase().includes('dedupe_key')
+  )
 
   if (lookupError && lookupError.code !== 'PGRST116' && !dedupeColumnMissing) {
     console.warn('Supabase duplicate lookup error:', lookupError)
@@ -152,21 +231,13 @@ export async function saveContactToDB(contact: Contact): Promise<boolean> {
     row = sanitizeContactForDB({ ...merged, id: existing.id })
   }
 
-  const { error } = await client
-    .from('contacts')
-    .upsert(dedupeColumnMissing ? withoutDedupeKey(row) : row, { onConflict: 'id' })
-
-  if (error) {
-    console.warn('Supabase upsert error:', error)
-    return false
-  }
-
-  return true
+  return upsertContactRow(sb, row, dedupeColumnMissing)
 }
 
 export async function saveContactsToDB(contacts: Contact[]): Promise<{
   ok: number
   failed: number
+  error?: string
 }> {
   if (!contacts.length) return { ok: 0, failed: 0 }
 
@@ -180,15 +251,17 @@ export async function saveContactsToDB(contacts: Contact[]): Promise<{
     else failed += 1
   })
 
-  return { ok, failed }
+  return { ok, failed, error: failed ? lastError : undefined }
 }
 
 export async function deleteContactFromDB(id: string): Promise<boolean> {
-  if (!client) return false
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
 
-  const { error } = await client.from('contacts').delete().eq('id', id)
+  const { error } = await sb.from('contacts').delete().eq('id', id)
 
   if (error) {
+    rememberSupabaseError('Supabase delete failed', error)
     console.warn('Supabase delete error:', error)
     return false
   }
@@ -197,10 +270,14 @@ export async function deleteContactFromDB(id: string): Promise<boolean> {
 }
 
 export async function testSupabaseConnection(): Promise<void> {
-  if (!client) throw new Error('Supabase not configured')
+  const sb = ensureSupabaseClient()
+  if (!sb) throw new Error(lastError || 'Supabase not configured')
 
-  const { error } = await client.from('contacts').select('id').limit(1)
-  if (error) throw error
+  const { error } = await sb.from('contacts').select('id').limit(1)
+  if (error) {
+    rememberSupabaseError('Supabase test failed', error)
+    throw error
+  }
 }
 
 export async function uploadCardPhoto(
@@ -209,7 +286,8 @@ export async function uploadCardPhoto(
   base64: string,
   mimeType = 'image/jpeg'
 ): Promise<string | null> {
-  if (!client || !base64) return null
+  const sb = ensureSupabaseClient()
+  if (!sb || !base64) return null
   try {
     const byteChars = atob(base64)
     const byteArray = new Uint8Array(byteChars.length)
@@ -219,18 +297,20 @@ export async function uploadCardPhoto(
     const blob = new Blob([byteArray], { type: mimeType })
     const path = `${contactId}_${side}.jpg`
 
-    const { error } = await client.storage
+    const { error } = await sb.storage
       .from('card-photos')
       .upload(path, blob, { upsert: true, contentType: mimeType })
 
     if (error) {
+      rememberSupabaseError('Photo upload failed', error)
       console.warn('Photo upload error:', error)
       return null
     }
 
-    const { data } = client.storage.from('card-photos').getPublicUrl(path)
+    const { data } = sb.storage.from('card-photos').getPublicUrl(path)
     return data?.publicUrl ?? null
   } catch (err) {
+    rememberSupabaseError('Photo upload failed', err)
     console.warn('Photo upload failed:', err)
     return null
   }

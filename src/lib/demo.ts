@@ -1,6 +1,12 @@
 import type { Contact } from '../types/contact'
 
-export const IS_DEMO_MODE = String(import.meta.env.VITE_DEMO_MODE || '').toLowerCase() === 'true'
+const demoModeEnv = String(import.meta.env.VITE_DEMO_MODE || '').toLowerCase() === 'true'
+const demoModeHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname.toLowerCase().includes('demo') ||
+    window.location.search.toLowerCase().includes('demo=true'))
+
+export const IS_DEMO_MODE = demoModeEnv || demoModeHost
 
 export const DEMO_CONTACTS: Contact[] = [
   {

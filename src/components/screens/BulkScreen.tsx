@@ -69,6 +69,8 @@ export function BulkScreen() {
       <ActionButton emoji="✉" label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
       <ActionButton emoji="💬" label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
 
+      {IS_DEMO_MODE && <SheetsPreview contacts={targetContacts} />}
+
       {selectedIds.length > 0 && (
         <button
           onClick={handleDeleteSelected}
@@ -80,6 +82,72 @@ export function BulkScreen() {
           🗑 Delete Selected ({selectedIds.length})
         </button>
       )}
+    </div>
+  )
+}
+
+function SheetsPreview({ contacts }: { contacts: Array<{
+  name: string
+  title: string
+  company: string
+  email: string
+  phone_mobile: string
+  city: string
+  state: string
+}> }) {
+  const previewRows = contacts.slice(0, 4)
+
+  return (
+    <div style={{
+      marginTop: 14,
+      border: '1px solid var(--border)',
+      background: 'var(--bg2)',
+      borderRadius: 14,
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '12px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid var(--border2)',
+      }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>Google Sheets Preview</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+            Demo-only view of synced rows
+          </div>
+        </div>
+        <div style={{ color: '#188038', fontSize: 24 }}>▦</div>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg3)', color: 'var(--text3)', textAlign: 'left' }}>
+              {['Name', 'Title', 'Company', 'Email', 'Phone', 'Location'].map((header) => (
+                <th key={header} style={{ padding: '9px 10px', borderBottom: '1px solid var(--border2)' }}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {previewRows.map((contact) => (
+              <tr key={`${contact.email}-${contact.phone_mobile}`}>
+                <td style={cellStyle}>{contact.name || 'Unknown'}</td>
+                <td style={cellStyle}>{contact.title}</td>
+                <td style={cellStyle}>{contact.company}</td>
+                <td style={{ ...cellStyle, color: 'var(--accent)', textDecoration: 'underline' }}>
+                  {contact.email}
+                </td>
+                <td style={cellStyle}>{contact.phone_mobile}</td>
+                <td style={cellStyle}>{[contact.city, contact.state].filter(Boolean).join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -101,4 +169,10 @@ const btnBase: React.CSSProperties = {
   border: '1px solid var(--border)', fontWeight: 700,
   fontSize: 15, cursor: 'pointer', width: '100%',
   transition: '0.18s',
+}
+
+const cellStyle: React.CSSProperties = {
+  padding: '9px 10px',
+  borderBottom: '1px solid var(--border2)',
+  whiteSpace: 'nowrap',
 }

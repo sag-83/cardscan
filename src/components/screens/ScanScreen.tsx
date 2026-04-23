@@ -17,26 +17,31 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 async function filterUniqueAgainstLocalAndCloud(
   cards: Contact[],
   contacts: Contact[]
-): Promise<{ unique: Contact[]; duplicates: number }> {
+): Promise<{ unique: Contact[]; localDuplicates: number; restoredFromCloud: Contact[] }> {
   const unique: Contact[] = []
-  let duplicates = 0
+  const restoredFromCloud: Contact[] = []
+  let localDuplicates = 0
 
   for (const card of cards) {
-    if (findDuplicateContact(card, contacts) || findDuplicateContact(card, unique)) {
-      duplicates += 1
+    if (
+      findDuplicateContact(card, contacts) ||
+      findDuplicateContact(card, unique) ||
+      findDuplicateContact(card, restoredFromCloud)
+    ) {
+      localDuplicates += 1
       continue
     }
 
     const cloudDuplicate = await findDuplicateContactInDB(card)
     if (cloudDuplicate) {
-      duplicates += 1
+      restoredFromCloud.push(normalizeContact(cloudDuplicate))
       continue
     }
 
     unique.push(card)
   }
 
-  return { unique, duplicates }
+  return { unique, localDuplicates, restoredFromCloud }
 }
 
 export function ScanScreen() {
@@ -237,20 +242,33 @@ export function ScanScreen() {
         })
       )
 
-      const { unique: uniqueCards, duplicates } = await filterUniqueAgainstLocalAndCloud(
+      const {
+        unique: uniqueCards,
+        localDuplicates,
+        restoredFromCloud,
+      } = await filterUniqueAgainstLocalAndCloud(
         newCards,
         contacts
       )
 
       setIsScanning(false)
 
+      if (restoredFromCloud.length) {
+        addContacts(restoredFromCloud)
+      }
+
       if (!uniqueCards.length) {
-        showToast('Already saved — duplicate card skipped')
+        if (restoredFromCloud.length) {
+          showToast('Already in Supabase — restored to app')
+          setActiveScreen('contacts')
+        } else {
+          showToast('Already saved — duplicate card skipped')
+        }
         return
       }
 
-      if (duplicates) {
-        showToast(`${duplicates} duplicate card(s) skipped`)
+      if (localDuplicates) {
+        showToast(`${localDuplicates} duplicate card(s) skipped`)
       }
 
       setPreviewCards(uniqueCards)
@@ -266,19 +284,32 @@ export function ScanScreen() {
     setIsSavingPreview(true)
 
     try {
-      const { unique: uniquePreviewCards, duplicates } = await filterUniqueAgainstLocalAndCloud(
+      const {
+        unique: uniquePreviewCards,
+        localDuplicates,
+        restoredFromCloud,
+      } = await filterUniqueAgainstLocalAndCloud(
         previewCards,
         contacts
       )
 
+      if (restoredFromCloud.length) {
+        addContacts(restoredFromCloud)
+      }
+
       if (!uniquePreviewCards.length) {
-        showToast('Already saved — duplicate card skipped')
+        if (restoredFromCloud.length) {
+          showToast('Already in Supabase — restored to app')
+          setActiveScreen('contacts')
+        } else {
+          showToast('Already saved — duplicate card skipped')
+        }
         setPreviewCards([])
         return
       }
 
-      if (duplicates) {
-        showToast(`${duplicates} duplicate card(s) skipped`)
+      if (localDuplicates) {
+        showToast(`${localDuplicates} duplicate card(s) skipped`)
       }
 
       const enriched = await Promise.all(

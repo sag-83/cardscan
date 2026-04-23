@@ -153,6 +153,21 @@ export function dedupeContacts(contacts: Contact[]): Contact[] {
   return Array.from(byId.values())
 }
 
+export function contactSortName(c: Pick<Contact, 'name' | 'company' | 'email'>): string {
+  return (c.name || c.company || c.email || '').toLowerCase().trim()
+}
+
+export function sortContactsAlphabetically(contacts: Contact[]): Contact[] {
+  return [...contacts].sort((a, b) => {
+    const aName = contactSortName(a)
+    const bName = contactSortName(b)
+    if (aName && bName && aName !== bName) return aName.localeCompare(bName)
+    if (aName && !bName) return -1
+    if (!aName && bName) return 1
+    return a.created_at.localeCompare(b.created_at)
+  })
+}
+
 export function findDuplicateContact(
   contact: Contact,
   contacts: Contact[]

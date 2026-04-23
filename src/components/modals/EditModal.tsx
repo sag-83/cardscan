@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../../store/useStore'
 import { normalizeContact } from '../../lib/utils'
-import { saveContactToDB, deleteContactFromDB } from '../../lib/supabase'
+import { saveContactToDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 import { Contact } from '../../types/contact'
 
@@ -60,19 +60,13 @@ export function EditModal() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Delete this contact?')) return
-    const deletedFromCloud = await deleteContactFromDB(form.id)
-    if (!deletedFromCloud) {
-      showToast('Supabase delete failed — contact was not deleted')
-      return
-    }
-
+  const handleDelete = () => {
+    if (!confirm('Remove this contact from this app? Supabase backup will stay saved.')) return
     deleteContact(form.id)
     deleteImages([`${form.id}_front`, `${form.id}_back`])
     setEditModal(null)
     setDetailContactId(null)
-    showToast('Deleted')
+    showToast('Removed locally. Supabase backup kept.')
   }
 
   return (

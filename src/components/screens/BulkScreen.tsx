@@ -1,6 +1,5 @@
 import { useStore } from '../../store/useStore'
 import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
-import { deleteContactFromDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 
 export function BulkScreen() {
@@ -37,22 +36,9 @@ export function BulkScreen() {
     }
   }
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (!selectedIds.length) return
-    if (!confirm(`Delete ${selectedIds.length} contact(s)?`)) return
-
-    const deleteResults = await Promise.all(
-      selectedIds.map(async (id) => ({
-        id,
-        deletedFromCloud: await deleteContactFromDB(id),
-      }))
-    )
-
-    const failed = deleteResults.filter((result) => !result.deletedFromCloud)
-    if (failed.length) {
-      showToast(`${failed.length} Supabase delete(s) failed — not deleted locally`)
-      return
-    }
+    if (!confirm(`Remove ${selectedIds.length} contact(s) from this app? Supabase backup will stay saved.`)) return
 
     const imageKeys = selectedIds.flatMap((id) => [`${id}_front`, `${id}_back`])
     selectedIds.forEach((id) => {
@@ -60,7 +46,7 @@ export function BulkScreen() {
     })
     deleteImages(imageKeys)
     clearSelected()
-    showToast('Deleted!')
+    showToast('Removed locally. Supabase backup kept.')
   }
 
   return (

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
-import { dedupeContacts, normalizeContact } from '../lib/utils'
+import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 
 function stripImages(contact: Contact): Contact {
   return {
@@ -96,7 +96,7 @@ export const useStore = create<AppState>()(
 
       addContacts: (newContacts) =>
         set((s) => ({
-          contacts: dedupeContacts([...newContacts, ...s.contacts]),
+          contacts: sortContactsAlphabetically(dedupeContacts([...newContacts, ...s.contacts])),
         })),
 
       updateContact: (id, updates) =>
@@ -112,7 +112,7 @@ export const useStore = create<AppState>()(
           selectedIds: s.selectedIds.filter((x) => x !== id),
         })),
 
-      setContacts: (contacts) => set({ contacts: dedupeContacts(contacts) }),
+      setContacts: (contacts) => set({ contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }),
 
       // ─── Settings ──────────────────────────────────────────────
       apiKey: (import.meta.env.VITE_GEMINI_KEY as string) ?? '',

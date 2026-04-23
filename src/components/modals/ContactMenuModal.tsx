@@ -1,5 +1,4 @@
 import { useStore } from '../../store/useStore'
-import { deleteContactFromDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 import { blankContact } from '../../lib/utils'
 
@@ -38,19 +37,13 @@ export function ContactMenuModal() {
     setTimeout(() => setTriggerBackScan(true), 80)
   }
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete ${contact.name || contact.company || 'this contact'}?`)) return
-    const deletedFromCloud = await deleteContactFromDB(contact.id)
-    if (!deletedFromCloud) {
-      showToast('Supabase delete failed — contact was not deleted')
-      return
-    }
-
+  const handleDelete = () => {
+    if (!confirm(`Remove ${contact.name || contact.company || 'this contact'} from this app? Supabase backup will stay saved.`)) return
     deleteContact(contact.id)
     deleteImages([`${contact.id}_front`, `${contact.id}_back`])
     close()
     setDetailContactId(null)
-    showToast('Deleted')
+    showToast('Removed locally. Supabase backup kept.')
   }
 
   void blankContact

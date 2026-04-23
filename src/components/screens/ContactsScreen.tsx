@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store/useStore'
-import { formatDate, initials, groupByDate } from '../../lib/utils'
+import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 
 export function ContactsScreen() {
@@ -16,7 +16,23 @@ export function ContactsScreen() {
   const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
   const cities = useMemo(() => [...new Set(contacts.map((c) => c.city).filter(Boolean))].sort(), [contacts])
 
-  const filtered = contacts.filter((c) => {
+  const lastAddedId = useMemo(() => {
+    let newestId: string | null = null
+    let newestTime = 0
+
+    contacts.forEach((contact) => {
+      const contactTime = Date.parse(contact.created_at || contact.scanned_at || '')
+      const safeContactTime = Number.isFinite(contactTime) ? contactTime : 0
+      if (!newestId || safeContactTime > newestTime) {
+        newestId = contact.id
+        newestTime = safeContactTime
+      }
+    })
+
+    return newestId
+  }, [contacts])
+
+  const filtered = sortContactsAlphabetically(contacts.filter((c) => {
     if (filterStars > 0 && c.stars !== filterStars) return false
     if (filterState && c.state !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
@@ -26,11 +42,9 @@ export function ContactsScreen() {
       if (!hay.includes(q)) return false
     }
     return true
-  })
+  }))
 
   const hasFilters = filterStars > 0 || filterState || filterCity
-  const groups = groupByDate(filtered)
-  const sortedDates = Object.keys(groups).sort((a, b) => (b > a ? 1 : -1))
 
   return (
     <div>
@@ -92,19 +106,19 @@ export function ContactsScreen() {
         </div>
       )}
 
-      {sortedDates.map((date) => (
-        <div key={date}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)',
-            padding: '14px 16px 5px', textTransform: 'uppercase',
-            letterSpacing: '0.6px', background: 'var(--bg)' }}>
-            {formatDate(date)}
-          </div>
-          {groups[date].map((c) => (
-            <ContactRow key={c.id} contact={c}
-              onClick={() => setDetailContactId(c.id)}
-              onMenu={() => setMenuContactId(c.id)} />
-          ))}
+      {!!filtered.length && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)',
+          padding: '14px 16px 5px', textTransform: 'uppercase',
+          letterSpacing: '0.6px', background: 'var(--bg)' }}>
+          Contacts A-Z
         </div>
+      )}
+
+      {filtered.map((c) => (
+        <ContactRow key={c.id} contact={c}
+          isLastAdded={c.id === lastAddedId}
+          onClick={() => setDetailContactId(c.id)}
+          onMenu={() => setMenuContactId(c.id)} />
       ))}
     </div>
   )
@@ -123,14 +137,15 @@ function dropdownStyle(active: boolean): React.CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, onClick, onMenu }: {
-  contact: Contact; onClick: () => void; onMenu: () => void
+function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
+  contact: Contact; isLastAdded: boolean; onClick: () => void; onMenu: () => void
 }) {
   return (
     <div onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 14,
       padding: '10px 16px', background: 'var(--bg2)',
       borderBottom: '1px solid var(--border2)', cursor: 'pointer',
+      borderLeft: isLastAdded ? '4px solid var(--accent)' : '4px solid transparent',
     }}>
       {(c.front_image || c.front_image_url) ? (
         <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
@@ -165,6 +180,16 @@ function ContactRow({ contact: c, onClick, onMenu }: {
             <span key={n} style={{ fontSize: 11, color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
           ))}
         </div>
+        {isLastAdded && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            marginTop: 5, padding: '3px 8px', borderRadius: 999,
+            background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
+            fontSize: 11, fontWeight: 800,
+          }}>
+            ★ Last added
+          </div>
+        )}
       </div>
       <div onClick={(e) => { e.stopPropagation(); onMenu() }}
         style={{ color: 'var(--text3)', fontSize: 22, padding: '8px 2px 8px 10px', lineHeight: 1, flexShrink: 0 }}>

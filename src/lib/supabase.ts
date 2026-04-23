@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
 
-export const SUPABASE_SCHEMA_SQL = `create table if not exists contacts (
+export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
+create table if not exists contacts (
   id text primary key,
   name text default '',
   title text default '',
@@ -26,7 +27,13 @@ export const SUPABASE_SCHEMA_SQL = `create table if not exists contacts (
   stars integer default 0,
   scanned_at text default '',
   created_at timestamptz default now()
-);`
+);
+
+-- 2. Remove user_id if it exists from a previous setup
+alter table contacts drop column if exists user_id;
+
+-- 3. Allow anonymous read/write (no auth used in this app)
+alter table contacts disable row level security;`
 
 let client: SupabaseClient | null = null
 
@@ -38,11 +45,32 @@ export function getSupabaseClient(): SupabaseClient | null {
   return client
 }
 
-function sanitizeContactForDB(contact: Contact): Contact {
+function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
   return {
-    ...contact,
-    front_image: '',
-    back_image: '',
+    id:              contact.id,
+    name:            contact.name,
+    title:           contact.title,
+    company:         contact.company,
+    email:           contact.email,
+    phone_mobile:    contact.phone_mobile,
+    phone_work:      contact.phone_work,
+    phone_fax:       contact.phone_fax,
+    website:         contact.website,
+    address:         contact.address,
+    city:            contact.city,
+    state:           contact.state,
+    zip:             contact.zip,
+    country:         contact.country,
+    notes:           contact.notes,
+    back_notes:      contact.back_notes,
+    user_notes:      contact.user_notes,
+    front_image:     '',
+    back_image:      '',
+    front_image_url: contact.front_image_url,
+    back_image_url:  contact.back_image_url,
+    stars:           contact.stars,
+    scanned_at:      contact.scanned_at,
+    created_at:      contact.created_at,
   }
 }
 

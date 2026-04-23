@@ -50,8 +50,8 @@ export function SettingsScreen() {
   }
 
   const handleClearAll = () => {
-    if (!confirm('Delete ALL contacts? This cannot be undone.')) return
-    setContacts([]); showToast('All contacts cleared.')
+    if (!confirm('Clear contacts from this phone/browser only? Supabase backup will stay saved.')) return
+    setContacts([]); showToast('Local contacts cleared. Use Restore from Supabase to bring them back.')
   }
 
   const handleRestoreFromSupabase = async () => {
@@ -208,7 +208,7 @@ export function SettingsScreen() {
         </div>
         <Divider />
         <div onClick={handleClearAll} style={{ ...rowStyle, cursor: 'pointer' }}>
-          <div style={{ flex: 1, fontSize: 15, color: 'var(--danger)' }}>Clear All Data</div>
+          <div style={{ flex: 1, fontSize: 15, color: 'var(--danger)' }}>Clear Local Data</div>
         </div>
       </SettingsGroup>
 

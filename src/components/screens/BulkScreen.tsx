@@ -37,13 +37,26 @@ export function BulkScreen() {
     }
   }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (!selectedIds.length) return
     if (!confirm(`Delete ${selectedIds.length} contact(s)?`)) return
+
+    const deleteResults = await Promise.all(
+      selectedIds.map(async (id) => ({
+        id,
+        deletedFromCloud: await deleteContactFromDB(id),
+      }))
+    )
+
+    const failed = deleteResults.filter((result) => !result.deletedFromCloud)
+    if (failed.length) {
+      showToast(`${failed.length} Supabase delete(s) failed — not deleted locally`)
+      return
+    }
+
     const imageKeys = selectedIds.flatMap((id) => [`${id}_front`, `${id}_back`])
     selectedIds.forEach((id) => {
       deleteContact(id)
-      deleteContactFromDB(id).catch((err) => console.error('DB delete failed:', err))
     })
     deleteImages(imageKeys)
     clearSelected()

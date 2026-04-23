@@ -38,10 +38,15 @@ export function ContactMenuModal() {
     setTimeout(() => setTriggerBackScan(true), 80)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirm(`Delete ${contact.name || contact.company || 'this contact'}?`)) return
+    const deletedFromCloud = await deleteContactFromDB(contact.id)
+    if (!deletedFromCloud) {
+      showToast('Supabase delete failed — contact was not deleted')
+      return
+    }
+
     deleteContact(contact.id)
-    deleteContactFromDB(contact.id)
     deleteImages([`${contact.id}_front`, `${contact.id}_back`])
     close()
     setDetailContactId(null)

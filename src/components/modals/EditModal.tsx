@@ -60,10 +60,15 @@ export function EditModal() {
     }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirm('Delete this contact?')) return
+    const deletedFromCloud = await deleteContactFromDB(form.id)
+    if (!deletedFromCloud) {
+      showToast('Supabase delete failed — contact was not deleted')
+      return
+    }
+
     deleteContact(form.id)
-    deleteContactFromDB(form.id)
     deleteImages([`${form.id}_front`, `${form.id}_back`])
     setEditModal(null)
     setDetailContactId(null)

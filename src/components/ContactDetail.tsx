@@ -26,10 +26,15 @@ export function ContactDetail() {
   if (!contact) return null
   const c = contact
 
-  const handleStarCycle = () => {
+  const handleStarCycle = async () => {
     const newStars = c.stars >= 4 ? 0 : c.stars + 1
+    const saved = await saveContactToDB({ ...c, stars: newStars })
+    if (!saved) {
+      showToast('Supabase backup failed — star was not changed')
+      return
+    }
+
     updateContact(c.id, { stars: newStars })
-    saveContactToDB({ ...c, stars: newStars })
   }
 
   const handleSaveToPhone = () => {

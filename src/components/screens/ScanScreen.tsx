@@ -6,6 +6,8 @@ import { saveContactToDB, saveContactsToDB, uploadCardPhoto } from '../../lib/su
 import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
 
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
 export function ScanScreen() {
   const frontInputRef = useRef<HTMLInputElement | null>(null)
   const backInputRef = useRef<HTMLInputElement | null>(null)
@@ -79,6 +81,16 @@ export function ScanScreen() {
   }
 
   const handleFile = async (file: File, side: 'front' | 'back') => {
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose a photo/image file')
+      return
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      showToast('Image is too large — use a smaller photo')
+      return
+    }
+
     setPreviewCards([])
     setIsScanning(true)
 

@@ -4,22 +4,29 @@ Return ONLY a valid JSON array, no markdown. Example:
 [{"name":"Full Name","title":"Job Title","company":"Company","email":"name@co.com","phone_mobile":"+1 917 555 0100","phone_work":"+1 718 555 0200","phone_fax":"","website":"co.com","address":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA","notes":"LinkedIn: linkedin.com/in/name"}]
 Empty string for missing fields. Return ONLY the JSON array.`
 
+const OCR_TIMEOUT_MS = 45_000
+
 async function callWithKey(
   b64: string,
   mime: string,
   apiKey: string
 ): Promise<Record<string, string>[]> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), OCR_TIMEOUT_MS)
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: b64 } }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
       }),
     }
-  )
+  ).finally(() => window.clearTimeout(timeout))
+
   if (!res.ok) {
     const err = new Error('API error ' + res.status) as Error & { status: number }
     err.status = res.status

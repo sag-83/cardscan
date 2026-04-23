@@ -10,6 +10,9 @@ import {
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts } from '../../lib/utils'
 
+const ENV_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+const ENV_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
 export function SettingsScreen() {
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const { theme, setTheme } = useTheme()
@@ -45,7 +48,11 @@ export function SettingsScreen() {
   }
 
   const handleTestSB = async () => {
-    try { await testSupabaseConnection(); showToast('✅ Supabase connected!') }
+    try {
+      initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
+      await testSupabaseConnection()
+      showToast('✅ Supabase connected!')
+    }
     catch (err) { showToast('❌ ' + (err as Error).message) }
   }
 
@@ -56,7 +63,7 @@ export function SettingsScreen() {
 
   const handleRestoreFromSupabase = async () => {
     try {
-      initSupabase(sbUrl, sbKey)
+      initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
       const cloudContacts = await syncContactsFromDB()
       if (!cloudContacts.length) {
         showToast('No cloud contacts found')

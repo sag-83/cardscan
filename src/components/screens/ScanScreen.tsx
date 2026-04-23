@@ -16,8 +16,26 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const MAX_PDF_BYTES = 6 * 1024 * 1024
 const SUPPORTED_SCAN_TYPES = ['application/pdf']
 
+const ENV_GEMINI_KEYS = [
+  (import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string),
+  (import.meta.env.VITE_GEMINI_KEY2 as string) || (import.meta.env.VITE_GEMINI_API_KEY2 as string),
+  (import.meta.env.VITE_GEMINI_KEY3 as string) || (import.meta.env.VITE_GEMINI_API_KEY3 as string),
+].filter(Boolean)
+
 function isSupportedScanFile(file: File): boolean {
   return file.type.startsWith('image/') || SUPPORTED_SCAN_TYPES.includes(file.type)
+}
+
+function mostRecentlyAddedContact(contacts: Contact[]): Contact | undefined {
+  return contacts.reduce<Contact | undefined>((newest, contact) => {
+    if (!newest) return contact
+    const contactTime = Date.parse(contact.created_at || contact.scanned_at || '')
+    const newestTime = Date.parse(newest.created_at || newest.scanned_at || '')
+    return (Number.isFinite(contactTime) ? contactTime : 0) >
+      (Number.isFinite(newestTime) ? newestTime : 0)
+      ? contact
+      : newest
+  }, undefined)
 }
 
 async function filterUniqueAgainstLocalAndCloud(
@@ -96,6 +114,10 @@ export function ScanScreen() {
     showToast: s.showToast,
   }))
 
+  const geminiKeys = [apiKey, apiKey2, apiKey3, ...ENV_GEMINI_KEYS]
+    .map((key) => key?.trim())
+    .filter((key, index, allKeys): key is string => Boolean(key) && allKeys.indexOf(key) === index)
+
   useEffect(() => {
     if (triggerBackScan) {
       setTriggerBackScan(false)
@@ -104,7 +126,7 @@ export function ScanScreen() {
   }, [triggerBackScan, setTriggerBackScan])
 
   const startScan = (side: 'front' | 'back', source: 'camera' | 'files' = 'camera') => {
-    if (!apiKey) {
+    if (!geminiKeys.length) {
       showToast('Set Gemini API key in Settings ⚙️')
       setActiveScreen('settings')
       return
@@ -117,7 +139,13 @@ export function ScanScreen() {
       }
 
       if (!pendingBackId) {
-        setPendingBackId(contacts[0].id)
+        const lastContact = mostRecentlyAddedContact(contacts)
+        if (!lastContact) {
+          showToast('Scan a front side first')
+          return
+        }
+
+        setPendingBackId(lastContact.id)
       }
 
       ;(source === 'files' ? backFileInputRef : backInputRef).current?.click()
@@ -157,7 +185,7 @@ export function ScanScreen() {
       // Medium-size image for OCR/API call to reduce request size
       const scanB64 = isPdf ? b64 : await resizeImage(b64, file.type, 1600)
 
-      const extracted = await callGemini(scanB64, isPdf ? 'application/pdf' : 'image/jpeg', [apiKey, apiKey2, apiKey3])
+      const extracted = await callGemini(scanB64, isPdf ? 'application/pdf' : 'image/jpeg', geminiKeys)
 
       if (!extracted.length) {
         showToast('No card detected — try a clearer photo')

@@ -81,7 +81,7 @@ export default function App() {
         initSupabase(effectiveUrl, effectiveKey)
         try {
           const dbContacts = await syncContactsFromDB()
-          if (dbContacts.length) {
+          if (dbContacts.length && contacts.length === 0) {
             const merged = dedupeContacts([...dbContacts, ...contacts])
             finalContacts = merged
             setContacts(merged)

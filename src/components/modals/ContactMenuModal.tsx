@@ -1,6 +1,5 @@
 import { useStore } from '../../store/useStore'
 import { deleteImages } from '../../lib/imageStore'
-import { blankContact } from '../../lib/utils'
 
 export function ContactMenuModal() {
   const menuContactId = useStore((s) => s.menuContactId)
@@ -45,8 +44,6 @@ export function ContactMenuModal() {
     setDetailContactId(null)
     showToast('Removed locally. Supabase backup kept.')
   }
-
-  void blankContact
 
   return (
     <div

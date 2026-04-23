@@ -6,7 +6,7 @@ import { deleteImages } from '../../lib/imageStore'
 export function BulkScreen() {
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, setContacts, setBulkMessageType, showToast, sheetsWebhook,
+    deleteContact, setContacts, setBulkMessageType, showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
@@ -15,7 +15,6 @@ export function BulkScreen() {
     setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
-    sheetsWebhook: s.sheetsWebhook,
   }))
 
   const targetContacts = selectedIds.length
@@ -33,7 +32,7 @@ export function BulkScreen() {
     if (!unsent.length) { showToast('All already in Sheets!'); return }
     showToast(`Sending ${unsent.length}...`)
     try {
-      await sendToGoogleSheets(unsent, sheetsWebhook || undefined)
+      await sendToGoogleSheets(unsent)
       const sentIds = new Set(unsent.map((c) => c.id))
       setContacts(contacts.map((c) => sentIds.has(c.id) ? { ...c, sent_to_sheets: true } : c))
       showToast(`${unsent.length} sent to Sheets!`)

@@ -59,17 +59,17 @@ function toSheetsRow(c: Contact) {
   }
 }
 
-export async function sendToGoogleSheets(contacts: Contact[], webhookUrl?: string): Promise<void> {
-  // Env var always wins — prevents stale localStorage empty-string from blocking it
-  const url = (import.meta.env.VITE_SHEETS_WEBHOOK as string) || webhookUrl
-  if (!url) throw new Error('Sheets webhook URL not configured')
-  // text/plain avoids a CORS preflight — Apps Script handles it fine
-  const res = await fetch(url, {
+export async function sendToGoogleSheets(contacts: Contact[]): Promise<void> {
+  // Goes through /api/sheets (Vercel serverless) to avoid Safari CORS issues
+  const res = await fetch('/api/sheets', {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(contacts.map(toSheetsRow)),
   })
-  if (!res.ok) throw new Error(`Sheets error ${res.status}`)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(data.error ?? `Server error ${res.status}`)
+  }
 }
 
 export function backupToJSON(contacts: Contact[]): void {

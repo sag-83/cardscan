@@ -19,6 +19,16 @@ function sheetsText(val: string | number | boolean | undefined | null): string {
   return /^[=+\-@]/.test(text) ? `'${text}` : text
 }
 
+function sheetsEmailLink(val: string | undefined | null): string {
+  const email = (val ?? '').trim().toLowerCase()
+  if (!email) return ''
+
+  const safeEmail = email.match(/^[^\s@"'=+<>]+@[^\s@"'=+<>]+\.[^\s@"'=+<>]+$/)?.[0]
+  if (!safeEmail) return sheetsText(email)
+
+  return `=HYPERLINK("mailto:${safeEmail}","${safeEmail}")`
+}
+
 export function exportToCSV(contacts: Contact[]): void {
   if (!contacts.length) return
   const rows = contacts.map((c) =>
@@ -49,7 +59,7 @@ function toSheetsRow(c: Contact) {
     name:      sheetsText(c.name),
     title:     sheetsText(c.title),
     company:   sheetsText(c.company),
-    email:     sheetsText(c.email),
+    email:     sheetsEmailLink(c.email),
     phone:     sheetsText(c.phone_mobile),
     phone2:    sheetsText(c.phone_work),
     fax:       sheetsText(c.phone_fax),

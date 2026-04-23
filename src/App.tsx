@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from './store/useStore'
 import { initSupabase, syncContactsFromDB } from './lib/supabase'
 import { loadImages } from './lib/imageStore'
@@ -17,6 +17,9 @@ import { ContactsScreen } from './components/screens/ContactsScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
 
+const APP_PASSWORD = (import.meta.env.VITE_APP_PASSWORD as string) ?? ''
+const APP_UNLOCK_KEY = 'cardscan_app_unlocked'
+
 export default function App() {
   const activeScreen = useStore((s) => s.activeScreen)
   const sbUrl = useStore((s) => s.sbUrl)
@@ -26,9 +29,13 @@ export default function App() {
   const showToast = useStore((s) => s.showToast)
   const sheetsWebhook = useStore((s) => s.sheetsWebhook)
   const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    return !APP_PASSWORD || localStorage.getItem(APP_UNLOCK_KEY) === APP_PASSWORD
+  })
 
-  // Initialize Supabase, sync from DB, then restore images from IndexedDB
   useEffect(() => {
+    if (!isUnlocked) return
+
     async function init() {
       // If env var is set but localStorage has stale empty string, fix it
       const envWebhook = import.meta.env.VITE_SHEETS_WEBHOOK as string
@@ -80,7 +87,11 @@ export default function App() {
 
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isUnlocked])
+
+  if (!isUnlocked) {
+    return <PasswordGate onUnlock={() => setIsUnlocked(true)} />
+  }
 
   return (
     <>
@@ -111,5 +122,96 @@ export default function App() {
       <ContactMenuModal />
       <BulkMessageModal />
     </>
+  )
+}
+
+function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+
+    if (password === APP_PASSWORD) {
+      localStorage.setItem(APP_UNLOCK_KEY, APP_PASSWORD)
+      onUnlock()
+      return
+    }
+
+    setError('Incorrect password')
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: '100dvh',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 20,
+        background:
+          'radial-gradient(circle at top, rgba(0,122,255,0.18), transparent 34%), var(--bg)',
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: '100%',
+          maxWidth: 390,
+          background: 'var(--bg2)',
+          border: '1px solid var(--border2)',
+          borderRadius: 22,
+          padding: 24,
+          boxShadow: '0 18px 50px rgba(0,0,0,0.12)',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>
+          Private Access
+        </div>
+        <h1 style={{ fontSize: 28, lineHeight: 1.1, marginBottom: 10 }}>CardHolder</h1>
+        <p style={{ color: 'var(--text3)', fontSize: 14, lineHeight: 1.5, marginBottom: 18 }}>
+          Enter the access password to open the scanner.
+        </p>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value)
+            setError('')
+          }}
+          placeholder="Access password"
+          autoFocus
+          style={{
+            width: '100%',
+            padding: '14px 15px',
+            borderRadius: 12,
+            border: '1.5px solid var(--border)',
+            background: 'var(--bg3)',
+            fontSize: 16,
+            marginBottom: 10,
+          }}
+        />
+        {error && (
+          <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+            {error}
+          </div>
+        )}
+        <button
+          type="submit"
+          style={{
+            width: '100%',
+            border: 'none',
+            borderRadius: 12,
+            padding: '14px 18px',
+            background: 'var(--accent)',
+            color: '#fff',
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          Unlock
+        </button>
+      </form>
+    </div>
   )
 }

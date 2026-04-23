@@ -1,6 +1,7 @@
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
 import { blankContact } from '../lib/utils'
+import { IS_DEMO_MODE } from '../lib/demo'
 
 export function Header() {
   const { theme, toggle } = useTheme()
@@ -41,7 +42,7 @@ export function Header() {
           textAlign: 'center', color: 'var(--text)',
         }}
       >
-        CardHolder
+        CardHolder {IS_DEMO_MODE ? 'Demo' : ''}
       </h1>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

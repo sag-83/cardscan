@@ -4,6 +4,7 @@ import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
+import { IS_DEMO_MODE } from '../lib/demo'
 
 export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
@@ -28,6 +29,12 @@ export function ContactDetail() {
 
   const handleStarCycle = async () => {
     const newStars = c.stars >= 4 ? 0 : c.stars + 1
+    if (IS_DEMO_MODE) {
+      updateContact(c.id, { stars: newStars })
+      showToast('Demo mode: star updated locally')
+      return
+    }
+
     const saved = await saveContactToDB({ ...c, stars: newStars })
     if (!saved) {
       showToast('Supabase backup failed — star was not changed')
@@ -44,6 +51,11 @@ export function ContactDetail() {
 
   const handleSendToSheets = async () => {
     if (isSendingSheets) return
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: this would sync to Google Sheets')
+      return
+    }
+
     setIsSendingSheets(true)
     try {
       const sent = await sendToGoogleSheets([c])

@@ -1,6 +1,7 @@
 import { useStore } from '../../store/useStore'
 import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
 import { deleteImages } from '../../lib/imageStore'
+import { IS_DEMO_MODE } from '../../lib/demo'
 
 export function BulkScreen() {
   const {
@@ -27,6 +28,11 @@ export function BulkScreen() {
 
   const handleSendToSheets = async () => {
     if (!targetContacts.length) { showToast('No contacts to send'); return }
+    if (IS_DEMO_MODE) {
+      showToast(`Demo mode: ${targetContacts.length} contact(s) would sync to Sheets`)
+      return
+    }
+
     showToast(`Sending ${targetContacts.length}...`)
     try {
       const sent = await sendToGoogleSheets(targetContacts)

@@ -10,6 +10,7 @@ import {
   uploadCardPhoto,
 } from '../../lib/supabase'
 import { saveImage } from '../../lib/imageStore'
+import { demoScannedContact, IS_DEMO_MODE } from '../../lib/demo'
 import type { Contact } from '../../types/contact'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
@@ -126,6 +127,23 @@ export function ScanScreen() {
   }, [triggerBackScan, setTriggerBackScan])
 
   const startScan = (side: 'front' | 'back', source: 'camera' | 'files' = 'camera') => {
+    if (IS_DEMO_MODE) {
+      if (side === 'back' && contacts.length) {
+        const lastContact = mostRecentlyAddedContact(contacts)
+        if (lastContact) {
+          updateContact(lastContact.id, {
+            back_notes: 'Demo back-side scan: booth number, extra phone, and follow-up notes.',
+          })
+          showToast('Demo mode: back side notes added')
+        }
+        return
+      }
+
+      setPreviewCards([demoScannedContact()])
+      showToast('Demo mode: fake AI scan generated')
+      return
+    }
+
     if (!geminiKeys.length) {
       showToast('Set Gemini API key in Settings ⚙️')
       setActiveScreen('settings')
@@ -156,6 +174,12 @@ export function ScanScreen() {
   }
 
   const handleFile = async (file: File, side: 'front' | 'back') => {
+    if (IS_DEMO_MODE) {
+      setPreviewCards([demoScannedContact()])
+      showToast('Demo mode: file upload simulated')
+      return
+    }
+
     if (!isSupportedScanFile(file)) {
       showToast('Please choose an image or PDF scan')
       return
@@ -335,6 +359,14 @@ export function ScanScreen() {
     setIsSavingPreview(true)
 
     try {
+      if (IS_DEMO_MODE) {
+        addContacts(previewCards)
+        showToast(`${previewCards.length} demo contact(s) added locally`)
+        setPreviewCards([])
+        setActiveScreen('contacts')
+        return
+      }
+
       const {
         unique: uniquePreviewCards,
         localDuplicates,

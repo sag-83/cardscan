@@ -3,6 +3,7 @@ import { useStore } from '../../store/useStore'
 import { normalizeContact } from '../../lib/utils'
 import { saveContactToDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
+import { IS_DEMO_MODE } from '../../lib/demo'
 import { Contact } from '../../types/contact'
 
 const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
@@ -41,10 +42,13 @@ export function EditModal() {
 
   const handleSave = async () => {
     const normalized = normalizeContact(form)
-    const saved = await saveContactToDB(normalized)
-    if (!saved) {
-      showToast('Supabase backup failed — check Settings')
-      return
+
+    if (!IS_DEMO_MODE) {
+      const saved = await saveContactToDB(normalized)
+      if (!saved) {
+        showToast('Supabase backup failed — check Settings')
+        return
+      }
     }
 
     if (isNew) {
@@ -53,7 +57,7 @@ export function EditModal() {
       updateContact(normalized.id, normalized)
     }
     setEditModal(null)
-    showToast('Saved!')
+    showToast(IS_DEMO_MODE ? 'Demo mode: saved locally' : 'Saved!')
     if (!isNew) {
       // Re-open detail with fresh data
       setDetailContactId(normalized.id)

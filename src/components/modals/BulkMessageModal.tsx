@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore'
+import { IS_DEMO_MODE } from '../../lib/demo'
 
 export function BulkMessageModal() {
   const [subject, setSubject] = useState('')
@@ -20,6 +21,12 @@ export function BulkMessageModal() {
   const close = () => setBulkMessageType(null)
 
   const handleSend = () => {
+    if (IS_DEMO_MODE) {
+      showToast(`Demo mode: this would open ${bulkMessageType === 'email' ? 'email' : 'SMS'} for ${targetContacts.length} contact(s)`)
+      close()
+      return
+    }
+
     if (bulkMessageType === 'email') {
       const emails = targetContacts.map((c) => c.email).filter(Boolean).join(',')
       if (!emails) { showToast('No email addresses found'); return }

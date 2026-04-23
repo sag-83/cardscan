@@ -9,6 +9,7 @@ import {
 } from '../../lib/supabase'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts } from '../../lib/utils'
+import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
 
 const ENV_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const ENV_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -48,6 +49,11 @@ export function SettingsScreen() {
   }
 
   const handleTestSB = async () => {
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: Supabase is disabled')
+      return
+    }
+
     try {
       initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
       await testSupabaseConnection()
@@ -62,6 +68,12 @@ export function SettingsScreen() {
   }
 
   const handleRestoreFromSupabase = async () => {
+    if (IS_DEMO_MODE) {
+      setContacts(DEMO_CONTACTS)
+      showToast('Demo mode: sample contacts restored')
+      return
+    }
+
     try {
       initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
       const cloudContacts = await syncContactsFromDB()

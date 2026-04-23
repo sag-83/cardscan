@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
+import { IS_DEMO_MODE } from '../lib/demo'
 
 function stripImages(contact: Contact): Contact {
   return {
@@ -186,7 +187,7 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: 'cs_store_v2',
+      name: IS_DEMO_MODE ? 'cs_store_demo_v1' : 'cs_store_v2',
       storage: createJSONStorage(() => localStorage),
 
       // Only persist data that should survive a page refresh

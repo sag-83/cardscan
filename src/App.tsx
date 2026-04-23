@@ -3,6 +3,7 @@ import { useStore } from './store/useStore'
 import { initSupabase, syncContactsFromDB } from './lib/supabase'
 import { loadImages } from './lib/imageStore'
 import { dedupeContacts } from './lib/utils'
+import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
@@ -17,7 +18,7 @@ import { ContactsScreen } from './components/screens/ContactsScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
 
-const APP_PASSWORD = (import.meta.env.VITE_APP_PASSWORD as string) ?? ''
+const APP_PASSWORD = IS_DEMO_MODE ? '' : ((import.meta.env.VITE_APP_PASSWORD as string) ?? '')
 const APP_UNLOCK_KEY = 'cardscan_app_unlocked'
 const INACTIVITY_LOCK_MS = 60_000
 
@@ -68,6 +69,11 @@ export default function App() {
     if (!isUnlocked) return
 
     async function init() {
+      if (IS_DEMO_MODE) {
+        if (contacts.length === 0) setContacts(DEMO_CONTACTS)
+        return
+      }
+
       // If env var is set but localStorage has stale empty string, fix it
       const envWebhook = import.meta.env.VITE_SHEETS_WEBHOOK as string
       if (envWebhook && !sheetsWebhook) setSheetsWebhook(envWebhook)

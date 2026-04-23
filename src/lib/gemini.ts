@@ -5,6 +5,7 @@ Return ONLY a valid JSON array, no markdown. Example:
 Empty string for missing fields. Return ONLY the JSON array.`
 
 const OCR_TIMEOUT_MS = 45_000
+const GEMINI_KEY_CURSOR = 'cardscan_gemini_key_cursor'
 
 async function callWithKey(
   b64: string,
@@ -55,6 +56,24 @@ function isQuotaError(err: unknown): boolean {
   return err instanceof Error && 'status' in err && (err as { status: number }).status === 429
 }
 
+function getKeyCursor(totalKeys: number): number {
+  const saved = Number(window.localStorage.getItem(GEMINI_KEY_CURSOR) ?? 0)
+  return Number.isFinite(saved) && totalKeys > 0 ? saved % totalKeys : 0
+}
+
+function setKeyCursor(nextIndex: number, totalKeys: number): void {
+  if (totalKeys <= 0) return
+  window.localStorage.setItem(GEMINI_KEY_CURSOR, String(nextIndex % totalKeys))
+}
+
+function rotateKeys(keys: string[]): Array<{ key: string; originalIndex: number }> {
+  const cursor = getKeyCursor(keys.length)
+  return keys.map((_, offset) => {
+    const originalIndex = (cursor + offset) % keys.length
+    return { key: keys[originalIndex], originalIndex }
+  })
+}
+
 export async function callGemini(
   b64: string,
   mime: string,
@@ -62,22 +81,33 @@ export async function callGemini(
 ): Promise<Record<string, string>[]> {
   const validKeys = keys.filter(Boolean)
   if (!validKeys.length) throw new Error('No Gemini API key configured')
+
+  const orderedKeys = rotateKeys(validKeys)
   let lastErr: unknown
-  for (let i = 0; i < validKeys.length; i++) {
+
+  for (let i = 0; i < orderedKeys.length; i++) {
+    const { key, originalIndex } = orderedKeys[i]
     try {
-      return await callWithKey(b64, mime, validKeys[i])
+      const result = await callWithKey(b64, mime, key)
+      setKeyCursor(originalIndex + 1, validKeys.length)
+      return result
     } catch (err) {
       lastErr = err
-      if (isQuotaError(err) && i < validKeys.length - 1) {
-        console.warn(`Gemini key ${i + 1} hit quota, trying key ${i + 2}`)
+
+      if (isQuotaError(err)) {
+        setKeyCursor(originalIndex + 1, validKeys.length)
+        console.warn(`Gemini key ${originalIndex + 1} hit quota, trying next configured key`)
         continue
       }
+
       throw err
     }
   }
+
   if (isQuotaError(lastErr)) {
-    throw new Error('All Gemini keys hit quota/rate limits. Try again later or add a fresh Gemini key in Settings.')
+    throw new Error(`All ${validKeys.length} Gemini keys hit quota/rate limits. Try again later, add a fresh Gemini key, or use a smaller image instead of a PDF scan.`)
   }
+
   throw lastErr
 }
 

@@ -115,9 +115,9 @@ export const useStore = create<AppState>()(
       setContacts: (contacts) => set({ contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }),
 
       // ─── Settings ──────────────────────────────────────────────
-      apiKey: (import.meta.env.VITE_GEMINI_KEY as string) ?? '',
-      apiKey2: (import.meta.env.VITE_GEMINI_KEY2 as string) ?? '',
-      apiKey3: (import.meta.env.VITE_GEMINI_KEY3 as string) ?? '',
+      apiKey: ((import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string)) ?? '',
+      apiKey2: ((import.meta.env.VITE_GEMINI_KEY2 as string) || (import.meta.env.VITE_GEMINI_API_KEY2 as string)) ?? '',
+      apiKey3: ((import.meta.env.VITE_GEMINI_KEY3 as string) || (import.meta.env.VITE_GEMINI_API_KEY3 as string)) ?? '',
 
       setApiKey: (apiKey) => set({ apiKey }),
       setApiKey2: (apiKey2) => set({ apiKey2 }),

@@ -11,6 +11,14 @@ function csvQuote(val: string | number | boolean | undefined | null): string {
   return `"${(val ?? '').toString().replace(/"/g, '""').replace(/\n/g, ' ')}"`
 }
 
+function sheetsText(val: string | number | boolean | undefined | null): string {
+  const text = (val ?? '').toString().trim()
+  if (!text) return ''
+
+  // Prevent Sheets from treating values like +1 555... as formulas.
+  return /^[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 export function exportToCSV(contacts: Contact[]): void {
   if (!contacts.length) return
   const rows = contacts.map((c) =>
@@ -38,24 +46,24 @@ export function exportToCSV(contacts: Contact[]): void {
  */
 function toSheetsRow(c: Contact) {
   return {
-    name:      c.name,
-    title:     c.title,
-    company:   c.company,
-    email:     c.email,
-    phone:     c.phone_mobile,
-    phone2:    c.phone_work,
-    fax:       c.phone_fax,
-    website:   c.website,
-    address:   c.address,
-    city:      c.city,
-    state:     c.state,
-    zip:       c.zip,
-    country:   c.country,
+    name:      sheetsText(c.name),
+    title:     sheetsText(c.title),
+    company:   sheetsText(c.company),
+    email:     sheetsText(c.email),
+    phone:     sheetsText(c.phone_mobile),
+    phone2:    sheetsText(c.phone_work),
+    fax:       sheetsText(c.phone_fax),
+    website:   sheetsText(c.website),
+    address:   sheetsText(c.address),
+    city:      sheetsText(c.city),
+    state:     sheetsText(c.state),
+    zip:       sheetsText(c.zip),
+    country:   sheetsText(c.country),
     stars:     c.stars,
-    notes:     c.notes,
-    backNotes: c.back_notes,
-    userNotes: c.user_notes,
-    scannedAt: c.scanned_at,
+    notes:     sheetsText(c.notes),
+    backNotes: sheetsText(c.back_notes),
+    userNotes: sheetsText(c.user_notes),
+    scannedAt: sheetsText(c.scanned_at),
   }
 }
 

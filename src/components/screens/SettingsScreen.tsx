@@ -1,8 +1,14 @@
 import { useRef } from 'react'
 import { useStore } from '../../store/useStore'
 import { useTheme } from '../../hooks/useTheme'
-import { initSupabase, testSupabaseConnection, SUPABASE_SCHEMA_SQL } from '../../lib/supabase'
+import {
+  initSupabase,
+  syncContactsFromDB,
+  testSupabaseConnection,
+  SUPABASE_SCHEMA_SQL,
+} from '../../lib/supabase'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
+import { dedupeContacts } from '../../lib/utils'
 
 export function SettingsScreen() {
   const restoreInputRef = useRef<HTMLInputElement>(null)
@@ -48,16 +54,33 @@ export function SettingsScreen() {
     setContacts([]); showToast('All contacts cleared.')
   }
 
+  const handleRestoreFromSupabase = async () => {
+    try {
+      initSupabase(sbUrl, sbKey)
+      const cloudContacts = await syncContactsFromDB()
+      if (!cloudContacts.length) {
+        showToast('No cloud contacts found')
+        return
+      }
+
+      const restored = dedupeContacts([...cloudContacts, ...contacts])
+      setContacts(restored)
+      showToast(`Restored ${cloudContacts.length} cloud contact(s)`)
+    } catch (err) {
+      showToast('Cloud restore failed: ' + (err as Error).message)
+    }
+  }
+
   const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       try {
         const { contacts: restored, count } = restoreFromJSON(reader.result as string)
-        const existingIds = new Set(contacts.map((c) => c.id))
-        const newOnes = restored.filter((c) => !existingIds.has(c.id))
-        setContacts([...contacts, ...newOnes])
-        showToast(`Restored ${newOnes.length} of ${count} contacts`)
+        const merged = dedupeContacts([...restored, ...contacts])
+        const added = Math.max(0, merged.length - contacts.length)
+        setContacts(merged)
+        showToast(`Restored ${added} of ${count} contacts`)
       } catch { showToast('Invalid backup file') }
     }
     reader.readAsText(file); e.target.value = ''
@@ -172,6 +195,11 @@ export function SettingsScreen() {
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts</div>
           <div style={{ color: 'var(--accent)' }}>⬇</div>
+        </div>
+        <Divider />
+        <div onClick={handleRestoreFromSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Restore from Supabase</div>
+          <div style={{ color: 'var(--accent)' }}>☁</div>
         </div>
         <Divider />
         <div onClick={() => restoreInputRef.current?.click()} style={{ ...rowStyle, cursor: 'pointer' }}>

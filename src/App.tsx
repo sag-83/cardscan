@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useStore } from './store/useStore'
 import { initSupabase, syncContactsFromDB } from './lib/supabase'
 import { loadImages } from './lib/imageStore'
+import { dedupeContacts } from './lib/utils'
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
@@ -43,10 +44,7 @@ export default function App() {
         try {
           const dbContacts = await syncContactsFromDB()
           if (dbContacts.length) {
-            const dbMap = new Map(dbContacts.map((c) => [c.id, c]))
-            const merged = contacts.map((c) => dbMap.get(c.id) ?? c)
-            const localIds = new Set(contacts.map((c) => c.id))
-            dbContacts.filter((c) => !localIds.has(c.id)).forEach((c) => merged.push(c))
+            const merged = dedupeContacts([...dbContacts, ...contacts])
             finalContacts = merged
             setContacts(merged)
           }

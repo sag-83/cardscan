@@ -46,6 +46,120 @@ export function normalizeContact(c: Contact): Contact {
   }
 }
 
+function compact(s: string | undefined | null): string {
+  return (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function phoneKey(s: string | undefined | null): string {
+  return (s ?? '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '')
+}
+
+export function contactDedupKey(c: Partial<Contact>): string {
+  const email = compact(c.email)
+  if (email) return `email:${email}`
+
+  const phone = phoneKey(c.phone_mobile) || phoneKey(c.phone_work) || phoneKey(c.phone_fax)
+  if (phone.length >= 7) return `phone:${phone}`
+
+  const name = compact(c.name)
+  const company = compact(c.company)
+  if (name && company) return `name-company:${name}|${company}`
+  if (company && compact(c.address)) return `company-address:${company}|${compact(c.address)}`
+
+  return `id:${c.id ?? ''}`
+}
+
+function scoreContact(c: Contact): number {
+  return [
+    c.name,
+    c.title,
+    c.company,
+    c.email,
+    c.phone_mobile,
+    c.phone_work,
+    c.phone_fax,
+    c.website,
+    c.address,
+    c.city,
+    c.state,
+    c.zip,
+    c.country,
+    c.notes,
+    c.back_notes,
+    c.user_notes,
+    c.front_image,
+    c.back_image,
+    c.front_image_url,
+    c.back_image_url,
+  ].filter(Boolean).length + c.stars
+}
+
+export function mergeContact(existing: Contact, incoming: Contact): Contact {
+  const base = scoreContact(incoming) > scoreContact(existing) ? incoming : existing
+  const other = base === incoming ? existing : incoming
+
+  return normalizeContact({
+    ...base,
+    name: base.name || other.name,
+    title: base.title || other.title,
+    company: base.company || other.company,
+    email: base.email || other.email,
+    phone_mobile: base.phone_mobile || other.phone_mobile,
+    phone_work: base.phone_work || other.phone_work,
+    phone_fax: base.phone_fax || other.phone_fax,
+    website: base.website || other.website,
+    address: base.address || other.address,
+    city: base.city || other.city,
+    state: base.state || other.state,
+    zip: base.zip || other.zip,
+    country: base.country || other.country,
+    notes: base.notes || other.notes,
+    back_notes: base.back_notes || other.back_notes,
+    user_notes: base.user_notes || other.user_notes,
+    front_image: base.front_image || other.front_image,
+    back_image: base.back_image || other.back_image,
+    front_image_url: base.front_image_url || other.front_image_url,
+    back_image_url: base.back_image_url || other.back_image_url,
+    stars: Math.max(base.stars, other.stars),
+    sent_to_sheets: base.sent_to_sheets || other.sent_to_sheets,
+    scanned_at: base.scanned_at || other.scanned_at,
+    created_at: base.created_at || other.created_at,
+  })
+}
+
+export function dedupeContacts(contacts: Contact[]): Contact[] {
+  const byId = new Map<string, Contact>()
+  const byFingerprint = new Map<string, Contact>()
+
+  contacts.forEach((contact) => {
+    const normalized = normalizeContact(contact)
+    const idMatch = byId.get(normalized.id)
+    const key = contactDedupKey(normalized)
+    const fingerprintMatch = byFingerprint.get(key)
+    const match = idMatch ?? fingerprintMatch
+
+    if (match) {
+      const merged = mergeContact(match, normalized)
+      byId.set(merged.id, merged)
+      byFingerprint.set(contactDedupKey(merged), merged)
+      return
+    }
+
+    byId.set(normalized.id, normalized)
+    byFingerprint.set(key, normalized)
+  })
+
+  return Array.from(byId.values())
+}
+
+export function findDuplicateContact(
+  contact: Contact,
+  contacts: Contact[]
+): Contact | undefined {
+  const key = contactDedupKey(contact)
+  return contacts.find((existing) => existing.id === contact.id || contactDedupKey(existing) === key)
+}
+
 export function blankContact(): Contact {
   return {
     id: uid(),

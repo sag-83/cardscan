@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
+import { contactDedupKey, mergeContact } from './utils'
 
 export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
 create table if not exists contacts (
@@ -24,15 +25,48 @@ create table if not exists contacts (
   back_image text default '',
   front_image_url text default '',
   back_image_url text default '',
+  dedupe_key text default '',
   stars integer default 0,
   scanned_at text default '',
   created_at timestamptz default now()
 );
 
--- 2. Remove user_id if it exists from a previous setup
+-- 2. Make older tables match the current app
 alter table contacts drop column if exists user_id;
+alter table contacts add column if not exists dedupe_key text default '';
 
--- 3. Allow anonymous read/write (no auth used in this app)
+-- 3. Backfill and enforce duplicate protection
+update contacts
+set dedupe_key = coalesce(
+  nullif('email:' || lower(trim(email)), 'email:'),
+  case
+    when length(regexp_replace(coalesce(phone_mobile, phone_work, phone_fax, ''), '\\D', '', 'g')) >= 7
+    then 'phone:' || regexp_replace(regexp_replace(coalesce(phone_mobile, phone_work, phone_fax, ''), '\\D', '', 'g'), '^1(?=\\d{10}$)', '')
+  end,
+  nullif('name-company:' || lower(trim(name)) || '|' || lower(trim(company)), 'name-company:|'),
+  'id:' || id
+)
+where dedupe_key is null or dedupe_key = '';
+
+delete from contacts
+where id in (
+  select id
+  from (
+    select id, row_number() over (
+      partition by dedupe_key
+      order by created_at desc, id desc
+    ) as duplicate_rank
+    from contacts
+    where dedupe_key <> ''
+  ) ranked
+  where duplicate_rank > 1
+);
+
+create unique index if not exists contacts_dedupe_key_idx
+on contacts (dedupe_key)
+where dedupe_key <> '';
+
+-- 4. Allow anonymous read/write (no auth used in this app)
 alter table contacts disable row level security;`
 
 let client: SupabaseClient | null = null
@@ -68,6 +102,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     back_image:      '',
     front_image_url: contact.front_image_url,
     back_image_url:  contact.back_image_url,
+    dedupe_key:      contactDedupKey(contact),
     stars:           contact.stars,
     scanned_at:      contact.scanned_at,
     created_at:      contact.created_at,
@@ -89,7 +124,23 @@ export async function syncContactsFromDB(): Promise<Contact[]> {
 export async function saveContactToDB(contact: Contact): Promise<boolean> {
   if (!client) return false
 
-  const row = sanitizeContactForDB(contact)
+  let row = sanitizeContactForDB(contact)
+
+  const { data: existing, error: lookupError } = await client
+    .from('contacts')
+    .select('*')
+    .eq('dedupe_key', contactDedupKey(contact))
+    .maybeSingle()
+
+  if (lookupError && lookupError.code !== 'PGRST116') {
+    console.warn('Supabase duplicate lookup error:', lookupError)
+  }
+
+  if (existing && existing.id !== contact.id) {
+    const merged = mergeContact(existing as Contact, contact)
+    row = sanitizeContactForDB({ ...merged, id: existing.id })
+  }
+
   const { error } = await client.from('contacts').upsert(row, { onConflict: 'id' })
 
   if (error) {

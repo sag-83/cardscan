@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } from 'react'
 import { useStore } from '../../store/useStore'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
-import { normalizeContact, uid, blankContact } from '../../lib/utils'
+import { findDuplicateContact, normalizeContact, uid, blankContact } from '../../lib/utils'
 import { saveContactToDB, uploadCardPhoto } from '../../lib/supabase'
 import { saveImage } from '../../lib/imageStore'
 import type { Contact } from '../../types/contact'
@@ -188,8 +188,20 @@ export function ScanScreen() {
         })
       )
 
+      const uniqueCards = newCards.filter((card) => !findDuplicateContact(card, contacts))
+
       setIsScanning(false)
-      setPreviewCards(newCards)
+
+      if (!uniqueCards.length) {
+        showToast('Already saved — duplicate card skipped')
+        return
+      }
+
+      if (uniqueCards.length < newCards.length) {
+        showToast(`${newCards.length - uniqueCards.length} duplicate card(s) skipped`)
+      }
+
+      setPreviewCards(uniqueCards)
     } catch (err) {
       showToast('Scan failed: ' + (err as Error).message)
       setIsScanning(false)
@@ -202,8 +214,16 @@ export function ScanScreen() {
     setIsSavingPreview(true)
 
     try {
+      const uniquePreviewCards = previewCards.filter((card) => !findDuplicateContact(card, contacts))
+
+      if (!uniquePreviewCards.length) {
+        showToast('Already saved — duplicate card skipped')
+        setPreviewCards([])
+        return
+      }
+
       const enriched = await Promise.all(
-        previewCards.map(async (c) => {
+        uniquePreviewCards.map(async (c) => {
           if (c.front_image) {
             await saveImage(`${c.id}_front`, c.front_image).catch(() => {})
             const url = await uploadCardPhoto(c.id, 'front', c.front_image)

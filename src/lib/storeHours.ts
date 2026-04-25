@@ -14,6 +14,7 @@ export interface StoreOpenStatus {
 type GooglePlacesStatus = 'OK' | 'ZERO_RESULTS' | 'OVER_QUERY_LIMIT' | 'REQUEST_DENIED' | string
 
 interface GooglePlaceResult {
+  name?: string
   place_id?: string
   business_status?: string
   opening_hours?: {
@@ -25,6 +26,10 @@ interface GooglePlaceResult {
 interface GooglePlacesService {
   findPlaceFromQuery(
     request: { query: string; fields: string[] },
+    callback: (results: GooglePlaceResult[] | null, status: GooglePlacesStatus) => void
+  ): void
+  textSearch(
+    request: { query: string },
     callback: (results: GooglePlaceResult[] | null, status: GooglePlacesStatus) => void
   ): void
   getDetails(
@@ -87,18 +92,23 @@ function loadPlacesService(): Promise<GooglePlacesService> {
   return placesPromise
 }
 
-function contactPlaceQuery(contact: Contact): string {
-  return [
-    contact.company || contact.name,
-    contact.address,
-    contact.city,
-    contact.state,
-    contact.zip,
-  ].filter(Boolean).join(', ')
+function status(state: StoreOpenState, label: string): StoreOpenStatus {
+  return { state, label, updatedAt: Date.now() }
 }
 
-function findPlaceId(service: GooglePlacesService, contact: Contact): Promise<string | null> {
-  const query = contactPlaceQuery(contact)
+function contactPlaceQueries(contact: Contact): string[] {
+  const business = contact.company || contact.name
+  const fullAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
+  const cityState = [contact.city, contact.state].filter(Boolean).join(', ')
+
+  return [
+    [business, fullAddress].filter(Boolean).join(', '),
+    [business, cityState].filter(Boolean).join(', '),
+    [contact.name, cityState].filter(Boolean).join(', '),
+  ].filter((query, index, queries) => query && queries.indexOf(query) === index)
+}
+
+function placeIdFromFindPlace(service: GooglePlacesService, query: string): Promise<string | null> {
   if (!query) return Promise.resolve(null)
   if (placeIdCache.has(query)) return Promise.resolve(placeIdCache.get(query)!)
 
@@ -114,35 +124,68 @@ function findPlaceId(service: GooglePlacesService, contact: Contact): Promise<st
   })
 }
 
+function placeIdFromTextSearch(service: GooglePlacesService, query: string): Promise<string | null> {
+  if (!query) return Promise.resolve(null)
+  if (placeIdCache.has(query)) return Promise.resolve(placeIdCache.get(query)!)
+
+  return new Promise((resolve) => {
+    service.textSearch({ query }, (results, status) => {
+      if (status !== 'OK' || !results?.[0]?.place_id) {
+        resolve(null)
+        return
+      }
+      placeIdCache.set(query, results[0].place_id)
+      resolve(results[0].place_id)
+    })
+  })
+}
+
+async function findPlaceId(service: GooglePlacesService, contact: Contact): Promise<string | null> {
+  for (const query of contactPlaceQueries(contact)) {
+    const placeId = await placeIdFromFindPlace(service, query) || await placeIdFromTextSearch(service, query)
+    if (placeId) return placeId
+  }
+  return null
+}
+
 function readOpenState(place: GooglePlaceResult | null): StoreOpenStatus {
-  const now = Date.now()
   if (!place || place.business_status === 'CLOSED_PERMANENTLY') {
-    return { state: 'unknown', label: 'Hours unknown', updatedAt: now }
+    return status('unknown', 'Hours unavailable')
   }
 
   const isOpen = place.opening_hours?.isOpen?.() ?? place.opening_hours?.open_now
-  if (isOpen === true) return { state: 'open', label: 'Open now', updatedAt: now }
-  if (isOpen === false) return { state: 'closed', label: 'Closed now', updatedAt: now }
-  return { state: 'unknown', label: 'Hours unknown', updatedAt: now }
+  if (isOpen === true) return status('open', 'Open now')
+  if (isOpen === false) return status('closed', 'Closed now')
+  return status('unknown', 'No hours listed')
 }
 
 export async function getStoreOpenStatus(contact: Contact): Promise<StoreOpenStatus> {
-  if (!hasMapsKey()) return { state: 'unknown', label: 'Hours unavailable', updatedAt: Date.now() }
+  if (!hasMapsKey()) return status('unknown', 'Maps key missing')
 
-  const service = await loadPlacesService()
+  let service: GooglePlacesService
+  try {
+    service = await loadPlacesService()
+  } catch {
+    return status('unknown', 'Maps failed')
+  }
+
   const placeId = await findPlaceId(service, contact)
-  if (!placeId) return { state: 'unknown', label: 'Hours unknown', updatedAt: Date.now() }
+  if (!placeId) return status('unknown', 'No Maps match')
 
   return new Promise((resolve) => {
     service.getDetails(
       { placeId, fields: ['business_status', 'opening_hours'] },
       (result, status) => {
         if (status !== 'OK') {
-          resolve({ state: 'unknown', label: 'Hours unknown', updatedAt: Date.now() })
+          resolve(status === 'REQUEST_DENIED' ? statusLabel('Maps blocked') : statusLabel('Hours unavailable'))
           return
         }
         resolve(readOpenState(result))
       }
     )
   })
+}
+
+function statusLabel(label: string): StoreOpenStatus {
+  return status('unknown', label)
 }

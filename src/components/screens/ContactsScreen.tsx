@@ -105,30 +105,32 @@ export function ContactsScreen() {
             <option value="">🏙 City</option>
             {cities.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
-            style={dropdownStyle(!!filterArea)}>
+            style={{ ...dropdownStyle(!!filterArea), flex: 'none', width: 120 }}>
             <option value="">🗺 Area</option>
             {areas.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
+          {lastAddedId && (
+            <button
+              onClick={jumpToLastAdded}
+              style={{
+                padding: '7px 12px',
+                borderRadius: 999,
+                border: '1.5px solid var(--accent)',
+                background: 'rgba(0,122,255,0.1)',
+                color: 'var(--accent)',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ★ Jump to Last Added
+            </button>
+          )}
         </div>
-        {lastAddedId && (
-          <button
-            onClick={jumpToLastAdded}
-            style={{
-              alignSelf: 'flex-start',
-              padding: '7px 12px',
-              borderRadius: 999,
-              border: '1.5px solid var(--accent)',
-              background: 'rgba(0,122,255,0.1)',
-              color: 'var(--accent)',
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: 'pointer',
-            }}
-          >
-            ★ Jump to Last Added
-          </button>
-        )}
         {hasFilters && (
           <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,

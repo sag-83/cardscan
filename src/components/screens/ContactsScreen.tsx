@@ -211,7 +211,7 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
       display: 'flex', alignItems: 'center', gap: 14,
       padding: '10px 16px', background: 'var(--bg2)',
       borderBottom: '1px solid var(--border2)', cursor: 'pointer',
-      borderLeft: isLastAdded ? '4px solid var(--accent)' : '4px solid transparent',
+      borderLeft: isLastAdded ? '4px solid #ff3b30' : '4px solid transparent',
     }} id={`contact-row-${c.id}`}>
       {(c.front_image || c.front_image_url) ? (
         <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
@@ -251,7 +251,7 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
+              background: 'rgba(255,59,48,0.12)', color: '#ff3b30',
               fontSize: 11, fontWeight: 800,
             }}>
               ★ Last added
@@ -279,10 +279,36 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
           )}
         </div>
       </div>
-      <div onClick={(e) => { e.stopPropagation(); onMenu() }}
-        style={{ color: 'var(--text3)', fontSize: 22, padding: '8px 2px 8px 10px', lineHeight: 1, flexShrink: 0 }}>
-        ···
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flexShrink: 0, paddingLeft: 8 }}>
+        {(c.phone_mobile || c.phone_work) && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${c.phone_mobile || c.phone_work}` }}
+              style={quickBtnStyle('#e1f0ff')}
+              title="Call"
+            >📞</button>
+            <button
+              onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${(c.phone_mobile || c.phone_work)!.replace(/[^\d]/g, '')}`, '_blank') }}
+              style={quickBtnStyle('#e8f5e9')}
+              title="WhatsApp"
+            >💬</button>
+          </>
+        )}
+        <div onClick={(e) => { e.stopPropagation(); onMenu() }}
+          style={{ color: 'var(--text3)', fontSize: 20, padding: '4px 2px', lineHeight: 1, cursor: 'pointer' }}>
+          ···
+        </div>
       </div>
     </div>
   )
+}
+
+function quickBtnStyle(bg: string): React.CSSProperties {
+  return {
+    width: 34, height: 34, borderRadius: '50%',
+    background: bg, border: 'none', cursor: 'pointer',
+    fontSize: 15, display: 'flex', alignItems: 'center',
+    justifyContent: 'center', flexShrink: 0,
+    WebkitTapHighlightColor: 'transparent',
+  }
 }

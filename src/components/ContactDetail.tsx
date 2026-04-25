@@ -5,10 +5,12 @@ import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
+import { getStoreOpenStatus, type StoreOpenStatus } from '../lib/storeHours'
 import type { Contact } from '../types/contact'
 
 export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
+  const [openStatus, setOpenStatus] = useState<StoreOpenStatus | null>(null)
   const detailContactId = useStore((s) => s.detailContactId)
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
@@ -25,6 +27,24 @@ export function ContactDetail() {
       setDetailContactId(null)
     }
   }, [contacts, detailContactId, setDetailContactId])
+
+  useEffect(() => {
+    if (!contact) {
+      setOpenStatus(null)
+      return
+    }
+    let cancelled = false
+    const refresh = async () => {
+      const status = await getStoreOpenStatus(contact)
+      if (!cancelled) setOpenStatus(status)
+    }
+    void refresh()
+    const timer = window.setInterval(() => { void refresh() }, 60_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [contact])
 
   if (!contact) return null
   const c = contact
@@ -138,6 +158,11 @@ export function ContactDetail() {
             {c.phone_mobile && (
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>
                 📱 {c.phone_mobile}
+              </div>
+            )}
+            {openStatus && (
+              <div style={{ marginTop: 6 }}>
+                <StoreOpenBadge status={openStatus} />
               </div>
             )}
           </div>
@@ -452,6 +477,32 @@ function ToggleRow({ icon, label, sublabel, active, activeColor, onToggle }: {
           boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
         }} />
       </div>
+    </div>
+  )
+}
+
+function StoreOpenBadge({ status }: { status: StoreOpenStatus }) {
+  const styles = {
+    open: { bg: 'rgba(52,199,89,0.17)', color: '#1e8e3e', dot: '#34c759' },
+    closed: { bg: 'rgba(255,59,48,0.16)', color: '#d8342a', dot: '#ff3b30' },
+    unknown: { bg: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)', dot: '#d1d1d6' },
+  }[status.state]
+
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '4px 9px',
+      borderRadius: 999,
+      background: styles.bg,
+      color: styles.color,
+      fontSize: 11,
+      fontWeight: 800,
+      maxWidth: '100%',
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: styles.dot, flexShrink: 0 }} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status.label}</span>
     </div>
   )
 }

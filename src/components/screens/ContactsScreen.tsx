@@ -1,8 +1,9 @@
-import { useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance } from '../../lib/geocode'
+import { getStoreOpenStatus, StoreOpenStatus } from '../../lib/storeHours'
 
 function useFollowups(contacts: Contact[]) {
   const now = new Date()
@@ -14,6 +15,45 @@ function useFollowups(contacts: Contact[]) {
     return d >= now && d <= weekAhead
   })
   return { overdue, dueSoon }
+}
+
+function useStoreOpenStatuses(contacts: Contact[]) {
+  const [statuses, setStatuses] = useState<Map<string, StoreOpenStatus>>(new Map())
+  const statusesRef = useRef<Map<string, StoreOpenStatus>>(new Map())
+  const refreshingRef = useRef(false)
+  const contactIds = useMemo(() => contacts.map((c) => c.id).join('|'), [contacts])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const refresh = async () => {
+      if (refreshingRef.current) return
+      refreshingRef.current = true
+      const nextStatuses = new Map(statusesRef.current)
+
+      try {
+        for (const contact of contacts) {
+          if (cancelled) return
+          const status = await getStoreOpenStatus(contact)
+          nextStatuses.set(contact.id, status)
+          statusesRef.current = new Map(nextStatuses)
+          setStatuses(new Map(nextStatuses))
+        }
+      } finally {
+        refreshingRef.current = false
+      }
+    }
+
+    void refresh()
+    const timer = window.setInterval(() => { void refresh() }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [contactIds])
+
+  return statuses
 }
 
 export function ContactsScreen() {
@@ -103,6 +143,7 @@ export function ContactsScreen() {
         return da - db
       })
     : sortContactsAlphabetically(baseFiltered)
+  const openStatuses = useStoreOpenStatuses(filtered)
 
   const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
 
@@ -254,6 +295,7 @@ export function ContactsScreen() {
         <ContactRow key={c.id} contact={c}
           isLastAdded={c.id === lastAddedId}
           distance={nearMeActive ? distances.get(c.id) : undefined}
+          openStatus={openStatuses.get(c.id)}
           onClick={() => setDetailContactId(c.id)}
           onMenu={() => setMenuContactId(c.id)}
           onShareError={(message) => showToast(message)} />
@@ -275,10 +317,11 @@ function dropdownStyle(active: boolean): React.CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShareError }: {
+function ContactRow({ contact: c, isLastAdded, distance, openStatus, onClick, onMenu, onShareError }: {
   contact: Contact
   isLastAdded: boolean
   distance?: number
+  openStatus?: StoreOpenStatus
   onClick: () => void
   onMenu: () => void
   onShareError: (message: string) => void
@@ -432,6 +475,9 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <span key={n} style={{ fontSize: 11, color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
           ))}
         </div>
+        {openStatus && (
+          <StoreOpenPill status={openStatus} />
+        )}
         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
           {distance !== undefined && (
             <div style={{
@@ -515,19 +561,35 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
 }
 
 function contactShareText(contact: Contact): string {
+  const address = [contact.address, contact.city, contact.state, contact.zip, contact.country].filter(Boolean).join(', ')
   const lines = [
-    contact.name || contact.company || 'Contact',
-    contact.title,
-    contact.company && contact.company !== contact.name ? contact.company : '',
-    contact.phone_mobile ? `Mobile: ${contact.phone_mobile}` : '',
-    contact.phone_work ? `Work: ${contact.phone_work}` : '',
-    contact.email ? `Email: ${contact.email}` : '',
-    contact.website ? `Website: ${contact.website}` : '',
-    [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', '),
-    contact.notes ? `Notes: ${contact.notes}` : '',
+    contact.company || contact.name || 'Company',
+    contact.phone_mobile || contact.phone_work ? `Number: ${contact.phone_mobile || contact.phone_work}` : '',
+    address ? `Address: ${address}` : '',
   ].filter(Boolean)
 
   return lines.join('\n')
+}
+
+function StoreOpenPill({ status }: { status: StoreOpenStatus }) {
+  const styles = {
+    open: { bg: 'rgba(52,199,89,0.13)', color: '#22a447', dot: '#34c759' },
+    closed: { bg: 'rgba(255,59,48,0.12)', color: '#d8342a', dot: '#ff3b30' },
+    unknown: { bg: 'rgba(142,142,147,0.13)', color: 'var(--text3)', dot: 'var(--text3)' },
+  }[status.state]
+
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      marginTop: 5, padding: '4px 9px', borderRadius: 999,
+      background: styles.bg, color: styles.color,
+      fontSize: 11, fontWeight: 800, lineHeight: 1,
+      maxWidth: '100%',
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: styles.dot, flexShrink: 0 }} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status.label}</span>
+    </div>
+  )
 }
 
 function quickBtnStyle(bg: string): React.CSSProperties {

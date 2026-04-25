@@ -23,6 +23,7 @@ export function SettingsScreen() {
     apiKey, setApiKey,
     apiKey2, setApiKey2,
     apiKey3, setApiKey3,
+    mapsApiKey, setMapsApiKey,
     sbUrl, setSbUrl,
     sbKey, setSbKey,
     sheetsWebhook, setSheetsWebhook,
@@ -34,6 +35,8 @@ export function SettingsScreen() {
     setApiKey2: s.setApiKey2,
     apiKey3: s.apiKey3,
     setApiKey3: s.setApiKey3,
+    mapsApiKey: s.mapsApiKey,
+    setMapsApiKey: s.setMapsApiKey,
     sbUrl: s.sbUrl,
     setSbUrl: s.setSbUrl,
     sbKey: s.sbKey,
@@ -156,6 +159,24 @@ export function SettingsScreen() {
           <label style={labelStyle}>Backup Key 3 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>(final fallback)</span></label>
           <input type="password" value={apiKey3} onChange={(e) => setApiKey3(e.target.value)}
             placeholder="AIza... (third key)" style={inputStyle} />
+        </div>
+      </SettingsGroup>
+
+      <SectionTitle>Google Maps (Store Open/Closed)</SectionTitle>
+      <SettingsGroup>
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <label style={labelStyle}>Maps Places API Key</label>
+          <input
+            type="password"
+            value={mapsApiKey}
+            onChange={(e) => setMapsApiKey(e.target.value)}
+            placeholder="AIza... (Maps JavaScript + Places enabled)"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+            Enable <strong>Maps JavaScript API</strong> and <strong>Places API</strong> for this key.
+            This powers the Open/Closed badge in Contacts.
+          </div>
         </div>
       </SettingsGroup>
 

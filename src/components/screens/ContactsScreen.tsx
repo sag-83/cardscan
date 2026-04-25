@@ -21,7 +21,11 @@ function useStoreOpenStatuses(contacts: Contact[]) {
   const [statuses, setStatuses] = useState<Map<string, StoreOpenStatus>>(new Map())
   const statusesRef = useRef<Map<string, StoreOpenStatus>>(new Map())
   const refreshingRef = useRef(false)
-  const contactIds = useMemo(() => contacts.map((c) => c.id).join('|'), [contacts])
+  const openableContacts = useMemo(
+    () => contacts.filter((c) => Boolean(c.company || c.name) && Boolean(c.city || c.address)),
+    [contacts]
+  )
+  const contactIds = useMemo(() => openableContacts.map((c) => c.id).join('|'), [openableContacts])
 
   useEffect(() => {
     let cancelled = false
@@ -32,7 +36,7 @@ function useStoreOpenStatuses(contacts: Contact[]) {
       const nextStatuses = new Map(statusesRef.current)
 
       try {
-        for (const contact of contacts) {
+        for (const contact of openableContacts) {
           if (cancelled) return
           const status = await getStoreOpenStatus(contact)
           nextStatuses.set(contact.id, status)
@@ -45,13 +49,13 @@ function useStoreOpenStatuses(contacts: Contact[]) {
     }
 
     void refresh()
-    const timer = window.setInterval(() => { void refresh() }, 5000)
+    const timer = window.setInterval(() => { void refresh() }, 60_000)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [contactIds])
+  }, [contactIds, openableContacts])
 
   return statuses
 }

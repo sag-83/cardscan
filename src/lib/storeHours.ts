@@ -1,7 +1,7 @@
 import type { Contact } from '../types/contact'
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-places-script'
+const OPEN_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
 
 export type StoreOpenState = 'open' | 'closed' | 'unknown'
 
@@ -52,15 +52,39 @@ declare global {
 }
 
 let placesPromise: Promise<GooglePlacesService> | null = null
+let loadedMapsKey = ''
 const placeIdCache = new Map<string, string>()
+const openStatusCache = new Map<string, StoreOpenStatus>()
+
+function getStoreState(): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem('cs_store_v2') || localStorage.getItem('cs_store_demo_v2')
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { state?: Record<string, unknown> }
+    return parsed.state ?? null
+  } catch {
+    return null
+  }
+}
+
+function getMapsKey(): string {
+  const envKey =
+    (import.meta.env.VITE_GOOGLE_MAPS_KEY as string) ||
+    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) ||
+    ''
+  const fromStore = (getStoreState()?.mapsApiKey as string) || ''
+  return (fromStore || envKey).trim()
+}
 
 function hasMapsKey(): boolean {
-  return Boolean(GOOGLE_MAPS_KEY && !GOOGLE_MAPS_KEY.includes('your-'))
+  const key = getMapsKey()
+  return Boolean(key && !key.includes('your-'))
 }
 
 function loadPlacesService(): Promise<GooglePlacesService> {
   if (!hasMapsKey()) return Promise.reject(new Error('Missing Google Maps key'))
-  if (placesPromise) return placesPromise
+  const mapsKey = getMapsKey()
+  if (placesPromise && loadedMapsKey === mapsKey) return placesPromise
 
   placesPromise = new Promise((resolve, reject) => {
     const existingService = window.google?.maps?.places?.PlacesService
@@ -70,10 +94,11 @@ function loadPlacesService(): Promise<GooglePlacesService> {
     }
 
     const existingScript = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as HTMLScriptElement | null
-    const script = existingScript || document.createElement('script')
+    if (existingScript && loadedMapsKey !== mapsKey) existingScript.remove()
+    const script = document.createElement('script')
 
     script.id = GOOGLE_MAPS_SCRIPT_ID
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_KEY)}&libraries=places`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(mapsKey)}&libraries=places`
     script.async = true
     script.defer = true
     script.onload = () => {
@@ -86,9 +111,10 @@ function loadPlacesService(): Promise<GooglePlacesService> {
     }
     script.onerror = () => reject(new Error('Google Places failed to load'))
 
-    if (!existingScript) document.head.appendChild(script)
+    document.head.appendChild(script)
   })
 
+  loadedMapsKey = mapsKey
   return placesPromise
 }
 
@@ -181,6 +207,8 @@ function readOpenState(place: GooglePlaceResult | null): StoreOpenStatus {
 }
 
 export async function getStoreOpenStatus(contact: Contact): Promise<StoreOpenStatus> {
+  const cached = openStatusCache.get(contact.id)
+  if (cached && Date.now() - cached.updatedAt < OPEN_STATUS_CACHE_TTL_MS) return cached
   if (!hasMapsKey()) return status('unknown', 'Maps key missing')
 
   let service: GooglePlacesService
@@ -197,7 +225,9 @@ export async function getStoreOpenStatus(contact: Contact): Promise<StoreOpenSta
       reason: lookup.reason,
       queries: contactPlaceQueries(contact),
     })
-    return status('unknown', lookup.reason || 'No Maps match')
+    const fallback = status('unknown', lookup.reason || 'No Maps match')
+    openStatusCache.set(contact.id, fallback)
+    return fallback
   }
   const placeId = lookup.placeId
 
@@ -206,10 +236,14 @@ export async function getStoreOpenStatus(contact: Contact): Promise<StoreOpenSta
       { placeId, fields: ['business_status', 'opening_hours'] },
       (result, status) => {
         if (status !== 'OK') {
-          resolve(status === 'REQUEST_DENIED' ? statusLabel('Maps blocked') : statusLabel('Hours unavailable'))
+          const fallback = status === 'REQUEST_DENIED' ? statusLabel('Maps blocked') : statusLabel('Hours unavailable')
+          openStatusCache.set(contact.id, fallback)
+          resolve(fallback)
           return
         }
-        resolve(readOpenState(result))
+        const resolved = readOpenState(result)
+        openStatusCache.set(contact.id, resolved)
+        resolve(resolved)
       }
     )
   })

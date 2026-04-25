@@ -108,44 +108,65 @@ function contactPlaceQueries(contact: Contact): string[] {
   ].filter((query, index, queries) => query && queries.indexOf(query) === index)
 }
 
-function placeIdFromFindPlace(service: GooglePlacesService, query: string): Promise<string | null> {
-  if (!query) return Promise.resolve(null)
-  if (placeIdCache.has(query)) return Promise.resolve(placeIdCache.get(query)!)
+interface PlaceLookupResult {
+  placeId: string | null
+  reason?: string
+}
+
+function lookupReasonFromStatus(status: GooglePlacesStatus): string | undefined {
+  if (status === 'REQUEST_DENIED') return 'Maps blocked'
+  if (status === 'OVER_QUERY_LIMIT') return 'Maps quota hit'
+  if (status === 'ZERO_RESULTS') return undefined
+  if (status && status !== 'OK') return `Maps ${status}`
+  return undefined
+}
+
+function placeIdFromFindPlace(service: GooglePlacesService, query: string): Promise<PlaceLookupResult> {
+  if (!query) return Promise.resolve({ placeId: null })
+  if (placeIdCache.has(query)) return Promise.resolve({ placeId: placeIdCache.get(query)! })
 
   return new Promise((resolve) => {
     service.findPlaceFromQuery({ query, fields: ['place_id'] }, (results, status) => {
       if (status !== 'OK' || !results?.[0]?.place_id) {
-        resolve(null)
+        resolve({ placeId: null, reason: lookupReasonFromStatus(status) })
         return
       }
       placeIdCache.set(query, results[0].place_id)
-      resolve(results[0].place_id)
+      resolve({ placeId: results[0].place_id })
     })
   })
 }
 
-function placeIdFromTextSearch(service: GooglePlacesService, query: string): Promise<string | null> {
-  if (!query) return Promise.resolve(null)
-  if (placeIdCache.has(query)) return Promise.resolve(placeIdCache.get(query)!)
+function placeIdFromTextSearch(service: GooglePlacesService, query: string): Promise<PlaceLookupResult> {
+  if (!query) return Promise.resolve({ placeId: null })
+  if (placeIdCache.has(query)) return Promise.resolve({ placeId: placeIdCache.get(query)! })
 
   return new Promise((resolve) => {
     service.textSearch({ query }, (results, status) => {
       if (status !== 'OK' || !results?.[0]?.place_id) {
-        resolve(null)
+        resolve({ placeId: null, reason: lookupReasonFromStatus(status) })
         return
       }
       placeIdCache.set(query, results[0].place_id)
-      resolve(results[0].place_id)
+      resolve({ placeId: results[0].place_id })
     })
   })
 }
 
-async function findPlaceId(service: GooglePlacesService, contact: Contact): Promise<string | null> {
+async function findPlaceId(service: GooglePlacesService, contact: Contact): Promise<PlaceLookupResult> {
+  let lastReason: string | undefined
+
   for (const query of contactPlaceQueries(contact)) {
-    const placeId = await placeIdFromFindPlace(service, query) || await placeIdFromTextSearch(service, query)
-    if (placeId) return placeId
+    const findPlace = await placeIdFromFindPlace(service, query)
+    if (findPlace.placeId) return findPlace
+    if (findPlace.reason) lastReason = findPlace.reason
+
+    const textSearch = await placeIdFromTextSearch(service, query)
+    if (textSearch.placeId) return textSearch
+    if (textSearch.reason) lastReason = textSearch.reason
   }
-  return null
+
+  return { placeId: null, reason: lastReason || 'No Maps match' }
 }
 
 function readOpenState(place: GooglePlaceResult | null): StoreOpenStatus {
@@ -169,8 +190,16 @@ export async function getStoreOpenStatus(contact: Contact): Promise<StoreOpenSta
     return status('unknown', 'Maps failed')
   }
 
-  const placeId = await findPlaceId(service, contact)
-  if (!placeId) return status('unknown', 'No Maps match')
+  const lookup = await findPlaceId(service, contact)
+  if (!lookup.placeId) {
+    console.warn('Store hours lookup failed', {
+      contact: contact.company || contact.name,
+      reason: lookup.reason,
+      queries: contactPlaceQueries(contact),
+    })
+    return status('unknown', lookup.reason || 'No Maps match')
+  }
+  const placeId = lookup.placeId
 
   return new Promise((resolve) => {
     service.getDetails(

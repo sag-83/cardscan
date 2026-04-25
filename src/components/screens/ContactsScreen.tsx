@@ -475,7 +475,7 @@ function ContactRow({ contact: c, isLastAdded, distance, openStatus, onClick, on
             <span key={n} style={{ fontSize: 11, color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
           ))}
         </div>
-        {openStatus && (
+        {openStatus && openStatus.state !== 'unknown' && (
           <StoreOpenPill status={openStatus} />
         )}
         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
@@ -575,8 +575,7 @@ function StoreOpenPill({ status }: { status: StoreOpenStatus }) {
   const styles = {
     open: { bg: 'rgba(52,199,89,0.13)', color: '#22a447', dot: '#34c759' },
     closed: { bg: 'rgba(255,59,48,0.12)', color: '#d8342a', dot: '#ff3b30' },
-    unknown: { bg: 'rgba(142,142,147,0.13)', color: 'var(--text3)', dot: 'var(--text3)' },
-  }[status.state]
+  }[status.state === 'open' || status.state === 'closed' ? status.state : 'closed']
 
   return (
     <div style={{

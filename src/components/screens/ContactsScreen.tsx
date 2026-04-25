@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
@@ -47,8 +47,15 @@ export function ContactsScreen() {
       const pos = await getUserPosition()
       setNearMeActive(true)
       await geocodeContacts(contacts, pos, (d) => setDistances(new Map(d)))
-    } catch {
-      showToast('Location access denied — enable it in browser settings')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not get location'
+      if (message.includes('HTTPS')) {
+        showToast('Location needs HTTPS on iPhone Safari')
+      } else if (message.includes('blocked') || message.includes('denied')) {
+        showToast('iPhone: Settings > Safari > Location > Allow, then reload')
+      } else {
+        showToast(`${message}. Try again near a window or turn Wi-Fi on`)
+      }
     } finally {
       setNearMeLoading(false)
     }
@@ -248,7 +255,8 @@ export function ContactsScreen() {
           isLastAdded={c.id === lastAddedId}
           distance={nearMeActive ? distances.get(c.id) : undefined}
           onClick={() => setDetailContactId(c.id)}
-          onMenu={() => setMenuContactId(c.id)} />
+          onMenu={() => setMenuContactId(c.id)}
+          onShareError={(message) => showToast(message)} />
       ))}
     </div>
   )
@@ -267,17 +275,130 @@ function dropdownStyle(active: boolean): React.CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu }: {
-  contact: Contact; isLastAdded: boolean; distance?: number; onClick: () => void; onMenu: () => void
+function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShareError }: {
+  contact: Contact
+  isLastAdded: boolean
+  distance?: number
+  onClick: () => void
+  onMenu: () => void
+  onShareError: (message: string) => void
 }) {
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const [shareVisible, setShareVisible] = useState(false)
+  const startRef = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
+  const swipeOffsetRef = useRef(0)
+  const didSwipeRef = useRef(false)
+
+  const shareContact = async () => {
+    const text = contactShareText(c)
+    const title = c.name || c.company || 'Contact'
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text })
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        onShareError('Contact copied. Paste it into Messages or WhatsApp')
+      } else {
+        onShareError('Sharing is not available in this browser')
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      onShareError('Could not open share sheet')
+    }
+  }
+
+  const closeShare = () => {
+    swipeOffsetRef.current = 0
+    setShareVisible(false)
+    setSwipeOffset(0)
+  }
+
   return (
-    <div onClick={onClick} style={{
-      scrollMarginTop: 170,
-      display: 'flex', alignItems: 'center', gap: 14,
-      padding: '10px 16px', background: 'var(--bg2)',
-      borderBottom: '1px solid var(--border2)', cursor: 'pointer',
-      borderLeft: isLastAdded ? '4px solid #ff3b30' : '4px solid transparent',
-    }} id={`contact-row-${c.id}`}>
+    <div
+      id={`contact-row-${c.id}`}
+      style={{
+        scrollMarginTop: 170,
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'var(--bg2)',
+        borderBottom: '1px solid var(--border2)',
+        touchAction: 'pan-y',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: '0 auto 0 0',
+          width: 82,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--accent)',
+        }}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); void shareContact(); closeShare() }}
+          style={{
+            width: 54, height: 54, borderRadius: '50%',
+            border: 'none', background: 'rgba(255,255,255,0.95)',
+            color: 'var(--accent)', fontSize: 22, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Share"
+          aria-label="Share contact"
+        >
+          ↗
+        </button>
+      </div>
+      <div
+        onClick={() => {
+          if (didSwipeRef.current || shareVisible) {
+            didSwipeRef.current = false
+            if (shareVisible) closeShare()
+            return
+          }
+          onClick()
+        }}
+        onPointerDown={(e) => {
+          startRef.current = { x: e.clientX, y: e.clientY, swiping: false }
+          didSwipeRef.current = false
+        }}
+        onPointerMove={(e) => {
+          const start = startRef.current
+          if (!start) return
+          const dx = e.clientX - start.x
+          const dy = e.clientY - start.y
+          if (!start.swiping && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) start.swiping = true
+          if (!start.swiping) return
+          didSwipeRef.current = true
+          const nextOffset = Math.max(0, Math.min(82, dx))
+          swipeOffsetRef.current = nextOffset
+          setSwipeOffset(nextOffset)
+        }}
+        onPointerUp={() => {
+          const shouldOpen = swipeOffsetRef.current > 44
+          swipeOffsetRef.current = shouldOpen ? 82 : 0
+          setShareVisible(shouldOpen)
+          setSwipeOffset(shouldOpen ? 82 : 0)
+          startRef.current = null
+        }}
+        onPointerCancel={() => {
+          swipeOffsetRef.current = shareVisible ? 82 : 0
+          setSwipeOffset(shareVisible ? 82 : 0)
+          startRef.current = null
+        }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '10px 16px', background: 'var(--bg2)',
+          cursor: 'pointer',
+          borderLeft: isLastAdded ? '4px solid #ff3b30' : '4px solid transparent',
+          transform: `translateX(${shareVisible ? 82 : swipeOffset}px)`,
+          transition: startRef.current?.swiping ? 'none' : 'transform 160ms ease',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
       {(c.front_image || c.front_image_url) ? (
         <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
           style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
@@ -388,8 +509,25 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu }: {
           ···
         </div>
       </div>
+      </div>
     </div>
   )
+}
+
+function contactShareText(contact: Contact): string {
+  const lines = [
+    contact.name || contact.company || 'Contact',
+    contact.title,
+    contact.company && contact.company !== contact.name ? contact.company : '',
+    contact.phone_mobile ? `Mobile: ${contact.phone_mobile}` : '',
+    contact.phone_work ? `Work: ${contact.phone_work}` : '',
+    contact.email ? `Email: ${contact.email}` : '',
+    contact.website ? `Website: ${contact.website}` : '',
+    [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', '),
+    contact.notes ? `Notes: ${contact.notes}` : '',
+  ].filter(Boolean)
+
+  return lines.join('\n')
 }
 
 function quickBtnStyle(bg: string): React.CSSProperties {

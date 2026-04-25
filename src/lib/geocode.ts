@@ -46,18 +46,54 @@ export function haversineDistance(lat1: number, lng1: number, lat2: number, lng2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-export function getUserPosition(): Promise<{ lat: number; lng: number }> {
+function isSecureLocationContext(): boolean {
+  return window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname)
+}
+
+function getPositionOnce(options: PositionOptions): Promise<{ lat: number; lng: number }> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location not supported on this device'))
       return
     }
+
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      (e) => reject(new Error(e.message)),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      (e) => {
+        const fallbackMessages: Record<number, string> = {
+          [e.PERMISSION_DENIED]: 'Location permission was denied',
+          [e.POSITION_UNAVAILABLE]: 'Location is unavailable right now',
+          [e.TIMEOUT]: 'Location timed out',
+        }
+        reject(new Error(e.message || fallbackMessages[e.code] || 'Could not get location'))
+      },
+      options
     )
   })
+}
+
+export async function getUserPosition(): Promise<{ lat: number; lng: number }> {
+  if (!isSecureLocationContext()) {
+    throw new Error('Location requires HTTPS on iPhone Safari')
+  }
+
+  try {
+    const permissions = navigator.permissions
+    if (permissions?.query) {
+      const status = await permissions.query({ name: 'geolocation' as PermissionName })
+      if (status.state === 'denied') throw new Error('Location permission is blocked for this site')
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('blocked')) throw err
+  }
+
+  try {
+    return await getPositionOnce({ enableHighAccuracy: false, timeout: 20000, maximumAge: 5 * 60 * 1000 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : ''
+    if (!/timed out|unavailable/i.test(message)) throw err
+    return getPositionOnce({ enableHighAccuracy: true, timeout: 30000, maximumAge: 0 })
+  }
 }
 
 export async function geocodeContacts(

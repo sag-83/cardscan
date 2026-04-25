@@ -63,7 +63,7 @@ export function SettingsScreen() {
     catch (err) { showToast('❌ ' + (err as Error).message) }
   }
 
-  const handleBackupToSupabase = async () => {
+  const handleBackupToSupabase = async (force = false) => {
     if (IS_DEMO_MODE) {
       showToast('Demo mode: Supabase is disabled')
       return
@@ -75,11 +75,11 @@ export function SettingsScreen() {
     initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
     showToast(`Backing up ${contacts.length} contacts…`)
     try {
-      const { ok, merged, failed } = await saveContactsToDB(contacts)
-      const parts = [`✅ ${ok} new`]
-      if (merged > 0) parts.push(`🔀 ${merged} merged`)
+      const { ok, merged, failed } = await saveContactsToDB(contacts, { skipDedupe: force })
+      const parts = [`✅ ${ok} saved`]
+      if (!force && merged > 0) parts.push(`🔀 ${merged} merged`)
       if (failed > 0) parts.push(`❌ ${failed} failed`)
-      showToast(parts.join(', ') + ' — backed up to Supabase')
+      showToast(parts.join(', ') + (force ? ' (force)' : '') + ' — Supabase')
     } catch (err) {
       showToast('❌ Backup failed: ' + (err as Error).message)
     }
@@ -234,9 +234,14 @@ export function SettingsScreen() {
       {/* Data */}
       <SectionTitle>Data</SectionTitle>
       <SettingsGroup>
-        <div onClick={handleBackupToSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>
+        <div onClick={() => handleBackupToSupabase()} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup All to Supabase</div>
           <div style={{ color: 'var(--accent)' }}>☁</div>
+        </div>
+        <Divider />
+        <div onClick={() => handleBackupToSupabase(true)} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Force Backup (save all, skip dedup)</div>
+          <div style={{ color: '#ff9500' }}>☁!</div>
         </div>
         <Divider />
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>

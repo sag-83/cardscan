@@ -283,7 +283,18 @@ export async function saveContactToDB(contact: Contact): Promise<'new' | 'merged
   return wasMerged ? 'merged' : 'new'
 }
 
-export async function saveContactsToDB(contacts: Contact[]): Promise<{
+async function saveContactToDBForce(contact: Contact): Promise<'new' | false> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+  const row = sanitizeContactForDB(contact)
+  const ok = await upsertContactRow(sb, row, false)
+  return ok ? 'new' : false
+}
+
+export async function saveContactsToDB(
+  contacts: Contact[],
+  opts?: { skipDedupe?: boolean }
+): Promise<{
   ok: number
   merged: number
   failed: number
@@ -291,7 +302,9 @@ export async function saveContactsToDB(contacts: Contact[]): Promise<{
 }> {
   if (!contacts.length) return { ok: 0, merged: 0, failed: 0 }
 
-  const results = await Promise.allSettled(contacts.map((c) => saveContactToDB(c)))
+  const results = await Promise.allSettled(
+    contacts.map((c) => opts?.skipDedupe ? saveContactToDBForce(c) : saveContactToDB(c))
+  )
 
   let ok = 0
   let merged = 0

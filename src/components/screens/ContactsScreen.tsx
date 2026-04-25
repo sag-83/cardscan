@@ -9,6 +9,7 @@ export function ContactsScreen() {
   const [filterState, setFilterState] = useState('')
   const [filterCity, setFilterCity] = useState('')
   const [filterArea, setFilterArea] = useState('')
+  const [filterType, setFilterType] = useState('')
 
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
@@ -39,6 +40,8 @@ export function ContactsScreen() {
     if (filterState && c.state !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
     if (filterArea && c.area !== filterArea) return false
+    if (filterType === 'customer' && !c.is_customer) return false
+    if (filterType === 'goods_shown' && !c.visited) return false
     if (query) {
       const q = query.toLowerCase()
       const hay = [c.name, c.company, c.email, c.phone_mobile, c.phone_work, c.city].join(' ').toLowerCase()
@@ -47,7 +50,7 @@ export function ContactsScreen() {
     return true
   }))
 
-  const hasFilters = filterStars > 0 || filterState || filterCity || filterArea
+  const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
 
   const jumpToLastAdded = () => {
     if (!lastAddedId) return
@@ -57,6 +60,7 @@ export function ContactsScreen() {
     setFilterState('')
     setFilterCity('')
     setFilterArea('')
+    setFilterType('')
 
     window.setTimeout(() => {
       document.getElementById(`contact-row-${lastAddedId}`)?.scrollIntoView({
@@ -106,11 +110,17 @@ export function ContactsScreen() {
             {cities.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
-            style={{ ...dropdownStyle(!!filterArea), flex: 'none', width: 120 }}>
+            style={{ ...dropdownStyle(!!filterArea), flex: 1 }}>
             <option value="">🗺 Area</option>
             {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+            style={{ ...dropdownStyle(!!filterType), flex: 1 }}>
+            <option value="">🏷 Type</option>
+            <option value="customer">🤝 Customer</option>
+            <option value="goods_shown">📦 Goods Shown</option>
           </select>
           {lastAddedId && (
             <button
@@ -132,7 +142,7 @@ export function ContactsScreen() {
           )}
         </div>
         {hasFilters && (
-          <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea('') }}
+          <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea(''); setFilterType('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,
               border: '1.5px solid var(--danger)', background: 'transparent',
               color: 'var(--danger)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
@@ -244,7 +254,7 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
               background: 'rgba(52,199,89,0.12)', color: '#34c759',
               fontSize: 11, fontWeight: 700,
             }}>
-              📦 Visited
+              📦 Goods Shown
             </div>
           )}
           {c.is_customer && (

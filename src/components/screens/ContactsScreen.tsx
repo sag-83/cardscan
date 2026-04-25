@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
+import { getUserPosition, geocodeContacts, formatDistance } from '../../lib/geocode'
 
 function useFollowups(contacts: Contact[]) {
   const now = new Date()
@@ -23,12 +24,35 @@ export function ContactsScreen() {
   const [filterArea, setFilterArea] = useState('')
   const [filterType, setFilterType] = useState('')
 
+  const [nearMeActive, setNearMeActive] = useState(false)
+  const [nearMeLoading, setNearMeLoading] = useState(false)
+  const [distances, setDistances] = useState<Map<string, number>>(new Map())
+
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
+  const showToast = useStore((s) => s.showToast)
 
   const { overdue, dueSoon } = useFollowups(contacts)
+
+  const handleNearMe = async () => {
+    if (nearMeActive) {
+      setNearMeActive(false)
+      setDistances(new Map())
+      return
+    }
+    setNearMeLoading(true)
+    try {
+      const pos = await getUserPosition()
+      setNearMeActive(true)
+      await geocodeContacts(contacts, pos, (d) => setDistances(new Map(d)))
+    } catch {
+      showToast('Location access denied — enable it in browser settings')
+    } finally {
+      setNearMeLoading(false)
+    }
+  }
 
   const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
   const cities = useMemo(() => [...new Set(contacts.map((c) => c.city).filter(Boolean))].sort(), [contacts])
@@ -50,7 +74,7 @@ export function ContactsScreen() {
     return newestId
   }, [contacts])
 
-  const filtered = sortContactsAlphabetically(contacts.filter((c) => {
+  const baseFiltered = contacts.filter((c) => {
     if (filterStars > 0 && c.stars !== filterStars) return false
     if (filterState && c.state !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
@@ -63,7 +87,15 @@ export function ContactsScreen() {
       if (!hay.includes(q)) return false
     }
     return true
-  }))
+  })
+
+  const filtered = nearMeActive
+    ? [...baseFiltered].sort((a, b) => {
+        const da = distances.get(a.id) ?? Infinity
+        const db = distances.get(b.id) ?? Infinity
+        return da - db
+      })
+    : sortContactsAlphabetically(baseFiltered)
 
   const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
 
@@ -147,22 +179,30 @@ export function ContactsScreen() {
             <option value="customer">🤝 Customer</option>
             <option value="goods_shown">📦 Goods Shown</option>
           </select>
+          <button
+            onClick={handleNearMe}
+            style={{
+              padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+              fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
+              border: `1.5px solid ${nearMeActive ? '#34c759' : 'var(--border)'}`,
+              background: nearMeActive ? 'rgba(52,199,89,0.12)' : 'var(--bg3)',
+              color: nearMeActive ? '#34c759' : 'var(--text2)',
+            }}
+          >
+            {nearMeLoading ? '⏳ Locating…' : nearMeActive ? '📍 Near Me ✓' : '📍 Near Me'}
+          </button>
           {lastAddedId && (
             <button
               onClick={jumpToLastAdded}
               style={{
-                padding: '7px 12px',
-                borderRadius: 999,
+                padding: '7px 12px', borderRadius: 999,
                 border: '1.5px solid var(--accent)',
                 background: 'rgba(0,122,255,0.1)',
-                color: 'var(--accent)',
-                fontSize: 12,
-                fontWeight: 800,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
+                color: 'var(--accent)', fontSize: 12, fontWeight: 800,
+                cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              ★ Jump to Last Added
+              ★ Last
             </button>
           )}
         </div>
@@ -199,13 +239,14 @@ export function ContactsScreen() {
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)',
           padding: '14px 16px 5px', textTransform: 'uppercase',
           letterSpacing: '0.6px', background: 'var(--bg)' }}>
-          Contacts A-Z
+          {nearMeActive ? '📍 Nearest First' : 'Contacts A-Z'}
         </div>
       )}
 
       {filtered.map((c) => (
         <ContactRow key={c.id} contact={c}
           isLastAdded={c.id === lastAddedId}
+          distance={nearMeActive ? distances.get(c.id) : undefined}
           onClick={() => setDetailContactId(c.id)}
           onMenu={() => setMenuContactId(c.id)} />
       ))}
@@ -226,8 +267,8 @@ function dropdownStyle(active: boolean): React.CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
-  contact: Contact; isLastAdded: boolean; onClick: () => void; onMenu: () => void
+function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu }: {
+  contact: Contact; isLastAdded: boolean; distance?: number; onClick: () => void; onMenu: () => void
 }) {
   return (
     <div onClick={onClick} style={{
@@ -271,6 +312,16 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+          {distance !== undefined && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(52,199,89,0.12)', color: '#34c759',
+              fontSize: 11, fontWeight: 800,
+            }}>
+              📍 {formatDistance(distance)}
+            </div>
+          )}
           {isLastAdded && (
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,

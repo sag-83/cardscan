@@ -125,6 +125,8 @@ export function mergeContact(existing: Contact, incoming: Contact): Contact {
     sent_to_sheets: base.sent_to_sheets || other.sent_to_sheets,
     visited: base.visited || other.visited,
     is_customer: base.is_customer || other.is_customer,
+    followup_at: base.followup_at || other.followup_at,
+    followup_note: base.followup_note || other.followup_note,
     scanned_at: base.scanned_at || other.scanned_at,
     created_at: base.created_at || other.created_at,
   })

@@ -3,6 +3,18 @@ import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 
+function useFollowups(contacts: Contact[]) {
+  const now = new Date()
+  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const overdue = contacts.filter((c) => c.followup_at && new Date(c.followup_at) < now)
+  const dueSoon = contacts.filter((c) => {
+    if (!c.followup_at) return false
+    const d = new Date(c.followup_at)
+    return d >= now && d <= weekAhead
+  })
+  return { overdue, dueSoon }
+}
+
 export function ContactsScreen() {
   const [query, setQuery] = useState('')
   const [filterStars, setFilterStars] = useState(0)
@@ -14,6 +26,9 @@ export function ContactsScreen() {
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
+  const setFollowupContactId = useStore((s) => s.setFollowupContactId)
+
+  const { overdue, dueSoon } = useFollowups(contacts)
 
   const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
   const cities = useMemo(() => [...new Set(contacts.map((c) => c.city).filter(Boolean))].sort(), [contacts])
@@ -161,6 +176,15 @@ export function ContactsScreen() {
         )}
       </div>
 
+      {(overdue.length > 0 || dueSoon.length > 0) && (
+        <FollowupBanner
+          overdue={overdue}
+          dueSoon={dueSoon}
+          onOpenContact={setDetailContactId}
+          onEditFollowup={setFollowupContactId}
+        />
+      )}
+
       {!filtered.length && (
         <div style={{ textAlign: 'center', padding: '70px 24px', color: 'var(--text3)' }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>{contacts.length ? '🔍' : '📇'}</div>
@@ -277,6 +301,20 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
               🤝 Customer
             </div>
           )}
+          {c.followup_at && (() => {
+            const isOverdue = new Date(c.followup_at!) < new Date()
+            return (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                padding: '3px 8px', borderRadius: 999,
+                background: isOverdue ? 'rgba(255,59,48,0.12)' : 'rgba(255,149,0,0.12)',
+                color: isOverdue ? '#ff3b30' : '#ff9500',
+                fontSize: 11, fontWeight: 700,
+              }}>
+                📅 {isOverdue ? 'Overdue' : 'Follow-up'}
+              </div>
+            )
+          })()}
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flexShrink: 0, paddingLeft: 8 }}>
@@ -311,4 +349,50 @@ function quickBtnStyle(bg: string): React.CSSProperties {
     justifyContent: 'center', flexShrink: 0,
     WebkitTapHighlightColor: 'transparent',
   }
+}
+
+function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
+  overdue: Contact[]
+  dueSoon: Contact[]
+  onOpenContact: (id: string) => void
+  onEditFollowup: (id: string) => void
+}) {
+  const groups = [
+    { label: '🔴 Overdue', items: overdue, color: '#ff3b30', bg: 'rgba(255,59,48,0.08)' },
+    { label: '🟠 Due this week', items: dueSoon, color: '#ff9500', bg: 'rgba(255,149,0,0.08)' },
+  ].filter((g) => g.items.length > 0)
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--border2)' }}>
+      {groups.map((group) => (
+        <div key={group.label} style={{ background: group.bg, padding: '10px 16px 6px' }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: group.color, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+            {group.label} · {group.items.length}
+          </div>
+          {group.items.map((c) => (
+            <div key={c.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '7px 0', borderTop: '1px solid var(--border2)',
+            }}>
+              <div onClick={() => onOpenContact(c.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c.name || c.company || 'Unknown'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
+                  {new Date(c.followup_at!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  {c.followup_note ? ` · ${c.followup_note}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => onEditFollowup(c.id)}
+                style={{ fontSize: 11, fontWeight: 700, color: group.color, background: 'none', border: `1px solid ${group.color}`, borderRadius: 99, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Edit
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
 }

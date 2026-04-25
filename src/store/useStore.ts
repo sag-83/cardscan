@@ -58,6 +58,9 @@ interface AppState {
   menuContactId: string | null
   setMenuContactId: (id: string | null) => void
 
+  followupContactId: string | null
+  setFollowupContactId: (id: string | null) => void
+
   bulkMessageType: 'email' | 'sms' | null
   setBulkMessageType: (type: 'email' | 'sms' | null) => void
 
@@ -149,6 +152,9 @@ export const useStore = create<AppState>()(
 
       menuContactId: null,
       setMenuContactId: (menuContactId) => set({ menuContactId }),
+
+      followupContactId: null,
+      setFollowupContactId: (followupContactId) => set({ followupContactId }),
 
       bulkMessageType: null,
       setBulkMessageType: (bulkMessageType) => set({ bulkMessageType }),

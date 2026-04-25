@@ -12,6 +12,7 @@ import { ContactDetail } from './components/ContactDetail'
 import { EditModal } from './components/modals/EditModal'
 import { ContactMenuModal } from './components/modals/ContactMenuModal'
 import { BulkMessageModal } from './components/modals/BulkMessageModal'
+import { FollowupModal } from './components/modals/FollowupModal'
 
 import { ScanScreen } from './components/screens/ScanScreen'
 import { ContactsScreen } from './components/screens/ContactsScreen'
@@ -158,6 +159,7 @@ export default function App() {
       <EditModal />
       <ContactMenuModal />
       <BulkMessageModal />
+      <FollowupModal />
     </>
   )
 }

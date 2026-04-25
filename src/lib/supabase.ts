@@ -30,6 +30,8 @@ create table if not exists contacts (
   stars integer default 0,
   visited boolean default false,
   is_customer boolean default false,
+  followup_at timestamptz,
+  followup_note text default '',
   scanned_at text default '',
   created_at timestamptz default now()
 );
@@ -40,6 +42,8 @@ alter table contacts add column if not exists dedupe_key text default '';
 alter table contacts add column if not exists area text default '';
 alter table contacts add column if not exists visited boolean default false;
 alter table contacts add column if not exists is_customer boolean default false;
+alter table contacts add column if not exists followup_at timestamptz;
+alter table contacts add column if not exists followup_note text default '';
 
 -- 3. Backfill and enforce duplicate protection
 update contacts
@@ -144,6 +148,8 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     stars:           contact.stars,
     visited:         contact.visited ?? false,
     is_customer:     contact.is_customer ?? false,
+    followup_at:     contact.followup_at || null,
+    followup_note:   contact.followup_note || '',
     scanned_at:      contact.scanned_at,
     created_at:      contact.created_at,
   }

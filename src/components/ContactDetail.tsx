@@ -5,6 +5,7 @@ import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
+import type { Contact } from '../types/contact'
 
 export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
@@ -13,6 +14,7 @@ export function ContactDetail() {
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setEditModal = useStore((s) => s.setEditModal)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
+  const setFollowupContactId = useStore((s) => s.setFollowupContactId)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
 
@@ -262,6 +264,7 @@ export function ContactDetail() {
           active={!!c.is_customer} activeColor="#007aff"
           onToggle={handleToggleCustomer}
         />
+        <FollowupDetailRow contact={c} onOpen={() => setFollowupContactId(c.id)} />
       </Section>
 
       <SectionTitle>Info</SectionTitle>
@@ -371,6 +374,45 @@ function NoteRow({ label, text }: { label: string; text: string }) {
     <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border2)' }}>
       <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text}</div>
+    </div>
+  )
+}
+
+function FollowupDetailRow({ contact: c, onOpen }: { contact: Contact; onOpen: () => void }) {
+  const hasFollowup = !!c.followup_at
+  const isOverdue = hasFollowup && new Date(c.followup_at!) < new Date()
+  const color = isOverdue ? '#ff3b30' : hasFollowup ? '#ff9500' : 'var(--text3)'
+  const bgColor = isOverdue ? 'rgba(255,59,48,0.12)' : hasFollowup ? 'rgba(255,149,0,0.12)' : 'var(--bg4)'
+
+  const label = hasFollowup
+    ? new Date(c.followup_at!).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })
+    : 'Tap to set a reminder'
+
+  return (
+    <div onClick={onOpen} style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+      borderBottom: '1px solid var(--border2)', cursor: 'pointer',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%', background: bgColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 15, flexShrink: 0,
+      }}>📅</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color }}>
+          {isOverdue ? '⚠ Overdue — ' : ''}{label}
+        </div>
+        {c.followup_note ? (
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>{c.followup_note}</div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Follow-up reminder</div>
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>
+        {hasFollowup ? 'Edit' : 'Set'}
+      </div>
     </div>
   )
 }

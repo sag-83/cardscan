@@ -13,6 +13,7 @@ export interface Contact {
   state: string
   zip: string
   country: string
+  area: string
   notes: string
   user_notes: string
   back_notes: string

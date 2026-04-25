@@ -144,6 +144,12 @@ export function EditModal() {
           </div>
         </div>
 
+        {/* Area */}
+        <div style={{ marginBottom: 11 }}>
+          <label style={labelStyle}>Area (e.g. Staten Island, Downtown)</label>
+          <input value={form.area ?? ''} onChange={(e) => set('area', e.target.value)} style={inputStyle} placeholder="Custom area / neighborhood" />
+        </div>
+
         {/* Notes */}
         <div style={{ marginBottom: 11 }}>
           <label style={labelStyle}>Notes (from card)</label>

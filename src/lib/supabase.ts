@@ -18,6 +18,7 @@ create table if not exists contacts (
   state text default '',
   zip text default '',
   country text default '',
+  area text default '',
   notes text default '',
   back_notes text default '',
   user_notes text default '',
@@ -34,6 +35,7 @@ create table if not exists contacts (
 -- 2. Make older tables match the current app
 alter table contacts drop column if exists user_id;
 alter table contacts add column if not exists dedupe_key text default '';
+alter table contacts add column if not exists area text default '';
 
 -- 3. Backfill and enforce duplicate protection
 update contacts
@@ -126,6 +128,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     state:           contact.state,
     zip:             contact.zip,
     country:         contact.country,
+    area:            contact.area,
     notes:           contact.notes,
     back_notes:      contact.back_notes,
     user_notes:      contact.user_notes,

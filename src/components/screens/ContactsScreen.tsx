@@ -8,6 +8,7 @@ export function ContactsScreen() {
   const [filterStars, setFilterStars] = useState(0)
   const [filterState, setFilterState] = useState('')
   const [filterCity, setFilterCity] = useState('')
+  const [filterArea, setFilterArea] = useState('')
 
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
@@ -15,6 +16,7 @@ export function ContactsScreen() {
 
   const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
   const cities = useMemo(() => [...new Set(contacts.map((c) => c.city).filter(Boolean))].sort(), [contacts])
+  const areas = useMemo(() => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(), [contacts])
 
   const lastAddedId = useMemo(() => {
     let newestId: string | null = null
@@ -36,6 +38,7 @@ export function ContactsScreen() {
     if (filterStars > 0 && c.stars !== filterStars) return false
     if (filterState && c.state !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
+    if (filterArea && c.area !== filterArea) return false
     if (query) {
       const q = query.toLowerCase()
       const hay = [c.name, c.company, c.email, c.phone_mobile, c.phone_work, c.city].join(' ').toLowerCase()
@@ -44,7 +47,7 @@ export function ContactsScreen() {
     return true
   }))
 
-  const hasFilters = filterStars > 0 || filterState || filterCity
+  const hasFilters = filterStars > 0 || filterState || filterCity || filterArea
 
   const jumpToLastAdded = () => {
     if (!lastAddedId) return
@@ -53,6 +56,7 @@ export function ContactsScreen() {
     setFilterStars(0)
     setFilterState('')
     setFilterCity('')
+    setFilterArea('')
 
     window.setTimeout(() => {
       document.getElementById(`contact-row-${lastAddedId}`)?.scrollIntoView({
@@ -101,6 +105,11 @@ export function ContactsScreen() {
             <option value="">🏙 City</option>
             {cities.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
+            style={dropdownStyle(!!filterArea)}>
+            <option value="">🗺 Area</option>
+            {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
         </div>
         {lastAddedId && (
           <button
@@ -121,7 +130,7 @@ export function ContactsScreen() {
           </button>
         )}
         {hasFilters && (
-          <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity('') }}
+          <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,
               border: '1.5px solid var(--danger)', background: 'transparent',
               color: 'var(--danger)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>

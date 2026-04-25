@@ -236,6 +236,7 @@ export function ContactDetail() {
 
       <SectionTitle>Info</SectionTitle>
       <Section>
+        {c.area && <SimpleRow icon="🗺" bg="#8e8e93" value={c.area} label="Area" />}
         <SimpleRow icon="📅" bg="#8e8e93" value={c.scanned_at || '—'} label="Scanned On" />
       </Section>
 

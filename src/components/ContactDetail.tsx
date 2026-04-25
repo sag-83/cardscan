@@ -5,18 +5,17 @@ import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
-import { getStoreOpenStatus, type StoreOpenStatus } from '../lib/storeHours'
 import type { Contact } from '../types/contact'
 
 export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
-  const [openStatus, setOpenStatus] = useState<StoreOpenStatus | null>(null)
   const detailContactId = useStore((s) => s.detailContactId)
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setEditModal = useStore((s) => s.setEditModal)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
+  const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
 
@@ -27,24 +26,6 @@ export function ContactDetail() {
       setDetailContactId(null)
     }
   }, [contacts, detailContactId, setDetailContactId])
-
-  useEffect(() => {
-    if (!contact) {
-      setOpenStatus(null)
-      return
-    }
-    let cancelled = false
-    const refresh = async () => {
-      const status = await getStoreOpenStatus(contact)
-      if (!cancelled) setOpenStatus(status)
-    }
-    void refresh()
-    const timer = window.setInterval(() => { void refresh() }, 60_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [contact])
 
   if (!contact) return null
   const c = contact
@@ -160,11 +141,6 @@ export function ContactDetail() {
                 📱 {c.phone_mobile}
               </div>
             )}
-            {openStatus && (
-              <div style={{ marginTop: 6 }}>
-                <StoreOpenBadge status={openStatus} />
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -190,6 +166,7 @@ export function ContactDetail() {
             onClick={() => window.location.href = `mailto:${c.email}`} />
         )}
         <ActionBtn icon={isSendingSheets ? '⏳' : '📊'} bg="#e8f5e9" label={isSendingSheets ? 'Sending…' : 'Sheets'} onClick={handleSendToSheets} />
+        <ActionBtn icon="🧾" bg="#fff4e5" label="Invoice" onClick={() => setInvoiceContactId(c.id)} />
         <ActionBtn icon="✏️" bg="#f5f5f5" label="Edit"
           onClick={() => setEditModal({ contact: c, isNew: false })} />
       </div>
@@ -481,28 +458,3 @@ function ToggleRow({ icon, label, sublabel, active, activeColor, onToggle }: {
   )
 }
 
-function StoreOpenBadge({ status }: { status: StoreOpenStatus }) {
-  const styles = {
-    open: { bg: 'rgba(52,199,89,0.17)', color: '#1e8e3e', dot: '#34c759' },
-    closed: { bg: 'rgba(255,59,48,0.16)', color: '#d8342a', dot: '#ff3b30' },
-    unknown: { bg: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)', dot: '#d1d1d6' },
-  }[status.state]
-
-  return (
-    <div style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '4px 9px',
-      borderRadius: 999,
-      background: styles.bg,
-      color: styles.color,
-      fontSize: 11,
-      fontWeight: 800,
-      maxWidth: '100%',
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: styles.dot, flexShrink: 0 }} />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status.label}</span>
-    </div>
-  )
-}

@@ -13,6 +13,7 @@ import { EditModal } from './components/modals/EditModal'
 import { ContactMenuModal } from './components/modals/ContactMenuModal'
 import { BulkMessageModal } from './components/modals/BulkMessageModal'
 import { FollowupModal } from './components/modals/FollowupModal'
+import { InvoiceModal } from './components/modals/InvoiceModal'
 
 import { ScanScreen } from './components/screens/ScanScreen'
 import { ContactsScreen } from './components/screens/ContactsScreen'
@@ -160,6 +161,7 @@ export default function App() {
       <ContactMenuModal />
       <BulkMessageModal />
       <FollowupModal />
+      <InvoiceModal />
     </>
   )
 }

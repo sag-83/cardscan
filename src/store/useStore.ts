@@ -32,8 +32,6 @@ interface AppState {
   setApiKey: (key: string) => void
   setApiKey2: (key: string) => void
   setApiKey3: (key: string) => void
-  mapsApiKey: string
-  setMapsApiKey: (key: string) => void
 
   sbUrl: string
   setSbUrl: (url: string) => void
@@ -62,6 +60,9 @@ interface AppState {
 
   followupContactId: string | null
   setFollowupContactId: (id: string | null) => void
+
+  invoiceContactId: string | null
+  setInvoiceContactId: (id: string | null) => void
 
   bulkMessageType: 'email' | 'sms' | null
   setBulkMessageType: (type: 'email' | 'sms' | null) => void
@@ -128,8 +129,6 @@ export const useStore = create<AppState>()(
       setApiKey: (apiKey) => set({ apiKey }),
       setApiKey2: (apiKey2) => set({ apiKey2 }),
       setApiKey3: (apiKey3) => set({ apiKey3 }),
-      mapsApiKey: ((import.meta.env.VITE_GOOGLE_MAPS_KEY as string) || (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string)) ?? '',
-      setMapsApiKey: (mapsApiKey) => set({ mapsApiKey }),
 
       sbUrl: (import.meta.env.VITE_SUPABASE_URL as string) ?? '',
       setSbUrl: (sbUrl) => set({ sbUrl }),
@@ -159,6 +158,9 @@ export const useStore = create<AppState>()(
 
       followupContactId: null,
       setFollowupContactId: (followupContactId) => set({ followupContactId }),
+
+      invoiceContactId: null,
+      setInvoiceContactId: (invoiceContactId) => set({ invoiceContactId }),
 
       bulkMessageType: null,
       setBulkMessageType: (bulkMessageType) => set({ bulkMessageType }),
@@ -206,7 +208,6 @@ export const useStore = create<AppState>()(
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,
         apiKey3: s.apiKey3,
-        mapsApiKey: s.mapsApiKey,
         sbUrl: s.sbUrl,
         sbKey: s.sbKey,
         sheetsWebhook: s.sheetsWebhook,

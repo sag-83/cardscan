@@ -203,11 +203,11 @@ export function ScanScreen() {
 
       const isPdf = file.type === 'application/pdf'
 
-      // Small preview image for UI. PDFs can be OCR'd directly, but cannot be shown in <img>.
-      const thumb = isPdf ? '' : await resizeImage(b64, file.type, side === 'front' ? 500 : 600)
-
-      // Medium-size image for OCR/API call to reduce request size
+      // Full-quality image stored on the contact (1600px) — also used for OCR
       const scanB64 = isPdf ? b64 : await resizeImage(b64, file.type, 1600)
+
+      // Small thumbnail only for PDF placeholder (PDFs can't render as <img>)
+      const thumb = isPdf ? '' : scanB64
 
       const extracted = await callGemini(scanB64, isPdf ? 'application/pdf' : 'image/jpeg', geminiKeys)
 
@@ -230,12 +230,12 @@ export function ScanScreen() {
         if (target) {
           const bd = (extracted[0] ?? {}) as Record<string, string>
 
-          await saveImage(`${pendingBackId}_back`, thumb).catch(() => {})
-          const backUrl = await uploadCardPhoto(pendingBackId, 'back', thumb)
+          await saveImage(`${pendingBackId}_back`, scanB64).catch(() => {})
+          const backUrl = await uploadCardPhoto(pendingBackId, 'back', scanB64)
 
           const merged: Contact = {
             ...target,
-            back_image: thumb,
+            back_image: scanB64,
             ...(backUrl ? { back_image_url: backUrl } : {}),
           }
 
@@ -400,12 +400,14 @@ export function ScanScreen() {
         showToast(`${localDuplicates.length} duplicate card(s) skipped`)
       }
 
+      let photoUploadFailed = false
       const enriched = await Promise.all(
         uniquePreviewCards.map(async (c) => {
           if (c.front_image) {
             await saveImage(`${c.id}_front`, c.front_image).catch(() => {})
             const url = await uploadCardPhoto(c.id, 'front', c.front_image)
             if (url) return { ...c, front_image_url: url }
+            photoUploadFailed = true
           }
           return c
         })
@@ -418,7 +420,9 @@ export function ScanScreen() {
       }
 
       addContacts(enriched)
-      showToast(`${enriched.length} contact(s) added!`)
+      showToast(photoUploadFailed
+        ? `${enriched.length} contact(s) added! (photo stored locally only — check Supabase storage bucket)`
+        : `${enriched.length} contact(s) added!`)
       setPreviewCards([])
       setActiveScreen('contacts')
     } catch (err) {

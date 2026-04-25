@@ -10,6 +10,7 @@ type InvoiceItem = {
   pcs: string
   ct: string
   pct: string
+  amount: string
 }
 
 const COMPANY_ADDRESS = '30 West 47th Street #MEZZ 26 New York-10036.'
@@ -27,6 +28,7 @@ function num(value: string): number {
 }
 
 function rowTotal(item: InvoiceItem): number {
+  if (item.amount.trim()) return num(item.amount)
   return num(item.ct) * num(item.pct)
 }
 
@@ -43,6 +45,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
+function upper(value: string): string {
+  return value.toUpperCase()
+}
+
 export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
@@ -56,7 +62,7 @@ export function InvoiceModal() {
   const [notes, setNotes] = useState('')
   const [isPreview, setIsPreview] = useState(false)
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: uid(), size: '', pcs: '1', ct: '', pct: '' },
+    { id: uid(), size: '', pcs: '1', ct: '', pct: '', amount: '' },
   ])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
@@ -77,7 +83,7 @@ export function InvoiceModal() {
   }
 
   const addItem = () => {
-    setItems((current) => [...current, { id: uid(), size: '', pcs: '1', ct: '', pct: '' }])
+    setItems((current) => [...current, { id: uid(), size: '', pcs: '1', ct: '', pct: '', amount: '' }])
   }
 
   const customer = contact.company || contact.name || 'Customer'
@@ -88,7 +94,7 @@ export function InvoiceModal() {
       .map((item) => {
         const lineTotal = rowTotal(item)
         return `<tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.size || '-')}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(upper(item.size || '-'))}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(item.pcs || '0')}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${num(item.ct).toFixed(2)}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(num(item.pct))}</td>
@@ -104,7 +110,7 @@ export function InvoiceModal() {
   <meta charset="utf-8" />
   <title>${docTitle}</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827; text-transform: uppercase;">
   <div style="text-align:center;">
     <img src="${COMPANY_LOGO}" alt="Delta Diamonds" style="max-width:460px;width:100%;height:auto;" />
   </div>
@@ -113,12 +119,12 @@ export function InvoiceModal() {
     <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
-  <div style="margin-bottom: 6px; color: #374151;">Date: ${invoiceDate}</div>
+  <div style="margin-bottom: 6px; color: #374151;">Date: ${upper(invoiceDate)}</div>
   <div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
-    <div>${escapeHtml(customer)}</div>
-    <div>${escapeHtml(customerAddress || '-')}</div>
+    <div>${escapeHtml(upper(customer))}</div>
+    <div>${escapeHtml(upper(customerAddress || '-'))}</div>
     <div>${escapeHtml(contact.phone_mobile || contact.phone_work || '')}</div>
   </div>
   <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
@@ -136,20 +142,55 @@ export function InvoiceModal() {
   <div style="margin-top: 14px; text-align: right; font-size: 18px; font-weight: 700;">
     Total: ${money(subtotal)}
   </div>
-  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(notes || '')}</div>
+  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(notes || ''))}</div>
 </body>
 </html>`
 
-    const popup = window.open('', '_blank')
-    if (!popup) {
-      showToast('Popup blocked. Please allow popups to print invoice.')
+    const frame = document.createElement('iframe')
+    frame.style.position = 'fixed'
+    frame.style.right = '0'
+    frame.style.bottom = '0'
+    frame.style.width = '0'
+    frame.style.height = '0'
+    frame.style.border = '0'
+    frame.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(frame)
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        if (frame.parentNode) frame.parentNode.removeChild(frame)
+      }, 250)
+    }
+
+    const frameWindow = frame.contentWindow
+    if (!frameWindow) {
+      cleanup()
+      showToast('Could not open print view. Please try again.')
       return
     }
-    popup.document.open()
-    popup.document.write(html)
-    popup.document.close()
-    popup.focus()
-    popup.print()
+
+    frameWindow.document.open()
+    frameWindow.document.write(html)
+    frameWindow.document.close()
+
+    // Keep users inside the app after opening print/save PDF.
+    close()
+
+    const onAfterPrint = () => {
+      cleanup()
+      frameWindow.removeEventListener('afterprint', onAfterPrint)
+    }
+    frameWindow.addEventListener('afterprint', onAfterPrint)
+
+    window.setTimeout(() => {
+      try {
+        frameWindow.focus()
+        frameWindow.print()
+      } catch {
+        cleanup()
+        showToast('Print failed. Please try again.')
+      }
+    }, 200)
   }
 
   return (
@@ -243,6 +284,13 @@ export function InvoiceModal() {
                     inputMode="decimal"
                     style={{ ...inputStyle, flex: 1 }}
                   />
+                  <input
+                    value={item.amount}
+                    onChange={(e) => updateItem(item.id, { amount: e.target.value })}
+                    placeholder="Amount"
+                    inputMode="decimal"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
                   <button onClick={() => removeItem(item.id)} style={removeBtnStyle}>✕</button>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
@@ -273,7 +321,7 @@ export function InvoiceModal() {
           </>
         ) : (
           <>
-            <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827' }}>
+            <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
               <div style={{ textAlign: 'center' }}>
                 <img src={COMPANY_LOGO} alt="Delta Diamonds" style={{ width: '100%', maxWidth: 400, height: 'auto' }} />
               </div>
@@ -282,12 +330,12 @@ export function InvoiceModal() {
                 <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
-              <div style={{ fontSize: 12, color: '#374151' }}>Date: {invoiceDate}</div>
+              <div style={{ fontSize: 12, color: '#374151' }}>Date: {upper(invoiceDate)}</div>
               <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>Bill To</div>
-                <div>{customer}</div>
-                <div>{customerAddress || '-'}</div>
+                <div>{upper(customer)}</div>
+                <div>{upper(customerAddress || '-')}</div>
               </div>
               <table style={{ width: '100%', marginTop: 10, borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
@@ -302,7 +350,7 @@ export function InvoiceModal() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id}>
-                      <td style={tdStyle}>{item.size || '-'}</td>
+                      <td style={tdStyle}>{upper(item.size || '-')}</td>
                       <td style={tdStyleRight}>{item.pcs || '0'}</td>
                       <td style={tdStyleRight}>{num(item.ct).toFixed(2)}</td>
                       <td style={tdStyleRight}>{money(num(item.pct))}</td>
@@ -312,7 +360,7 @@ export function InvoiceModal() {
                 </tbody>
               </table>
               <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(subtotal)}</div>
-              {notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{notes}</div>}
+              {notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(notes)}</div>}
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>

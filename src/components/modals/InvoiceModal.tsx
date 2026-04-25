@@ -1,12 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
 
+type DocKind = 'invoice' | 'memo'
+type PaidBy = 'cash' | 'check'
+
 type InvoiceItem = {
   id: string
-  description: string
-  qty: string
-  price: string
+  size: string
+  pcs: string
+  ct: string
+  pct: string
 }
+
+const COMPANY_ADDRESS = '30 West 47th Street #MEZZ 26 New York-10036.'
+const COMPANY_PHONE = '+1(212)380-3190'
+const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
+const COMPANY_LOGO = '/delta-logo.png'
 
 function money(value: number): string {
   return `$${value.toFixed(2)}`
@@ -18,11 +27,20 @@ function num(value: string): number {
 }
 
 function rowTotal(item: InvoiceItem): number {
-  return num(item.qty) * num(item.price)
+  return num(item.ct) * num(item.pct)
 }
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 9)
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export function InvoiceModal() {
@@ -32,18 +50,23 @@ export function InvoiceModal() {
   const showToast = useStore((s) => s.showToast)
 
   const contact = contacts.find((c) => c.id === invoiceContactId) || null
-  const [invoiceNo, setInvoiceNo] = useState(() => `${Date.now().toString().slice(-6)}`)
+  const [docKind, setDocKind] = useState<DocKind>('invoice')
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [paidBy, setPaidBy] = useState<PaidBy>('cash')
   const [notes, setNotes] = useState('')
+  const [isPreview, setIsPreview] = useState(false)
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: uid(), description: 'Product / Service', qty: '1', price: '' },
+    { id: uid(), size: '', pcs: '1', ct: '', pct: '' },
   ])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
 
   if (!contact) return null
 
-  const close = () => setInvoiceContactId(null)
+  const close = () => {
+    setIsPreview(false)
+    setInvoiceContactId(null)
+  }
 
   const updateItem = (id: string, patch: Partial<InvoiceItem>) => {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
@@ -54,46 +77,57 @@ export function InvoiceModal() {
   }
 
   const addItem = () => {
-    setItems((current) => [...current, { id: uid(), description: '', qty: '1', price: '' }])
+    setItems((current) => [...current, { id: uid(), size: '', pcs: '1', ct: '', pct: '' }])
   }
 
   const customer = contact.company || contact.name || 'Customer'
-  const address = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
+  const customerAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
 
   const printInvoice = () => {
     const invoiceRows = items
       .map((item) => {
         const lineTotal = rowTotal(item)
         return `<tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.description || '-'}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${num(item.qty)}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(num(item.price))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.size || '-')}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(item.pcs || '0')}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${num(item.ct).toFixed(2)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(num(item.pct))}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(lineTotal)}</td>
         </tr>`
       })
       .join('')
 
+    const docTitle = docKind === 'invoice' ? 'INVOICE' : 'MEMO'
     const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Invoice ${invoiceNo}</title>
+  <title>${docTitle}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827;">
-  <h1 style="margin: 0 0 8px;">Invoice #${invoiceNo}</h1>
-  <div style="margin-bottom: 18px; color: #374151;">Date: ${invoiceDate}</div>
+  <div style="text-align:center;">
+    <img src="${COMPANY_LOGO}" alt="Delta Diamonds" style="max-width:460px;width:100%;height:auto;" />
+  </div>
+  <div style="text-align:center;color:#374151;margin:8px 0 18px;">
+    <div>${COMPANY_ADDRESS}</div>
+    <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
+  </div>
+  <h1 style="margin: 0 0 8px;">${docTitle}</h1>
+  <div style="margin-bottom: 6px; color: #374151;">Date: ${invoiceDate}</div>
+  <div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
-    <div>${customer}</div>
-    <div>${address || '-'}</div>
-    <div>${contact.phone_mobile || contact.phone_work || ''}</div>
+    <div>${escapeHtml(customer)}</div>
+    <div>${escapeHtml(customerAddress || '-')}</div>
+    <div>${escapeHtml(contact.phone_mobile || contact.phone_work || '')}</div>
   </div>
   <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
     <thead>
       <tr style="background:#f9fafb;">
-        <th style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Item</th>
-        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Qty</th>
-        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Price</th>
+        <th style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Size</th>
+        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Pcs</th>
+        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Ct</th>
+        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">P/Ct</th>
         <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Amount</th>
       </tr>
     </thead>
@@ -102,7 +136,7 @@ export function InvoiceModal() {
   <div style="margin-top: 14px; text-align: right; font-size: 18px; font-weight: 700;">
     Total: ${money(subtotal)}
   </div>
-  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${notes || ''}</div>
+  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(notes || '')}</div>
 </body>
 </html>`
 
@@ -145,76 +179,148 @@ export function InvoiceModal() {
       >
         <div style={{ width: 36, height: 4, borderRadius: 4, background: 'var(--bg4)', margin: '0 auto 14px' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 19, fontWeight: 800 }}>Create Invoice</div>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>{isPreview ? 'Invoice Preview' : 'Create Invoice'}</div>
           <button onClick={close} style={{ border: 'none', background: 'none', fontSize: 22, color: 'var(--text3)' }}>✕</button>
         </div>
+        {!isPreview ? (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>Customer</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{customer}</div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>{customerAddress || 'No address'}</div>
 
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>Customer</div>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>{customer}</div>
-        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>{address || 'No address'}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>Type</div>
+                <select value={docKind} onChange={(e) => setDocKind(e.target.value as DocKind)} style={inputStyle}>
+                  <option value="invoice">Invoice</option>
+                  <option value="memo">Memo</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={labelStyle}>Date</div>
+                <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={labelStyle}>Invoice #</div>
-            <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} style={inputStyle} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={labelStyle}>Date</div>
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} style={inputStyle} />
-          </div>
-        </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={labelStyle}>Paid By</div>
+              <select value={paidBy} onChange={(e) => setPaidBy(e.target.value as PaidBy)} style={inputStyle}>
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+              </select>
+            </div>
 
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Items</div>
-        {items.map((item) => (
-          <div key={item.id} style={{ border: '1px solid var(--border2)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
-            <input
-              value={item.description}
-              onChange={(e) => updateItem(item.id, { description: e.target.value })}
-              placeholder="Description"
-              style={inputStyle}
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Lines</div>
+            {items.map((item) => (
+              <div key={item.id} style={{ border: '1px solid var(--border2)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={item.size}
+                    onChange={(e) => updateItem(item.id, { size: e.target.value })}
+                    placeholder="Size (e.g. 1.25VS)"
+                    style={{ ...inputStyle, flex: 2 }}
+                  />
+                  <input
+                    value={item.pcs}
+                    onChange={(e) => updateItem(item.id, { pcs: e.target.value.replace(/[^\d]/g, '') })}
+                    placeholder="Pcs"
+                    inputMode="numeric"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input
+                    value={item.ct}
+                    onChange={(e) => updateItem(item.id, { ct: e.target.value })}
+                    placeholder="Ct"
+                    inputMode="decimal"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <input
+                    value={item.pct}
+                    onChange={(e) => updateItem(item.id, { pct: e.target.value })}
+                    placeholder="P/Ct"
+                    inputMode="decimal"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button onClick={() => removeItem(item.id)} style={removeBtnStyle}>✕</button>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                  Line total: {money(rowTotal(item))}
+                </div>
+              </div>
+            ))}
+
+            <button onClick={addItem} style={ghostBtnStyle}>+ Add line</button>
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Notes</div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Payment terms or notes"
+              style={{ ...inputStyle, resize: 'vertical' }}
             />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                value={item.qty}
-                onChange={(e) => updateItem(item.id, { qty: e.target.value })}
-                placeholder="Qty"
-                inputMode="decimal"
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <input
-                value={item.price}
-                onChange={(e) => updateItem(item.id, { price: e.target.value })}
-                placeholder="Price"
-                inputMode="decimal"
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <button onClick={() => removeItem(item.id)} style={removeBtnStyle}>✕</button>
+
+            <div style={{ marginTop: 12, fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
+              Total: {money(subtotal)}
             </div>
-            <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-              Line total: {money(rowTotal(item))}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={close} style={ghostBtnStyle}>Cancel</button>
+              <button onClick={() => setIsPreview(true)} style={primaryBtnStyle}>Preview</button>
             </div>
-          </div>
-        ))}
+          </>
+        ) : (
+          <>
+            <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827' }}>
+              <div style={{ textAlign: 'center' }}>
+                <img src={COMPANY_LOGO} alt="Delta Diamonds" style={{ width: '100%', maxWidth: 400, height: 'auto' }} />
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151', marginTop: 6 }}>
+                <div>{COMPANY_ADDRESS}</div>
+                <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
+              </div>
+              <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
+              <div style={{ fontSize: 12, color: '#374151' }}>Date: {invoiceDate}</div>
+              <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>
+              <div style={{ marginTop: 8, fontSize: 12 }}>
+                <div style={{ fontWeight: 700 }}>Bill To</div>
+                <div>{customer}</div>
+                <div>{customerAddress || '-'}</div>
+              </div>
+              <table style={{ width: '100%', marginTop: 10, borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Size</th>
+                    <th style={thStyleRight}>Pcs</th>
+                    <th style={thStyleRight}>Ct</th>
+                    <th style={thStyleRight}>P/Ct</th>
+                    <th style={thStyleRight}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td style={tdStyle}>{item.size || '-'}</td>
+                      <td style={tdStyleRight}>{item.pcs || '0'}</td>
+                      <td style={tdStyleRight}>{num(item.ct).toFixed(2)}</td>
+                      <td style={tdStyleRight}>{money(num(item.pct))}</td>
+                      <td style={tdStyleRight}>{money(rowTotal(item))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(subtotal)}</div>
+              {notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{notes}</div>}
+            </div>
 
-        <button onClick={addItem} style={ghostBtnStyle}>+ Add item</button>
-
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Notes</div>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Payment terms or notes"
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-
-        <div style={{ marginTop: 12, fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
-          Total: {money(subtotal)}
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button onClick={close} style={ghostBtnStyle}>Cancel</button>
-          <button onClick={printInvoice} style={primaryBtnStyle}>Print / Save PDF</button>
-        </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setIsPreview(false)} style={ghostBtnStyle}>Back</button>
+              <button onClick={printInvoice} style={primaryBtnStyle}>Download PDF / Print</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -270,4 +376,27 @@ const removeBtnStyle: React.CSSProperties = {
   color: 'var(--text3)',
   fontWeight: 700,
   cursor: 'pointer',
+}
+
+const thStyle: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '6px 4px',
+  borderBottom: '1px solid #e5e7eb',
+}
+
+const thStyleRight: React.CSSProperties = {
+  textAlign: 'right',
+  padding: '6px 4px',
+  borderBottom: '1px solid #e5e7eb',
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: '6px 4px',
+  borderBottom: '1px solid #f3f4f6',
+}
+
+const tdStyleRight: React.CSSProperties = {
+  textAlign: 'right',
+  padding: '6px 4px',
+  borderBottom: '1px solid #f3f4f6',
 }

@@ -86,18 +86,18 @@ export function ContactsScreen() {
               background: 'var(--bg3)', border: 'none', borderRadius: 10,
               fontSize: 15, color: 'var(--text)' }} />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}
             style={dropdownStyle(filterStars > 0)}>
-            <option value={0}>⭐ Any Stars</option>
-            <option value={1}>★ 1 Star</option>
-            <option value={2}>★★ 2 Stars</option>
-            <option value={3}>★★★ 3 Stars</option>
-            <option value={4}>★★★★ 4 Stars</option>
+            <option value={0}>⭐</option>
+            <option value={1}>★ 1</option>
+            <option value={2}>★★ 2</option>
+            <option value={3}>★★★ 3</option>
+            <option value={4}>★★★★ 4</option>
           </select>
           <select value={filterState} onChange={(e) => setFilterState(e.target.value)}
             style={dropdownStyle(!!filterState)}>
-            <option value="">📍 State</option>
+            <option value="">📍 ST</option>
             {states.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)}
@@ -169,14 +169,14 @@ export function ContactsScreen() {
 
 function dropdownStyle(active: boolean): React.CSSProperties {
   return {
-    flex: 1, padding: '8px 10px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+    flex: 1, padding: '8px 6px', borderRadius: 10, fontSize: 11, fontWeight: 600,
     border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
     background: active ? 'rgba(0,122,255,0.08)' : 'var(--bg3)',
     color: active ? 'var(--accent)' : 'var(--text2)',
     cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none',
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e93' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
-    paddingRight: 24,
+    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+    paddingRight: 20,
   }
 }
 

@@ -79,16 +79,26 @@ export function ContactsScreen() {
         display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         <div style={{ position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
             width="16" height="16" viewBox="0 0 24 24" fill="none"
             stroke="var(--text3)" strokeWidth="2.5" strokeLinecap="round">
             <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
           </svg>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search contacts..."
-            style={{ width: '100%', padding: '9px 14px 9px 36px',
+            style={{ width: '100%', padding: '9px 36px 9px 36px',
               background: 'var(--bg3)', border: 'none', borderRadius: 10,
               fontSize: 15, color: 'var(--text)' }} />
+          {query && (
+            <button onClick={() => setQuery('')} style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              width: 20, height: 20, borderRadius: '50%',
+              background: 'var(--text3)', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--bg)', fontSize: 12, fontWeight: 800, lineHeight: 1,
+              padding: 0,
+            }}>✕</button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}

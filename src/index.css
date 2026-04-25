@@ -49,6 +49,7 @@ body {
   color: var(--text);
   min-height: 100dvh;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }
 
 input,

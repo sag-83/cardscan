@@ -44,6 +44,22 @@ export function ContactDetail() {
     updateContact(c.id, { stars: newStars })
   }
 
+  const handleToggleVisited = async () => {
+    const next = !c.visited
+    if (IS_DEMO_MODE) { updateContact(c.id, { visited: next }); return }
+    const saved = await saveContactToDB({ ...c, visited: next })
+    if (saved) updateContact(c.id, { visited: next })
+    else showToast('Supabase backup failed')
+  }
+
+  const handleToggleCustomer = async () => {
+    const next = !c.is_customer
+    if (IS_DEMO_MODE) { updateContact(c.id, { is_customer: next }); return }
+    const saved = await saveContactToDB({ ...c, is_customer: next })
+    if (saved) updateContact(c.id, { is_customer: next })
+    else showToast('Supabase backup failed')
+  }
+
   const handleSaveToPhone = () => {
     downloadVCard(c)
     showToast('Open the .vcf file to save!')
@@ -234,6 +250,20 @@ export function ContactDetail() {
         </>
       )}
 
+      <SectionTitle>Status</SectionTitle>
+      <Section>
+        <ToggleRow
+          icon="📦" label="Showed Goods" sublabel="Tap to toggle"
+          active={!!c.visited} activeColor="#34c759"
+          onToggle={handleToggleVisited}
+        />
+        <ToggleRow
+          icon="🤝" label="Current Customer" sublabel="Tap to toggle"
+          active={!!c.is_customer} activeColor="#007aff"
+          onToggle={handleToggleCustomer}
+        />
+      </Section>
+
       <SectionTitle>Info</SectionTitle>
       <Section>
         {c.area && <SimpleRow icon="🗺" bg="#8e8e93" value={c.area} label="Area" />}
@@ -341,6 +371,45 @@ function NoteRow({ label, text }: { label: string; text: string }) {
     <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border2)' }}>
       <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text}</div>
+    </div>
+  )
+}
+
+function ToggleRow({ icon, label, sublabel, active, activeColor, onToggle }: {
+  icon: string; label: string; sublabel: string
+  active: boolean; activeColor: string; onToggle: () => void
+}) {
+  return (
+    <div onClick={onToggle} style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+      borderBottom: '1px solid var(--border2)', cursor: 'pointer',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%',
+        background: active ? activeColor : 'var(--bg4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 15, flexShrink: 0, transition: 'background 0.2s',
+      }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: active ? activeColor : 'var(--text)' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>{sublabel}</div>
+      </div>
+      <div style={{
+        width: 44, height: 26, borderRadius: 13,
+        background: active ? activeColor : 'var(--bg4)',
+        position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+      }}>
+        <div style={{
+          position: 'absolute', top: 3, left: active ? 21 : 3,
+          width: 20, height: 20, borderRadius: '50%',
+          background: '#fff', transition: 'left 0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        }} />
+      </div>
     </div>
   )
 }

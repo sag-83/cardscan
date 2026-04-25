@@ -28,6 +28,8 @@ create table if not exists contacts (
   back_image_url text default '',
   dedupe_key text default '',
   stars integer default 0,
+  visited boolean default false,
+  is_customer boolean default false,
   scanned_at text default '',
   created_at timestamptz default now()
 );
@@ -36,6 +38,8 @@ create table if not exists contacts (
 alter table contacts drop column if exists user_id;
 alter table contacts add column if not exists dedupe_key text default '';
 alter table contacts add column if not exists area text default '';
+alter table contacts add column if not exists visited boolean default false;
+alter table contacts add column if not exists is_customer boolean default false;
 
 -- 3. Backfill and enforce duplicate protection
 update contacts
@@ -138,6 +142,8 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     back_image_url:  contact.back_image_url,
     dedupe_key:      contactDedupKey(contact),
     stars:           contact.stars,
+    visited:         contact.visited ?? false,
+    is_customer:     contact.is_customer ?? false,
     scanned_at:      contact.scanned_at,
     created_at:      contact.created_at,
   }
@@ -244,7 +250,7 @@ export async function findDuplicateContactInDB(contact: Contact): Promise<Contac
   return findDuplicateContact(contact, (fallback.data ?? []) as Contact[]) ?? null
 }
 
-export async function saveContactToDB(contact: Contact): Promise<boolean> {
+export async function saveContactToDB(contact: Contact): Promise<'new' | 'merged' | false> {
   const sb = ensureSupabaseClient()
   if (!sb) return false
 
@@ -266,32 +272,38 @@ export async function saveContactToDB(contact: Contact): Promise<boolean> {
     console.warn('Supabase duplicate lookup error:', lookupError)
   }
 
-  if (existing && existing.id !== contact.id) {
+  const wasMerged = existing && existing.id !== contact.id
+  if (wasMerged) {
     const merged = mergeContact(existing as Contact, contact)
     row = sanitizeContactForDB({ ...merged, id: existing.id })
   }
 
-  return upsertContactRow(sb, row, dedupeColumnMissing)
+  const ok = await upsertContactRow(sb, row, dedupeColumnMissing)
+  if (!ok) return false
+  return wasMerged ? 'merged' : 'new'
 }
 
 export async function saveContactsToDB(contacts: Contact[]): Promise<{
   ok: number
+  merged: number
   failed: number
   error?: string
 }> {
-  if (!contacts.length) return { ok: 0, failed: 0 }
+  if (!contacts.length) return { ok: 0, merged: 0, failed: 0 }
 
   const results = await Promise.allSettled(contacts.map((c) => saveContactToDB(c)))
 
   let ok = 0
+  let merged = 0
   let failed = 0
 
   results.forEach((r) => {
-    if (r.status === 'fulfilled' && r.value) ok += 1
+    if (r.status === 'fulfilled' && r.value === 'new') ok += 1
+    else if (r.status === 'fulfilled' && r.value === 'merged') merged += 1
     else failed += 1
   })
 
-  return { ok, failed, error: failed ? lastError : undefined }
+  return { ok, merged, failed, error: failed ? lastError : undefined }
 }
 
 export async function deleteContactFromDB(id: string): Promise<boolean> {

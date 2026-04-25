@@ -123,6 +123,8 @@ export function mergeContact(existing: Contact, incoming: Contact): Contact {
     back_image_url: base.back_image_url || other.back_image_url,
     stars: Math.max(base.stars, other.stars),
     sent_to_sheets: base.sent_to_sheets || other.sent_to_sheets,
+    visited: base.visited || other.visited,
+    is_customer: base.is_customer || other.is_customer,
     scanned_at: base.scanned_at || other.scanned_at,
     created_at: base.created_at || other.created_at,
   })
@@ -204,6 +206,8 @@ export function blankContact(): Contact {
     front_image_url: '',
     back_image_url: '',
     sent_to_sheets: false,
+    visited: false,
+    is_customer: false,
     created_at: new Date().toISOString(),
   }
 }

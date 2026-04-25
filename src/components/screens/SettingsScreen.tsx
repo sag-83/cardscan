@@ -5,6 +5,7 @@ import {
   initSupabase,
   syncContactsFromDB,
   testSupabaseConnection,
+  saveContactsToDB,
   SUPABASE_SCHEMA_SQL,
 } from '../../lib/supabase'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
@@ -60,6 +61,28 @@ export function SettingsScreen() {
       showToast('✅ Supabase connected!')
     }
     catch (err) { showToast('❌ ' + (err as Error).message) }
+  }
+
+  const handleBackupToSupabase = async () => {
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: Supabase is disabled')
+      return
+    }
+    if (!contacts.length) {
+      showToast('No contacts to back up')
+      return
+    }
+    initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
+    showToast(`Backing up ${contacts.length} contacts…`)
+    try {
+      const { ok, merged, failed } = await saveContactsToDB(contacts)
+      const parts = [`✅ ${ok} new`]
+      if (merged > 0) parts.push(`🔀 ${merged} merged`)
+      if (failed > 0) parts.push(`❌ ${failed} failed`)
+      showToast(parts.join(', ') + ' — backed up to Supabase')
+    } catch (err) {
+      showToast('❌ Backup failed: ' + (err as Error).message)
+    }
   }
 
   const handleClearAll = () => {
@@ -211,8 +234,13 @@ export function SettingsScreen() {
       {/* Data */}
       <SectionTitle>Data</SectionTitle>
       <SettingsGroup>
+        <div onClick={handleBackupToSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Backup All to Supabase</div>
+          <div style={{ color: 'var(--accent)' }}>☁</div>
+        </div>
+        <Divider />
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>
-          <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts</div>
+          <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts (JSON)</div>
           <div style={{ color: 'var(--accent)' }}>⬇</div>
         </div>
         <Divider />

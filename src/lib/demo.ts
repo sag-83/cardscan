@@ -35,6 +35,8 @@ export const DEMO_CONTACTS: Contact[] = [
     front_image_url: '/demo/gold-palace-jewelers.png',
     back_image_url: '',
     sent_to_sheets: false,
+    visited: false,
+    is_customer: false,
     created_at: '2026-04-23T14:30:00.000Z',
   },
   {
@@ -63,6 +65,8 @@ export const DEMO_CONTACTS: Contact[] = [
     front_image_url: '/demo/david-harvey.png',
     back_image_url: '',
     sent_to_sheets: false,
+    visited: false,
+    is_customer: false,
     created_at: '2026-04-23T14:20:00.000Z',
   },
   {
@@ -91,6 +95,8 @@ export const DEMO_CONTACTS: Contact[] = [
     front_image_url: '/demo/heart-of-gold.png',
     back_image_url: '',
     sent_to_sheets: false,
+    visited: false,
+    is_customer: false,
     created_at: '2026-04-23T14:10:00.000Z',
   },
 ]
@@ -122,6 +128,8 @@ export function demoScannedContact(): Contact {
     front_image_url: '',
     back_image_url: '',
     sent_to_sheets: false,
+    visited: false,
+    is_customer: false,
     created_at: new Date().toISOString(),
   }
 }

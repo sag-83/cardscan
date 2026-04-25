@@ -24,6 +24,8 @@ export interface Contact {
   front_image_url: string
   back_image_url: string
   sent_to_sheets: boolean
+  visited: boolean
+  is_customer: boolean
   created_at: string
 }
 

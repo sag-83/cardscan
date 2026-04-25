@@ -226,16 +226,38 @@ function ContactRow({ contact: c, isLastAdded, onClick, onMenu }: {
             <span key={n} style={{ fontSize: 11, color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
           ))}
         </div>
-        {isLastAdded && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            marginTop: 5, padding: '3px 8px', borderRadius: 999,
-            background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
-            fontSize: 11, fontWeight: 800,
-          }}>
-            ★ Last added
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+          {isLastAdded && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
+              fontSize: 11, fontWeight: 800,
+            }}>
+              ★ Last added
+            </div>
+          )}
+          {c.visited && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(52,199,89,0.12)', color: '#34c759',
+              fontSize: 11, fontWeight: 700,
+            }}>
+              📦 Visited
+            </div>
+          )}
+          {c.is_customer && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
+              fontSize: 11, fontWeight: 700,
+            }}>
+              🤝 Customer
+            </div>
+          )}
+        </div>
       </div>
       <div onClick={(e) => { e.stopPropagation(); onMenu() }}
         style={{ color: 'var(--text3)', fontSize: 22, padding: '8px 2px 8px 10px', lineHeight: 1, flexShrink: 0 }}>

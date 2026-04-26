@@ -348,21 +348,19 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
   const didSwipeRef = useRef(false)
 
   const shareContact = async () => {
-    const text = contactShareText(c)
-    const title = c.name || c.company || 'Contact'
+    const recipient = c.phone_mobile || c.phone_work
+    if (!recipient) {
+      onShareError('No phone number found for this contact')
+      return
+    }
+    const text = contactOutreachText(c)
+    const smsUrl = `sms:${recipient}?&body=${encodeURIComponent(text)}`
 
     try {
-      if (navigator.share) {
-        await navigator.share({ title, text })
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
-        onShareError('Contact copied. Paste it into Messages or WhatsApp')
-      } else {
-        onShareError('Sharing is not available in this browser')
-      }
+      window.location.href = smsUrl
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      onShareError('Could not open share sheet')
+      onShareError('Could not open Messages')
     }
   }
 
@@ -572,15 +570,10 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
   )
 }
 
-function contactShareText(contact: Contact): string {
-  const address = [contact.address, contact.city, contact.state, contact.zip, contact.country].filter(Boolean).join(', ')
-  const lines = [
-    contact.company || contact.name || 'Company',
-    contact.phone_mobile || contact.phone_work ? `Number: ${contact.phone_mobile || contact.phone_work}` : '',
-    address ? `Address: ${address}` : '',
-  ].filter(Boolean)
-
-  return lines.join('\n')
+function contactOutreachText(contact: Contact): string {
+  const company = contact.company || contact.name || 'your company'
+  const brochureUrl = `${window.location.origin}/amit-brochure.pdf`
+  return `Hi ${company}, this is Amit from Delta Diamonds — we met before. We provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs. Brochure PDF: ${brochureUrl}`
 }
 
 function quickBtnStyle(bg: string): React.CSSProperties {

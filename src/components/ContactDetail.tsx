@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore'
 import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
-import { sendToGoogleSheets } from '../lib/export'
+import { sendToGoogleSheets, hasBeenSentToSheets, markContactsSentToSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
 import type { Contact } from '../types/contact'
 
@@ -70,7 +70,7 @@ export function ContactDetail() {
 
   const handleSendToSheets = async () => {
     if (isSendingSheets) return
-    if (c.sent_to_sheets) {
+    if (hasBeenSentToSheets(c)) {
       showToast('Already sent to Google Sheets')
       return
     }
@@ -83,6 +83,7 @@ export function ContactDetail() {
     try {
       const sent = await sendToGoogleSheets([c])
       if (sent) {
+        markContactsSentToSheets([c.id])
         updateContact(c.id, { sent_to_sheets: true })
       }
       showToast(sent ? '✅ Sent to Google Sheets!' : '❌ Not sent')

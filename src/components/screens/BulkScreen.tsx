@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore'
-import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
+import {
+  exportToCSV,
+  sendToGoogleSheets,
+  filterUnsentContactsForSheets,
+  markContactsSentToSheets,
+} from '../../lib/export'
 import { deleteImages } from '../../lib/imageStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
 
@@ -22,7 +27,7 @@ export function BulkScreen() {
   const targetContacts = selectedIds.length
     ? contacts.filter((c) => selectedIds.includes(c.id))
     : contacts
-  const unsentTargetContacts = targetContacts.filter((c) => !c.sent_to_sheets)
+  const unsentTargetContacts = filterUnsentContactsForSheets(targetContacts)
 
   const handleExportCSV = () => {
     if (!targetContacts.length) { showToast('No contacts'); return }
@@ -47,6 +52,7 @@ export function BulkScreen() {
     try {
       const sent = await sendToGoogleSheets(unsentTargetContacts)
       const sentIds = new Set(unsentTargetContacts.map((contact) => contact.id))
+      markContactsSentToSheets(Array.from(sentIds))
       setContacts(
         contacts.map((contact) => (
           sentIds.has(contact.id)

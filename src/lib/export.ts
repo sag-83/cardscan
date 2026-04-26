@@ -1,5 +1,7 @@
 import { Contact } from '../types/contact'
 
+const SHEETS_SENT_IDS_KEY = 'cs_sheets_sent_ids_v1'
+
 
 const CSV_HEADERS = [
   'Name', 'Title', 'Company', 'Email', 'Mobile', 'Work Phone', 'Fax',
@@ -76,6 +78,37 @@ function toSheetsRow(c: Contact) {
     userNotes: sheetsText(c.user_notes),
     scannedAt: sheetsText(c.scanned_at),
   }
+}
+
+function readSentIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(SHEETS_SENT_IDS_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((item): item is string => typeof item === 'string' && item.length > 0))
+  } catch {
+    return new Set()
+  }
+}
+
+export function hasBeenSentToSheets(contact: Pick<Contact, 'id' | 'sent_to_sheets'>): boolean {
+  if (contact.sent_to_sheets) return true
+  return readSentIds().has(contact.id)
+}
+
+export function filterUnsentContactsForSheets(contacts: Contact[]): Contact[] {
+  const sentIds = readSentIds()
+  return contacts.filter((contact) => !contact.sent_to_sheets && !sentIds.has(contact.id))
+}
+
+export function markContactsSentToSheets(contactIds: string[]): void {
+  if (!contactIds.length) return
+  const sentIds = readSentIds()
+  contactIds.forEach((id) => {
+    if (id) sentIds.add(id)
+  })
+  localStorage.setItem(SHEETS_SENT_IDS_KEY, JSON.stringify(Array.from(sentIds)))
 }
 
 export async function sendToGoogleSheets(contacts: Contact[]): Promise<number> {

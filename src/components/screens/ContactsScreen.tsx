@@ -616,7 +616,7 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '7px 0', borderTop: '1px solid var(--border2)',
             }}>
-              <div onClick={() => onOpenContact(c.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+              <div onClick={() => onEditFollowup(c.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.name || c.company || 'Unknown'}
                 </div>
@@ -626,10 +626,10 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
                 </div>
               </div>
               <button
-                onClick={() => onEditFollowup(c.id)}
+                onClick={() => onOpenContact(c.id)}
                 style={{ fontSize: 11, fontWeight: 700, color: group.color, background: 'none', border: `1px solid ${group.color}`, borderRadius: 99, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
-                Edit
+                More Info
               </button>
             </div>
           ))}

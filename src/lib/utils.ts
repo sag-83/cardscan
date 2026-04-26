@@ -38,6 +38,7 @@ export function normalizeContact(c: Contact): Contact {
   return {
     ...c,
     company: norm(c.company),
+    area: norm(c.area),
     city: norm(c.city),
     state: norm(c.state),
     zip: norm(c.zip),

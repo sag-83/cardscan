@@ -9,8 +9,16 @@ import {
   SUPABASE_SCHEMA_SQL,
 } from '../../lib/supabase'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
-import { dedupeContacts } from '../../lib/utils'
+import { dedupeContacts, normalizeContact } from '../../lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
+import { Contact } from '../../types/contact'
+
+const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
+
+type NormalizeBackup = {
+  createdAt: string
+  contacts: Contact[]
+}
 
 const ENV_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const ENV_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -126,6 +134,47 @@ export function SettingsScreen() {
       } catch { showToast('Invalid backup file') }
     }
     reader.readAsText(file); e.target.value = ''
+  }
+
+  const handleNormalizeNow = () => {
+    if (!contacts.length) {
+      showToast('No contacts to normalize')
+      return
+    }
+    // Safety net: keep exact pre-normalized data for one-tap restore.
+    const backup: NormalizeBackup = {
+      createdAt: new Date().toISOString(),
+      contacts,
+    }
+    localStorage.setItem(NORMALIZE_BACKUP_KEY, JSON.stringify(backup))
+
+    const normalized = dedupeContacts(contacts.map((contact) => normalizeContact(contact)))
+    const removed = contacts.length - normalized.length
+    setContacts(normalized)
+    showToast(
+      removed > 0
+        ? `Normalized to ALL CAPS and removed ${removed} duplicate entr${removed === 1 ? 'y' : 'ies'}`
+        : 'Normalized to ALL CAPS (no duplicates removed)'
+    )
+  }
+
+  const handleUndoNormalize = () => {
+    const raw = localStorage.getItem(NORMALIZE_BACKUP_KEY)
+    if (!raw) {
+      showToast('No normalize backup found')
+      return
+    }
+    try {
+      const parsed = JSON.parse(raw) as NormalizeBackup
+      if (!parsed || !Array.isArray(parsed.contacts)) {
+        showToast('Normalize backup is invalid')
+        return
+      }
+      setContacts(parsed.contacts)
+      showToast(`Restored pre-normalize backup (${parsed.contacts.length} contacts)`)
+    } catch {
+      showToast('Could not restore normalize backup')
+    }
   }
 
   return (
@@ -247,6 +296,16 @@ export function SettingsScreen() {
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts (JSON)</div>
           <div style={{ color: 'var(--accent)' }}>⬇</div>
+        </div>
+        <Divider />
+        <div onClick={handleNormalizeNow} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Normalize Existing Data Now (ALL CAPS + dedupe)</div>
+          <div style={{ color: '#34c759' }}>✓</div>
+        </div>
+        <Divider />
+        <div onClick={handleUndoNormalize} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Undo Last Normalize (restore backup)</div>
+          <div style={{ color: '#ff9500' }}>↩</div>
         </div>
         <Divider />
         <div onClick={handleRestoreFromSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>

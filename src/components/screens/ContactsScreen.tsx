@@ -62,8 +62,52 @@ export function ContactsScreen() {
   }
 
   const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
-  const cities = useMemo(() => [...new Set(contacts.map((c) => c.city).filter(Boolean))].sort(), [contacts])
+  const cities = useMemo(() => {
+    const source = filterState ? contacts.filter((c) => c.state === filterState) : contacts
+    return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
+  }, [contacts, filterState])
   const areas = useMemo(() => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(), [contacts])
+  const starCounts = useMemo(() => {
+    const counts = new Map<number, number>([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+    ])
+    contacts.forEach((contact) => {
+      if (contact.stars >= 1 && contact.stars <= 4) {
+        counts.set(contact.stars, (counts.get(contact.stars) ?? 0) + 1)
+      }
+    })
+    return counts
+  }, [contacts])
+  const stateCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    contacts.forEach((contact) => {
+      if (!contact.state) return
+      counts.set(contact.state, (counts.get(contact.state) ?? 0) + 1)
+    })
+    return counts
+  }, [contacts])
+  const cityCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    const source = filterState ? contacts.filter((c) => c.state === filterState) : contacts
+    source.forEach((contact) => {
+      if (!contact.city) return
+      counts.set(contact.city, (counts.get(contact.city) ?? 0) + 1)
+    })
+    return counts
+  }, [contacts, filterState])
+  const areaCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    contacts.forEach((contact) => {
+      if (!contact.area) return
+      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
+    })
+    return counts
+  }, [contacts])
+  const customerCount = useMemo(() => contacts.filter((c) => c.is_customer).length, [contacts])
+  const goodsShownCount = useMemo(() => contacts.filter((c) => c.visited).length, [contacts])
 
   const lastAddedId = useMemo(() => {
     let newestId: string | null = null
@@ -105,6 +149,16 @@ export function ContactsScreen() {
     : sortContactsAlphabetically(baseFiltered)
 
   const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
+
+  const onStateChange = (nextState: string) => {
+    setFilterState(nextState)
+    if (filterCity) {
+      const cityStillValid = contacts.some((c) => c.city === filterCity && c.state === nextState)
+      if (!nextState || !cityStillValid) {
+        setFilterCity('')
+      }
+    }
+  }
 
   const jumpToLastAdded = () => {
     if (!lastAddedId) return
@@ -158,33 +212,33 @@ export function ContactsScreen() {
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}
             style={dropdownStyle(filterStars > 0)}>
             <option value={0}>⭐</option>
-            <option value={1}>★ 1</option>
-            <option value={2}>★★ 2</option>
-            <option value={3}>★★★ 3</option>
-            <option value={4}>★★★★ 4</option>
+            <option value={1}>★ 1 ({starCounts.get(1) ?? 0})</option>
+            <option value={2}>★★ 2 ({starCounts.get(2) ?? 0})</option>
+            <option value={3}>★★★ 3 ({starCounts.get(3) ?? 0})</option>
+            <option value={4}>★★★★ 4 ({starCounts.get(4) ?? 0})</option>
           </select>
-          <select value={filterState} onChange={(e) => setFilterState(e.target.value)}
+          <select value={filterState} onChange={(e) => onStateChange(e.target.value)}
             style={dropdownStyle(!!filterState)}>
             <option value="">📍 ST</option>
-            {states.map((s) => <option key={s} value={s}>{s}</option>)}
+            {states.map((s) => <option key={s} value={s}>{s} ({stateCounts.get(s) ?? 0})</option>)}
           </select>
           <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)}
             style={dropdownStyle(!!filterCity)}>
             <option value="">🏙 City</option>
-            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            {cities.map((c) => <option key={c} value={c}>{c} ({cityCounts.get(c) ?? 0})</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
             style={{ ...dropdownStyle(!!filterArea), flex: 1 }}>
             <option value="">🗺 Area</option>
-            {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+            {areas.map((a) => <option key={a} value={a}>{a} ({areaCounts.get(a) ?? 0})</option>)}
           </select>
           <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
             style={{ ...dropdownStyle(!!filterType), flex: 1 }}>
             <option value="">🏷 Type</option>
-            <option value="customer">🤝 Customer</option>
-            <option value="goods_shown">📦 Goods Shown</option>
+            <option value="customer">🤝 Customer ({customerCount})</option>
+            <option value="goods_shown">📦 Goods Shown ({goodsShownCount})</option>
           </select>
           <button
             onClick={handleNearMe}

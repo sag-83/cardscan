@@ -200,7 +200,17 @@ export const useStore = create<AppState>()(
     }),
     {
       name: IS_DEMO_MODE ? 'cs_store_demo_v2' : 'cs_store_v2',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState: unknown) => {
+        if (!persistedState || typeof persistedState !== 'object') return persistedState as AppState
+        const state = persistedState as Partial<AppState>
+        if (!Array.isArray(state.contacts)) return state as AppState
+        return {
+          ...state,
+          contacts: sortContactsAlphabetically(dedupeContacts(state.contacts)),
+        } as AppState
+      },
 
       // Only persist data that should survive a page refresh
       partialize: (s) => ({

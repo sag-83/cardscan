@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
 
 type DocKind = 'invoice' | 'memo'
-type PaidBy = 'cash' | 'check'
+type PaidBy = 'cash' | 'check' | 'pending'
+type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL'
 
 type InvoiceItem = {
   id: string
+  prefix: SizePrefix
   size: string
   pcs: string
   ct: string
@@ -49,6 +51,11 @@ function upper(value: string): string {
   return value.toUpperCase()
 }
 
+function displaySize(item: InvoiceItem): string {
+  const combined = [item.prefix, item.size].filter(Boolean).join(' ')
+  return upper(combined || '-')
+}
+
 export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
@@ -62,7 +69,7 @@ export function InvoiceModal() {
   const [notes, setNotes] = useState('')
   const [isPreview, setIsPreview] = useState(false)
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: uid(), size: '', pcs: '1', ct: '', pct: '', amount: '' },
+    { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' },
   ])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
@@ -83,7 +90,7 @@ export function InvoiceModal() {
   }
 
   const addItem = () => {
-    setItems((current) => [...current, { id: uid(), size: '', pcs: '1', ct: '', pct: '', amount: '' }])
+    setItems((current) => [...current, { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }])
   }
 
   const customer = contact.company || contact.name || 'Customer'
@@ -94,7 +101,7 @@ export function InvoiceModal() {
       .map((item) => {
         const lineTotal = rowTotal(item)
         return `<tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(upper(item.size || '-'))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(displaySize(item))}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(item.pcs || '0')}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${num(item.ct).toFixed(2)}</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(num(item.pct))}</td>
@@ -120,7 +127,7 @@ export function InvoiceModal() {
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom: 6px; color: #374151;">Date: ${upper(invoiceDate)}</div>
-  <div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>
+  ${docKind === 'invoice' ? `<div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>` : ''}
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
     <div>${escapeHtml(upper(customer))}</div>
@@ -243,18 +250,35 @@ export function InvoiceModal() {
               </div>
             </div>
 
-            <div style={{ marginTop: 10 }}>
-              <div style={labelStyle}>Paid By</div>
-              <select value={paidBy} onChange={(e) => setPaidBy(e.target.value as PaidBy)} style={inputStyle}>
-                <option value="cash">Cash</option>
-                <option value="check">Check</option>
-              </select>
-            </div>
+            {docKind === 'invoice' && (
+              <div style={{ marginTop: 10 }}>
+                <div style={labelStyle}>Paid By</div>
+                <select value={paidBy} onChange={(e) => setPaidBy(e.target.value as PaidBy)} style={inputStyle}>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="pending">Payment Pending</option>
+                </select>
+              </div>
+            )}
 
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Lines</div>
             {items.map((item) => (
               <div key={item.id} style={{ border: '1px solid var(--border2)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <select
+                    value={item.prefix}
+                    onChange={(e) => updateItem(item.id, { prefix: e.target.value as SizePrefix })}
+                    style={{ ...inputStyle, flex: 1 }}
+                  >
+                    <option value="">Prefix</option>
+                    <option value="DGC">DGC</option>
+                    <option value="STD">STD</option>
+                    <option value="TNB">TNB</option>
+                    <option value="TUB">TUB</option>
+                    <option value="TUC">TUC</option>
+                    <option value="LDW">LDW</option>
+                    <option value="PRCL">PRCL</option>
+                  </select>
                   <input
                     value={item.size}
                     onChange={(e) => updateItem(item.id, { size: e.target.value })}
@@ -331,7 +355,7 @@ export function InvoiceModal() {
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
               <div style={{ fontSize: 12, color: '#374151' }}>Date: {upper(invoiceDate)}</div>
-              <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>
+              {docKind === 'invoice' && <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>}
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>Bill To</div>
                 <div>{upper(customer)}</div>
@@ -350,7 +374,7 @@ export function InvoiceModal() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id}>
-                      <td style={tdStyle}>{upper(item.size || '-')}</td>
+                      <td style={tdStyle}>{displaySize(item)}</td>
                       <td style={tdStyleRight}>{item.pcs || '0'}</td>
                       <td style={tdStyleRight}>{num(item.ct).toFixed(2)}</td>
                       <td style={tdStyleRight}>{money(num(item.pct))}</td>

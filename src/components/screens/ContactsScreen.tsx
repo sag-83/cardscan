@@ -343,7 +343,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [openSide, setOpenSide] = useState<'none' | 'left' | 'right'>('none')
-  const startRef = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
+  const startRef = useRef<{ x: number; y: number; swiping: boolean; baseOffset: number } | null>(null)
   const swipeOffsetRef = useRef(0)
   const didSwipeRef = useRef(false)
 
@@ -375,23 +375,6 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
     const text = contactColdMessageText(c)
 
     try {
-      // Best effort: use native share with PDF attached if supported.
-      if (navigator.share && navigator.canShare) {
-        const res = await fetch('/amit-brochure.pdf')
-        if (res.ok) {
-          const blob = await res.blob()
-          const file = new File([blob], 'Amit-Brochure.pdf', { type: 'application/pdf' })
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              title: 'Delta Diamonds Brochure',
-              text,
-              files: [file],
-            })
-            return
-          }
-        }
-      }
-
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       const separator = isIOS ? '&' : '?'
       const smsUrl = `sms:${recipient}${separator}body=${encodeURIComponent(`${text}\nBrochure PDF: ${window.location.origin}/amit-brochure.pdf`)}`
@@ -483,7 +466,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           onClick()
         }}
         onPointerDown={(e) => {
-          startRef.current = { x: e.clientX, y: e.clientY, swiping: false }
+          const baseOffset = openSide === 'left' ? 82 : openSide === 'right' ? -90 : 0
+          startRef.current = { x: e.clientX, y: e.clientY, swiping: false, baseOffset }
           didSwipeRef.current = false
         }}
         onPointerMove={(e) => {
@@ -494,14 +478,27 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           if (!start.swiping && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) start.swiping = true
           if (!start.swiping) return
           didSwipeRef.current = true
-          const nextOffset = Math.max(-90, Math.min(82, dx))
+          const raw = start.baseOffset + dx
+          const overshootDamped = raw > 82 ? 82 + (raw - 82) * 0.2 : raw < -90 ? -90 + (raw + 90) * 0.2 : raw
+          const nextOffset = Math.max(-96, Math.min(88, overshootDamped))
           swipeOffsetRef.current = nextOffset
           setSwipeOffset(nextOffset)
         }}
         onPointerUp={() => {
-          const shouldOpenLeft = swipeOffsetRef.current > 44
-          const shouldOpenRight = swipeOffsetRef.current < -44
-          if (shouldOpenLeft) {
+          const current = swipeOffsetRef.current
+          const shouldOpenLeft = current > 44
+          const shouldOpenRight = current < -44
+
+          // If one side is already open, a swipe toward the opposite side closes first.
+          if (openSide === 'left' && shouldOpenRight) {
+            swipeOffsetRef.current = 0
+            setOpenSide('none')
+            setSwipeOffset(0)
+          } else if (openSide === 'right' && shouldOpenLeft) {
+            swipeOffsetRef.current = 0
+            setOpenSide('none')
+            setSwipeOffset(0)
+          } else if (shouldOpenLeft) {
             swipeOffsetRef.current = 82
             setOpenSide('left')
             setSwipeOffset(82)
@@ -535,7 +532,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           cursor: 'pointer',
           borderLeft: isLastAdded ? '4px solid #ff3b30' : '4px solid transparent',
           transform: `translateX(${openSide === 'left' ? 82 : openSide === 'right' ? -90 : swipeOffset}px)`,
-          transition: startRef.current?.swiping ? 'none' : 'transform 160ms ease',
+          transition: startRef.current?.swiping ? 'none' : 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1)',
           position: 'relative',
           zIndex: 1,
         }}
@@ -667,7 +664,7 @@ function contactShareText(contact: Contact): string {
 
 function contactColdMessageText(contact: Contact): string {
   const company = contact.company || contact.name || 'your company'
-  return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.`
+  return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.\nHappy to assist with any requirements.`
 }
 
 function quickBtnStyle(bg: string): React.CSSProperties {

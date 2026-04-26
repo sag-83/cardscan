@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
 import { blankContact } from '../lib/utils'
@@ -6,9 +6,19 @@ import { IS_DEMO_MODE } from '../lib/demo'
 
 export function Header() {
   const [showQr, setShowQr] = useState(false)
+  const [qrPressed, setQrPressed] = useState(false)
   const { theme, toggle } = useTheme()
   const contacts = useStore((s) => s.contacts)
   const setEditModal = useStore((s) => s.setEditModal)
+
+  useEffect(() => {
+    if (!showQr) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [showQr])
 
   return (
     <header
@@ -50,11 +60,16 @@ export function Header() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={() => setShowQr((v) => !v)}
+          onPointerDown={() => setQrPressed(true)}
+          onPointerUp={() => setQrPressed(false)}
+          onPointerCancel={() => setQrPressed(false)}
           style={{
             width: 32, height: 32, borderRadius: '50%', border: 'none',
             background: 'var(--bg3)', display: 'flex', alignItems: 'center',
             justifyContent: 'center', cursor: 'pointer', fontSize: 14, flexShrink: 0,
-            transition: '0.15s',
+            transition: '0.12s',
+            transform: qrPressed ? 'scale(0.93)' : 'scale(1)',
+            boxShadow: qrPressed ? 'inset 0 0 0 2px rgba(0,122,255,0.35)' : 'none',
           }}
           aria-label="Show my QR code"
           title="Show my QR code"
@@ -91,21 +106,25 @@ export function Header() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.88)',
-            zIndex: 700,
+            background: '#000',
+            zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 16,
+            width: '100vw',
+            height: '100dvh',
+            padding: 20,
           }}
         >
           <img
             src="/my-contact-qr.png"
             alt="My contact QR code"
             style={{
-              width: '100%',
-              maxWidth: 460,
-              borderRadius: 14,
+              display: 'block',
+              width: 'min(92vw, 520px)',
+              maxHeight: '92dvh',
+              objectFit: 'contain',
+              borderRadius: 12,
               background: '#fff',
             }}
           />

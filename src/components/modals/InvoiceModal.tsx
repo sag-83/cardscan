@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
 
 type DocKind = 'invoice' | 'memo'
@@ -21,7 +21,12 @@ const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
 const COMPANY_LOGO = '/delta-logo.png'
 
 function money(value: number): string {
-  return `$${value.toFixed(2)}`
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
 }
 
 function num(value: string): number {
@@ -56,6 +61,17 @@ function displaySize(item: InvoiceItem): string {
   return upper(combined || '-')
 }
 
+function formatUsDate(isoDate: string): string {
+  if (!isoDate) return ''
+  const parsed = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return isoDate
+  return parsed.toLocaleDateString('en-US')
+}
+
+function blankInvoiceItem(): InvoiceItem {
+  return { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }
+}
+
 export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
@@ -69,10 +85,20 @@ export function InvoiceModal() {
   const [notes, setNotes] = useState('')
   const [isPreview, setIsPreview] = useState(false)
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' },
+    blankInvoiceItem(),
   ])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
+
+  useEffect(() => {
+    if (!invoiceContactId) return
+    setDocKind('invoice')
+    setInvoiceDate(new Date().toISOString().slice(0, 10))
+    setPaidBy('cash')
+    setNotes('')
+    setIsPreview(false)
+    setItems([blankInvoiceItem()])
+  }, [invoiceContactId])
 
   if (!contact) return null
 
@@ -90,7 +116,7 @@ export function InvoiceModal() {
   }
 
   const addItem = () => {
-    setItems((current) => [...current, { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }])
+    setItems((current) => [...current, blankInvoiceItem()])
   }
 
   const customer = contact.company || contact.name || 'Customer'
@@ -126,7 +152,7 @@ export function InvoiceModal() {
     <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
-  <div style="margin-bottom: 6px; color: #374151;">Date: ${upper(invoiceDate)}</div>
+  <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(invoiceDate)}</div>
   ${docKind === 'invoice' ? `<div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>` : ''}
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
@@ -354,7 +380,7 @@ export function InvoiceModal() {
                 <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
-              <div style={{ fontSize: 12, color: '#374151' }}>Date: {upper(invoiceDate)}</div>
+              <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(invoiceDate)}</div>
               {docKind === 'invoice' && <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>}
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>Bill To</div>

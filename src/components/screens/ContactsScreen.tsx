@@ -240,10 +240,13 @@ export function ContactsScreen() {
             <option value="customer">🤝 Customer ({customerCount})</option>
             <option value="goods_shown">📦 Goods Shown ({goodsShownCount})</option>
           </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={handleNearMe}
             style={{
-              padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+              width: '100%',
+              padding: '8px 12px', borderRadius: 999, cursor: 'pointer',
               fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
               border: `1.5px solid ${nearMeActive ? '#34c759' : 'var(--border)'}`,
               background: nearMeActive ? 'rgba(52,199,89,0.12)' : 'var(--bg3)',

@@ -6,12 +6,13 @@ import { IS_DEMO_MODE } from '../../lib/demo'
 export function BulkScreen() {
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, setBulkMessageType, showToast,
+    deleteContact, updateContact, setBulkMessageType, showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
     clearSelected: s.clearSelected,
     deleteContact: s.deleteContact,
+    updateContact: s.updateContact,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
   }))
@@ -19,6 +20,7 @@ export function BulkScreen() {
   const targetContacts = selectedIds.length
     ? contacts.filter((c) => selectedIds.includes(c.id))
     : contacts
+  const unsentTargetContacts = targetContacts.filter((c) => !c.sent_to_sheets)
 
   const handleExportCSV = () => {
     if (!targetContacts.length) { showToast('No contacts'); return }
@@ -28,15 +30,22 @@ export function BulkScreen() {
 
   const handleSendToSheets = async () => {
     if (!targetContacts.length) { showToast('No contacts to send'); return }
+    if (!unsentTargetContacts.length) {
+      showToast('All selected contacts are already in Google Sheets')
+      return
+    }
     if (IS_DEMO_MODE) {
-      showToast(`Demo mode: ${targetContacts.length} contact(s) would sync to Sheets`)
+      showToast(`Demo mode: ${unsentTargetContacts.length} unsent contact(s) would sync to Sheets`)
       return
     }
 
-    showToast(`Sending ${targetContacts.length}...`)
+    showToast(`Sending ${unsentTargetContacts.length} unsent contact(s)...`)
     try {
-      const sent = await sendToGoogleSheets(targetContacts)
-      showToast(`${sent} sent to Sheets!`)
+      const sent = await sendToGoogleSheets(unsentTargetContacts)
+      unsentTargetContacts.forEach((contact) => {
+        updateContact(contact.id, { sent_to_sheets: true })
+      })
+      showToast(`${sent} new contact(s) sent to Sheets`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)
     }

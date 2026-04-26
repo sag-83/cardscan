@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { exportToCSV, sendToGoogleSheets } from '../../lib/export'
 import { deleteImages } from '../../lib/imageStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
 
 export function BulkScreen() {
+  const [isSendingSheets, setIsSendingSheets] = useState(false)
   const {
     contacts, selectedIds, clearSelected,
     deleteContact, setContacts, setBulkMessageType, showToast,
@@ -29,6 +31,7 @@ export function BulkScreen() {
   }
 
   const handleSendToSheets = async () => {
+    if (isSendingSheets) return
     if (!targetContacts.length) { showToast('No contacts to send'); return }
     if (!unsentTargetContacts.length) {
       showToast('All selected contacts are already in Google Sheets')
@@ -40,6 +43,7 @@ export function BulkScreen() {
     }
 
     showToast(`Sending ${unsentTargetContacts.length} unsent contact(s)...`)
+    setIsSendingSheets(true)
     try {
       const sent = await sendToGoogleSheets(unsentTargetContacts)
       const sentIds = new Set(unsentTargetContacts.map((contact) => contact.id))
@@ -53,6 +57,8 @@ export function BulkScreen() {
       showToast(`${sent} new contact(s) sent to Sheets`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)
+    } finally {
+      setIsSendingSheets(false)
     }
   }
 
@@ -79,7 +85,12 @@ export function BulkScreen() {
       </div>
 
       <ActionButton emoji="⬇" label="Export CSV" onClick={handleExportCSV} />
-      <ActionButton emoji="📊" label="Send to Google Sheets" onClick={handleSendToSheets} />
+      <ActionButton
+        emoji={isSendingSheets ? '⏳' : '📊'}
+        label={isSendingSheets ? 'Sending to Google Sheets...' : 'Send to Google Sheets'}
+        onClick={handleSendToSheets}
+        disabled={isSendingSheets}
+      />
       <ActionButton emoji="✉" label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
       <ActionButton emoji="💬" label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
 
@@ -166,11 +177,11 @@ function SheetsPreview({ contacts }: { contacts: Array<{
   )
 }
 
-function ActionButton({ emoji, label, onClick }: {
-  emoji: string; label: string; onClick: () => void
+function ActionButton({ emoji, label, onClick, disabled }: {
+  emoji: string; label: string; onClick: () => void; disabled?: boolean
 }) {
   return (
-    <button onClick={onClick} style={{ ...btnBase, marginBottom: 10 }}>
+    <button onClick={onClick} disabled={disabled} style={{ ...btnBase, marginBottom: 10, opacity: disabled ? 0.65 : 1 }}>
       {emoji} {label}
     </button>
   )

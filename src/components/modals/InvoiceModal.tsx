@@ -84,11 +84,13 @@ export function InvoiceModal() {
   const [paidBy, setPaidBy] = useState<PaidBy>('cash')
   const [notes, setNotes] = useState('')
   const [isPreview, setIsPreview] = useState(false)
+  const [grandTotalOverride, setGrandTotalOverride] = useState('')
   const [items, setItems] = useState<InvoiceItem[]>([
     blankInvoiceItem(),
   ])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
+  const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal
 
   useEffect(() => {
     if (!invoiceContactId) return
@@ -97,6 +99,7 @@ export function InvoiceModal() {
     setPaidBy('cash')
     setNotes('')
     setIsPreview(false)
+    setGrandTotalOverride('')
     setItems([blankInvoiceItem()])
   }, [invoiceContactId])
 
@@ -173,7 +176,7 @@ export function InvoiceModal() {
     <tbody>${invoiceRows}</tbody>
   </table>
   <div style="margin-top: 14px; text-align: right; font-size: 18px; font-weight: 700;">
-    Total: ${money(subtotal)}
+    Total: ${money(finalTotal)}
   </div>
   <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(notes || ''))}</div>
 </body>
@@ -361,7 +364,25 @@ export function InvoiceModal() {
             />
 
             <div style={{ marginTop: 12, fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
-              Total: {money(subtotal)}
+              Grand Total: {money(finalTotal)}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <div style={labelStyle}>Adjust Grand Total (optional)</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  value={grandTotalOverride}
+                  onChange={(e) => setGrandTotalOverride(e.target.value)}
+                  placeholder={subtotal.toFixed(2)}
+                  inputMode="decimal"
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  onClick={() => setGrandTotalOverride('')}
+                  style={{ ...ghostBtnStyle, flex: '0 0 auto', padding: '10px 12px' }}
+                >
+                  Auto
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -409,7 +430,7 @@ export function InvoiceModal() {
                   ))}
                 </tbody>
               </table>
-              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(subtotal)}</div>
+              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(finalTotal)}</div>
               {notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(notes)}</div>}
             </div>
 

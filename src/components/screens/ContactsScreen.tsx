@@ -245,8 +245,8 @@ export function ContactsScreen() {
           <button
             onClick={handleNearMe}
             style={{
-              width: '100%',
-              padding: '8px 12px', borderRadius: 999, cursor: 'pointer',
+              flex: 1,
+              padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
               fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
               border: `1.5px solid ${nearMeActive ? '#34c759' : 'var(--border)'}`,
               background: nearMeActive ? 'rgba(52,199,89,0.12)' : 'var(--bg3)',
@@ -255,12 +255,11 @@ export function ContactsScreen() {
           >
             {nearMeLoading ? '⏳ Locating…' : nearMeActive ? '📍 Near Me ✓' : '📍 Near Me'}
           </button>
-        </div>
-        {lastAddedId && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {lastAddedId && (
             <button
               onClick={jumpToLastAdded}
               style={{
+                flex: 1,
                 padding: '7px 12px', borderRadius: 999,
                 border: '1.5px solid var(--accent)',
                 background: 'rgba(0,122,255,0.1)',
@@ -270,8 +269,8 @@ export function ContactsScreen() {
             >
               ★ Last
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {hasFilters && (
           <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea(''); setFilterType('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,

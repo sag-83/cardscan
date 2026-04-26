@@ -39,6 +39,10 @@ function mostRecentlyAddedContact(contacts: Contact[]): Contact | undefined {
   }, undefined)
 }
 
+function scanText(value: string | undefined): string {
+  return (value ?? '').toUpperCase().trim()
+}
+
 async function filterUniqueAgainstLocalAndCloud(
   cards: Contact[],
   contacts: Contact[]
@@ -260,18 +264,18 @@ export function ScanScreen() {
           fillFields.forEach((f) => {
             const value = bd[f as string]
             if (value && !merged[f]) {
-              merged[f] = value.toUpperCase().trim() as never
+              merged[f] = scanText(value) as never
             }
           })
 
           if (bd.email && !merged.email) merged.email = bd.email.toLowerCase().trim()
           if (bd.website && !merged.website) merged.website = bd.website
-          if (bd.name && !merged.name) merged.name = bd.name
-          if (bd.title && !merged.title) merged.title = bd.title
-          if (bd.company && !merged.company) merged.company = bd.company.toUpperCase().trim()
+          if (bd.name && !merged.name) merged.name = scanText(bd.name)
+          if (bd.title && !merged.title) merged.title = scanText(bd.title)
+          if (bd.company && !merged.company) merged.company = scanText(bd.company)
 
           if (bd.notes?.trim()) {
-            merged.back_notes = [merged.back_notes, bd.notes].filter(Boolean).join(' | ')
+            merged.back_notes = [merged.back_notes, scanText(bd.notes)].filter(Boolean).join(' | ')
           }
 
           const saved = await saveContactToDB(merged)
@@ -294,20 +298,20 @@ export function ScanScreen() {
         normalizeContact({
           ...blankContact(),
           id: uid(),
-          name: raw.name ?? '',
-          title: raw.title ?? '',
-          company: raw.company ?? '',
+          name: scanText(raw.name),
+          title: scanText(raw.title),
+          company: scanText(raw.company),
           email: raw.email ?? '',
           phone_mobile: raw.phone_mobile ?? '',
           phone_work: raw.phone_work ?? '',
           phone_fax: raw.phone_fax ?? '',
           website: raw.website ?? '',
-          address: raw.address ?? '',
-          city: raw.city ?? '',
-          state: raw.state ?? '',
-          zip: raw.zip ?? '',
-          country: raw.country ?? '',
-          notes: raw.notes ?? '',
+          address: scanText(raw.address),
+          city: scanText(raw.city),
+          state: scanText(raw.state),
+          zip: scanText(raw.zip),
+          country: scanText(raw.country),
+          notes: scanText(raw.notes),
           front_image: thumb,
         })
       )

@@ -198,7 +198,9 @@ export function ContactsScreen() {
           >
             {nearMeLoading ? '⏳ Locating…' : nearMeActive ? '📍 Near Me ✓' : '📍 Near Me'}
           </button>
-          {lastAddedId && (
+        </div>
+        {lastAddedId && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
               onClick={jumpToLastAdded}
               style={{
@@ -211,8 +213,8 @@ export function ContactsScreen() {
             >
               ★ Last
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {hasFilters && (
           <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea(''); setFilterType('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,

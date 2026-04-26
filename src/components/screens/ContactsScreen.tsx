@@ -342,21 +342,59 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
   onShareError: (message: string) => void
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0)
-  const [shareVisible, setShareVisible] = useState(false)
+  const [openSide, setOpenSide] = useState<'none' | 'left' | 'right'>('none')
   const startRef = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
   const swipeOffsetRef = useRef(0)
   const didSwipeRef = useRef(false)
 
-  const shareContact = async () => {
+  const shareBusinessCard = async () => {
+    const text = contactShareText(c)
+    const title = c.name || c.company || 'Contact'
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text })
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        onShareError('Contact copied. Paste it into Messages or WhatsApp')
+      } else {
+        onShareError('Sharing is not available in this browser')
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      onShareError('Could not open share sheet')
+    }
+  }
+
+  const sendColdMessage = async () => {
     const recipient = c.phone_mobile || c.phone_work
     if (!recipient) {
       onShareError('No phone number found for this contact')
       return
     }
-    const text = contactOutreachText(c)
-    const smsUrl = `sms:${recipient}?&body=${encodeURIComponent(text)}`
+    const text = contactColdMessageText(c)
 
     try {
+      // Best effort: use native share with PDF attached if supported.
+      if (navigator.share && navigator.canShare) {
+        const res = await fetch('/amit-brochure.pdf')
+        if (res.ok) {
+          const blob = await res.blob()
+          const file = new File([blob], 'Amit-Brochure.pdf', { type: 'application/pdf' })
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: 'Delta Diamonds Brochure',
+              text,
+              files: [file],
+            })
+            return
+          }
+        }
+      }
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      const separator = isIOS ? '&' : '?'
+      const smsUrl = `sms:${recipient}${separator}body=${encodeURIComponent(`${text}\nBrochure PDF: ${window.location.origin}/amit-brochure.pdf`)}`
       window.location.href = smsUrl
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
@@ -364,9 +402,9 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
     }
   }
 
-  const closeShare = () => {
+  const closeSwipe = () => {
     swipeOffsetRef.current = 0
-    setShareVisible(false)
+    setOpenSide('none')
     setSwipeOffset(0)
   }
 
@@ -391,27 +429,55 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--accent)',
+          gap: 8,
         }}
       >
         <button
-          onClick={(e) => { e.stopPropagation(); void shareContact(); closeShare() }}
+          onClick={(e) => { e.stopPropagation(); void shareBusinessCard(); closeSwipe() }}
           style={{
-            width: 54, height: 54, borderRadius: '50%',
-            border: 'none', background: 'rgba(255,255,255,0.95)',
-            color: 'var(--accent)', fontSize: 22, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 66, height: 54, borderRadius: 16,
+            border: 'none', background: 'rgba(255,255,255,0.96)',
+            color: 'var(--accent)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 12px',
           }}
           title="Share"
-          aria-label="Share contact"
+          aria-label="Share contact card"
         >
-          ↗
+          ↗ Share
+        </button>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          inset: '0 0 0 auto',
+          width: 90,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#34c759',
+        }}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); void sendColdMessage(); closeSwipe() }}
+          style={{
+            minWidth: 70, height: 54, borderRadius: 16,
+            border: 'none', background: 'rgba(255,255,255,0.96)',
+            color: '#1f8f44', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 12px',
+          }}
+          title="Cold message"
+          aria-label="Send cold message"
+        >
+          💬 Msg
         </button>
       </div>
       <div
         onClick={() => {
-          if (didSwipeRef.current || shareVisible) {
+          if (didSwipeRef.current || openSide !== 'none') {
             didSwipeRef.current = false
-            if (shareVisible) closeShare()
+            if (openSide !== 'none') closeSwipe()
             return
           }
           onClick()
@@ -428,20 +494,39 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           if (!start.swiping && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) start.swiping = true
           if (!start.swiping) return
           didSwipeRef.current = true
-          const nextOffset = Math.max(0, Math.min(82, dx))
+          const nextOffset = Math.max(-90, Math.min(82, dx))
           swipeOffsetRef.current = nextOffset
           setSwipeOffset(nextOffset)
         }}
         onPointerUp={() => {
-          const shouldOpen = swipeOffsetRef.current > 44
-          swipeOffsetRef.current = shouldOpen ? 82 : 0
-          setShareVisible(shouldOpen)
-          setSwipeOffset(shouldOpen ? 82 : 0)
+          const shouldOpenLeft = swipeOffsetRef.current > 44
+          const shouldOpenRight = swipeOffsetRef.current < -44
+          if (shouldOpenLeft) {
+            swipeOffsetRef.current = 82
+            setOpenSide('left')
+            setSwipeOffset(82)
+          } else if (shouldOpenRight) {
+            swipeOffsetRef.current = -90
+            setOpenSide('right')
+            setSwipeOffset(-90)
+          } else {
+            swipeOffsetRef.current = 0
+            setOpenSide('none')
+            setSwipeOffset(0)
+          }
           startRef.current = null
         }}
         onPointerCancel={() => {
-          swipeOffsetRef.current = shareVisible ? 82 : 0
-          setSwipeOffset(shareVisible ? 82 : 0)
+          if (openSide === 'left') {
+            swipeOffsetRef.current = 82
+            setSwipeOffset(82)
+          } else if (openSide === 'right') {
+            swipeOffsetRef.current = -90
+            setSwipeOffset(-90)
+          } else {
+            swipeOffsetRef.current = 0
+            setSwipeOffset(0)
+          }
           startRef.current = null
         }}
         style={{
@@ -449,7 +534,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           padding: '10px 16px', background: 'var(--bg2)',
           cursor: 'pointer',
           borderLeft: isLastAdded ? '4px solid #ff3b30' : '4px solid transparent',
-          transform: `translateX(${shareVisible ? 82 : swipeOffset}px)`,
+          transform: `translateX(${openSide === 'left' ? 82 : openSide === 'right' ? -90 : swipeOffset}px)`,
           transition: startRef.current?.swiping ? 'none' : 'transform 160ms ease',
           position: 'relative',
           zIndex: 1,
@@ -570,10 +655,19 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
   )
 }
 
-function contactOutreachText(contact: Contact): string {
+function contactShareText(contact: Contact): string {
+  const address = [contact.address, contact.city, contact.state, contact.zip, contact.country].filter(Boolean).join(', ')
+  const lines = [
+    contact.company || contact.name || 'Company',
+    contact.phone_mobile || contact.phone_work ? `Number: ${contact.phone_mobile || contact.phone_work}` : '',
+    address ? `Address: ${address}` : '',
+  ].filter(Boolean)
+  return lines.join('\n')
+}
+
+function contactColdMessageText(contact: Contact): string {
   const company = contact.company || contact.name || 'your company'
-  const brochureUrl = `${window.location.origin}/amit-brochure.pdf`
-  return `Hi ${company}, this is Amit from Delta Diamonds — we met before. We provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs. Brochure PDF: ${brochureUrl}`
+  return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.`
 }
 
 function quickBtnStyle(bg: string): React.CSSProperties {

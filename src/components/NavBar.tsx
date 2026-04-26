@@ -21,6 +21,12 @@ const TABS: Tab[] = [
       'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
   },
   {
+    id: 'dashboard',
+    label: 'Stats',
+    iconPath:
+      'M3 3v18h18 M7 15l3-3 2 2 5-5',
+  },
+  {
     id: 'bulk',
     label: 'Bulk',
     iconPath: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',

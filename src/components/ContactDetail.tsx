@@ -94,10 +94,11 @@ export function ContactDetail() {
     }
   }
 
-  const handleSMS = () => {
+  const handleWhatsApp = () => {
     const phone = c.phone_mobile || c.phone_work
     if (!phone) { showToast('No phone number found'); return }
-    window.open(`sms:${phone}`)
+    const digits = phone.replace(/[^\d]/g, '')
+    window.open(`https://wa.me/${digits}`, '_blank')
   }
 
   const fullAddress = [c.address, c.city, c.state, c.zip, c.country].filter(Boolean).join(', ')
@@ -153,14 +154,14 @@ export function ContactDetail() {
         </div>
       </div>
 
-      {/* Quick action row — now includes SMS */}
+      {/* Quick action row */}
       <div style={{ display: 'flex', background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
         {(c.phone_mobile || c.phone_work) && (
           <ActionBtn icon="📞" bg="#e1f0ff" label="Call"
             onClick={() => window.location.href = `tel:${c.phone_mobile || c.phone_work}`} />
         )}
         {(c.phone_mobile || c.phone_work) && (
-          <ActionBtn icon="💬" bg="#e8f5e9" label="SMS" onClick={handleSMS} />
+          <ActionBtn icon="💬" bg="#e8f5e9" label="WhatsApp" onClick={handleWhatsApp} />
         )}
         {(c.address || c.city) && (
           <ActionBtn icon="📍" bg="#fff3e0" label="Map"
@@ -291,9 +292,9 @@ export function ContactDetail() {
         borderTop: '1px solid var(--border2)', position: 'sticky', bottom: 0,
         display: 'flex', gap: 10,
       }}>
-        <button onClick={handleSMS} style={{ ...saveBtnStyle, background: 'var(--bg3)',
+        <button onClick={handleWhatsApp} style={{ ...saveBtnStyle, background: 'var(--bg3)',
           color: 'var(--text)', border: '1px solid var(--border)', flex: 1 }}>
-          💬 SMS
+          💬 WhatsApp
         </button>
         <button onClick={handleSaveToPhone} style={{ ...saveBtnStyle, flex: 2 }}>
           👤 Save to Phone

@@ -31,4 +31,4 @@ export interface Contact {
   created_at: string
 }
 
-export type Screen = 'scan' | 'contacts' | 'bulk' | 'settings'
+export type Screen = 'scan' | 'contacts' | 'dashboard' | 'bulk' | 'settings'

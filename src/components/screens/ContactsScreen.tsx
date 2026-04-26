@@ -556,10 +556,10 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               title="Call"
             >📞</button>
             <button
-              onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${(c.phone_mobile || c.phone_work)!.replace(/[^\d]/g, '')}`, '_blank') }}
+              onClick={(e) => { e.stopPropagation(); window.location.href = `sms:${c.phone_mobile || c.phone_work}` }}
               style={quickBtnStyle('#e8f5e9')}
-              title="WhatsApp"
-            >💬</button>
+              title="Message"
+            >✉️</button>
           </>
         )}
         <div onClick={(e) => { e.stopPropagation(); onMenu() }}

@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
 import { blankContact } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
 
 export function Header() {
+  const [showQr, setShowQr] = useState(false)
   const { theme, toggle } = useTheme()
   const contacts = useStore((s) => s.contacts)
   const setEditModal = useStore((s) => s.setEditModal)
@@ -46,6 +48,19 @@ export function Header() {
       </h1>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={() => setShowQr((v) => !v)}
+          style={{
+            width: 32, height: 32, borderRadius: '50%', border: 'none',
+            background: 'var(--bg3)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'pointer', fontSize: 14, flexShrink: 0,
+            transition: '0.15s',
+          }}
+          aria-label="Show my QR code"
+          title="Show my QR code"
+        >
+          QR
+        </button>
         {contacts.length > 0 && (
           <span
             style={{
@@ -69,6 +84,33 @@ export function Header() {
           ＋
         </button>
       </div>
+
+      {showQr && (
+        <div
+          onClick={() => setShowQr(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.88)',
+            zIndex: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <img
+            src="/my-contact-qr.png"
+            alt="My contact QR code"
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              borderRadius: 14,
+              background: '#fff',
+            }}
+          />
+        </div>
+      )}
     </header>
   )
 }

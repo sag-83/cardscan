@@ -70,6 +70,10 @@ export function ContactDetail() {
 
   const handleSendToSheets = async () => {
     if (isSendingSheets) return
+    if (c.sent_to_sheets) {
+      showToast('Already sent to Google Sheets')
+      return
+    }
     if (IS_DEMO_MODE) {
       showToast('Demo mode: this would sync to Google Sheets')
       return
@@ -78,6 +82,9 @@ export function ContactDetail() {
     setIsSendingSheets(true)
     try {
       const sent = await sendToGoogleSheets([c])
+      if (sent) {
+        updateContact(c.id, { sent_to_sheets: true })
+      }
       showToast(sent ? '✅ Sent to Google Sheets!' : '❌ Not sent')
     } catch (err) {
       showToast('❌ ' + (err as Error).message)

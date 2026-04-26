@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
 import { initSupabase, syncContactsFromDB } from './lib/supabase'
 import { loadImages } from './lib/imageStore'
@@ -23,6 +23,7 @@ import { SettingsScreen } from './components/screens/SettingsScreen'
 const APP_PASSWORD = IS_DEMO_MODE ? '' : ((import.meta.env.VITE_APP_PASSWORD as string) ?? '')
 const APP_UNLOCK_KEY = 'cardscan_app_unlocked'
 const INACTIVITY_LOCK_MS = 60_000
+const BUILD_CHECK_INTERVAL_MS = 60_000
 
 export default function App() {
   const activeScreen = useStore((s) => s.activeScreen)
@@ -36,6 +37,49 @@ export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(() => {
     return !APP_PASSWORD || localStorage.getItem(APP_UNLOCK_KEY) === APP_PASSWORD
   })
+  const notifiedBuildRef = useRef('')
+
+  useEffect(() => {
+    if (!isUnlocked) return
+
+    const currentAsset = document
+      .querySelector('script[src*="/assets/index-"]')
+      ?.getAttribute('src')
+      ?.trim()
+
+    if (!currentAsset) return
+
+    const checkForNewBuild = async () => {
+      try {
+        const res = await fetch(`/index.html?t=${Date.now()}`, { cache: 'no-store' })
+        const html = await res.text()
+        const match = html.match(/src="(\/assets\/index-[^"]+\.js)"/)
+        const latestAsset = match?.[1]?.trim()
+        if (!latestAsset || latestAsset === currentAsset) return
+        if (notifiedBuildRef.current === latestAsset) return
+        notifiedBuildRef.current = latestAsset
+        showToast('New app version available. Open Settings to refresh.')
+        const shouldReload = window.confirm('A new version is available. Reload now?')
+        if (shouldReload) {
+          window.location.replace(`${window.location.pathname}?v=${Date.now()}`)
+        }
+      } catch {
+        // Ignore transient network errors.
+      }
+    }
+
+    const intervalId = window.setInterval(checkForNewBuild, BUILD_CHECK_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkForNewBuild()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    void checkForNewBuild()
+
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [isUnlocked, showToast])
 
   useEffect(() => {
     if (!APP_PASSWORD || !isUnlocked) return

@@ -177,6 +177,10 @@ export function SettingsScreen() {
     }
   }
 
+  const handleRefreshApp = () => {
+    window.location.replace(`${window.location.pathname}?v=${Date.now()}`)
+  }
+
   return (
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: '16px 16px 0', fontSize: 22, fontWeight: 800 }}>Settings</div>
@@ -296,6 +300,11 @@ export function SettingsScreen() {
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts (JSON)</div>
           <div style={{ color: 'var(--accent)' }}>⬇</div>
+        </div>
+        <Divider />
+        <div onClick={handleRefreshApp} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>Refresh to Latest Version</div>
+          <div style={{ color: 'var(--accent)' }}>↻</div>
         </div>
         <Divider />
         <div onClick={handleNormalizeNow} style={{ ...rowStyle, cursor: 'pointer' }}>

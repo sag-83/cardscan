@@ -6,13 +6,13 @@ import { IS_DEMO_MODE } from '../../lib/demo'
 export function BulkScreen() {
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, updateContact, setBulkMessageType, showToast,
+    deleteContact, setContacts, setBulkMessageType, showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
     clearSelected: s.clearSelected,
     deleteContact: s.deleteContact,
-    updateContact: s.updateContact,
+    setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
   }))
@@ -42,9 +42,14 @@ export function BulkScreen() {
     showToast(`Sending ${unsentTargetContacts.length} unsent contact(s)...`)
     try {
       const sent = await sendToGoogleSheets(unsentTargetContacts)
-      unsentTargetContacts.forEach((contact) => {
-        updateContact(contact.id, { sent_to_sheets: true })
-      })
+      const sentIds = new Set(unsentTargetContacts.map((contact) => contact.id))
+      setContacts(
+        contacts.map((contact) => (
+          sentIds.has(contact.id)
+            ? { ...contact, sent_to_sheets: true }
+            : contact
+        ))
+      )
       showToast(`${sent} new contact(s) sent to Sheets`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)

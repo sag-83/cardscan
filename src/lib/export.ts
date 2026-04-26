@@ -56,6 +56,7 @@ export function exportToCSV(contacts: Contact[]): void {
  */
 function toSheetsRow(c: Contact) {
   return {
+    id:        sheetsText(c.id),
     name:      sheetsText(c.name),
     title:     sheetsText(c.title),
     company:   sheetsText(c.company),

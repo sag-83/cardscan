@@ -375,6 +375,23 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
     const text = contactColdMessageText(c)
 
     try {
+      // Best effort: use native share with PDF attached if supported.
+      if (navigator.share && navigator.canShare) {
+        const res = await fetch('/amit-brochure.pdf')
+        if (res.ok) {
+          const blob = await res.blob()
+          const file = new File([blob], 'Amit-Brochure.pdf', { type: 'application/pdf' })
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: 'Delta Diamonds Brochure',
+              text,
+              files: [file],
+            })
+            return
+          }
+        }
+      }
+
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       const separator = isIOS ? '&' : '?'
       const smsUrl = `sms:${recipient}${separator}body=${encodeURIComponent(`${text}\nBrochure PDF: ${window.location.origin}/amit-brochure.pdf`)}`

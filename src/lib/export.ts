@@ -1,4 +1,5 @@
 import { Contact } from '../types/contact'
+import { SavedInvoice } from '../types/invoice'
 
 const SHEETS_SENT_IDS_KEY = 'cs_sheets_sent_ids_v1'
 
@@ -135,6 +136,34 @@ export function backupToJSON(contacts: Contact[]): void {
   anchor.href = URL.createObjectURL(blob)
   anchor.download = `cardscan_${new Date().toISOString().split('T')[0]}.json`
   anchor.click()
+}
+
+export async function sendInvoiceToSheets(invoice: SavedInvoice): Promise<void> {
+  const itemsSummary = invoice.items
+    .map((it) => `${it.size} x${it.pcs} ${it.ct.toFixed(2)}ct`)
+    .join('; ')
+  const row = {
+    date:        sheetsText(invoice.date),
+    company:     sheetsText(invoice.company),
+    contactName: sheetsText(invoice.contactName),
+    state:       sheetsText(invoice.state),
+    city:        sheetsText(invoice.city),
+    docKind:     sheetsText(invoice.docKind),
+    paidBy:      sheetsText(invoice.paidBy),
+    items:       sheetsText(itemsSummary),
+    total:       invoice.total,
+    notes:       sheetsText(invoice.notes),
+    savedAt:     sheetsText(invoice.saved_at),
+  }
+  const res = await fetch('/api/invoice-sheets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([row]),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(data.error ?? `Server error ${res.status}`)
+  }
 }
 
 export function restoreFromJSON(

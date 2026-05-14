@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
+import { SavedInvoice } from '../types/invoice'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
 
@@ -25,6 +26,10 @@ interface AppState {
   deleteContact: (id: string) => void
   setContacts: (contacts: Contact[]) => void
 
+  // ─── Invoices ────────────────────────────────────────────────────
+  invoices: SavedInvoice[]
+  addInvoice: (invoice: SavedInvoice) => void
+
   // ─── Settings ────────────────────────────────────────────────────
   apiKey: string
   apiKey2: string
@@ -40,6 +45,9 @@ interface AppState {
 
   sheetsWebhook: string
   setSheetsWebhook: (url: string) => void
+
+  invoiceSheetsWebhook: string
+  setInvoiceSheetsWebhook: (url: string) => void
 
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
@@ -121,6 +129,11 @@ export const useStore = create<AppState>()(
 
       setContacts: (contacts) => set({ contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }),
 
+      // ─── Invoices ──────────────────────────────────────────────
+      invoices: [],
+      addInvoice: (invoice) =>
+        set((s) => ({ invoices: [invoice, ...s.invoices] })),
+
       // ─── Settings ──────────────────────────────────────────────
       apiKey: ((import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string)) ?? '',
       apiKey2: ((import.meta.env.VITE_GEMINI_KEY2 as string) || (import.meta.env.VITE_GEMINI_API_KEY2 as string)) ?? '',
@@ -138,6 +151,9 @@ export const useStore = create<AppState>()(
 
       sheetsWebhook: (import.meta.env.VITE_SHEETS_WEBHOOK as string) ?? '',
       setSheetsWebhook: (sheetsWebhook) => set({ sheetsWebhook }),
+
+      invoiceSheetsWebhook: (import.meta.env.VITE_INVOICE_SHEETS_WEBHOOK as string) ?? '',
+      setInvoiceSheetsWebhook: (invoiceSheetsWebhook) => set({ invoiceSheetsWebhook }),
 
       theme: 'light',
       setTheme: (theme) => set({ theme }),
@@ -215,12 +231,14 @@ export const useStore = create<AppState>()(
       // Only persist data that should survive a page refresh
       partialize: (s) => ({
         contacts: s.contacts.map(stripImages),
+        invoices: s.invoices,
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,
         apiKey3: s.apiKey3,
         sbUrl: s.sbUrl,
         sbKey: s.sbKey,
         sheetsWebhook: s.sheetsWebhook,
+        invoiceSheetsWebhook: s.invoiceSheetsWebhook,
         theme: s.theme,
       }),
     }

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
+import { sendInvoiceToSheets } from '../../lib/export'
+import { SavedInvoice } from '../../types/invoice'
 
 type DocKind = 'invoice' | 'memo'
 type PaidBy = 'cash' | 'check' | 'pending'
@@ -76,6 +78,7 @@ export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
   const contacts = useStore((s) => s.contacts)
+  const addInvoice = useStore((s) => s.addInvoice)
   const showToast = useStore((s) => s.showToast)
 
   const contact = contacts.find((c) => c.id === invoiceContactId) || null
@@ -126,6 +129,32 @@ export function InvoiceModal() {
   const customerAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
 
   const printInvoice = () => {
+    const record: SavedInvoice = {
+      id: uid(),
+      contactId: contact.id,
+      company: contact.company || contact.name || '',
+      contactName: contact.name || '',
+      state: contact.state || '',
+      city: contact.city || '',
+      date: invoiceDate,
+      docKind,
+      paidBy,
+      items: items.map((item) => ({
+        size: displaySize(item),
+        pcs: num(item.pcs),
+        ct: num(item.ct),
+        pct: num(item.pct),
+        amount: rowTotal(item),
+      })),
+      total: finalTotal,
+      notes,
+      saved_at: new Date().toISOString(),
+    }
+    addInvoice(record)
+    sendInvoiceToSheets(record).catch(() => {
+      // silent — invoice is already saved locally
+    })
+
     const invoiceRows = items
       .map((item) => {
         const lineTotal = rowTotal(item)

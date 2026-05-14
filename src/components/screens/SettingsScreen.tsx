@@ -35,6 +35,7 @@ export function SettingsScreen() {
     sbUrl, setSbUrl,
     sbKey, setSbKey,
     sheetsWebhook, setSheetsWebhook,
+    invoiceSheetsWebhook, setInvoiceSheetsWebhook,
     contacts, setContacts, showToast,
   } = useStore((s) => ({
     apiKey: s.apiKey,
@@ -49,6 +50,8 @@ export function SettingsScreen() {
     setSbKey: s.setSbKey,
     sheetsWebhook: s.sheetsWebhook,
     setSheetsWebhook: s.setSheetsWebhook,
+    invoiceSheetsWebhook: s.invoiceSheetsWebhook,
+    setInvoiceSheetsWebhook: s.setInvoiceSheetsWebhook,
     contacts: s.contacts,
     setContacts: s.setContacts,
     showToast: s.showToast,
@@ -215,6 +218,24 @@ export function SettingsScreen() {
           <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
             Deploy a Google Apps Script as a web app and paste its URL here.
             The script receives a JSON array of contacts via POST.
+          </div>
+        </div>
+      </SettingsGroup>
+
+      {/* Invoice Sheets */}
+      <SectionTitle>Invoice Sheets Webhook</SectionTitle>
+      <SettingsGroup>
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <label style={labelStyle}>Invoice Apps Script Web App URL</label>
+          <input
+            type="url"
+            value={invoiceSheetsWebhook}
+            onChange={(e) => setInvoiceSheetsWebhook(e.target.value)}
+            placeholder="https://script.google.com/macros/s/.../exec"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+            Separate Google Sheet for invoice ledger. Every PDF you generate is logged here automatically.
           </div>
         </div>
       </SettingsGroup>

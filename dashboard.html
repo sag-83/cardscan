@@ -15,106 +15,103 @@
         font-family: 'Inter', system-ui, -apple-system, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        background: #eef2f7;
+        background: #06090f;
+        color: #dde3ed;
       }
 
       ::-webkit-scrollbar { width: 5px; height: 5px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
 
-      /* ── Keyframes ─────────────────────────────────── */
+      /* ── Keyframes ──────────────────────────────────── */
       @keyframes shimmer {
         0%   { background-position: 200% 0; }
         100% { background-position: -200% 0; }
       }
       @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(12px); }
+        from { opacity: 0; transform: translateY(14px); }
         to   { opacity: 1; transform: translateY(0); }
       }
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
-      @keyframes pulse-ring {
-        0%, 100% { opacity: 1; }
-        50%       { opacity: 0.6; }
-      }
 
-      /* ── Utilities ─────────────────────────────────── */
-      .fade-up  { animation: fadeUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) both; }
+      /* ── Utilities ──────────────────────────────────── */
+      .fade-up  { animation: fadeUp 0.44s cubic-bezier(0.16, 1, 0.3, 1) both; }
       .fade-up-1{ animation-delay: 0.04s; }
-      .fade-up-2{ animation-delay: 0.08s; }
-      .fade-up-3{ animation-delay: 0.12s; }
-      .fade-up-4{ animation-delay: 0.16s; }
-      .fade-up-5{ animation-delay: 0.20s; }
+      .fade-up-2{ animation-delay: 0.10s; }
+      .fade-up-3{ animation-delay: 0.16s; }
+      .fade-up-4{ animation-delay: 0.22s; }
+      .fade-up-5{ animation-delay: 0.28s; }
 
       .shimmer {
-        background: linear-gradient(90deg, #f1f5f9 25%, #e8edf4 50%, #f1f5f9 75%);
+        background: linear-gradient(90deg, #0e1420 25%, #1c2d44 50%, #0e1420 75%);
         background-size: 200% 100%;
-        animation: shimmer 1.6s infinite;
+        animation: shimmer 1.8s infinite;
         border-radius: 8px;
       }
       .spin { animation: spin 0.75s linear infinite; }
 
-      /* ── Sidebar nav ───────────────────────────────── */
+      /* ── Sidebar nav ────────────────────────────────── */
       .nav-btn {
-        transition: background 0.13s, color 0.13s;
+        transition: background 0.14s, color 0.14s;
         border-radius: 9px;
       }
       .nav-btn:hover:not(.nav-active) {
-        background: rgba(255,255,255,0.07) !important;
-        color: rgba(255,255,255,0.88) !important;
+        background: rgba(255,255,255,0.05) !important;
+        color: rgba(255,255,255,0.78) !important;
       }
       .nav-active {
-        background: rgba(99,102,241,0.18) !important;
-        color: #a5b4fc !important;
+        background: rgba(20,184,166,0.13) !important;
+        color: #2dd4bf !important;
         font-weight: 600 !important;
       }
-      .nav-active svg { stroke: #a5b4fc; }
+      .nav-active svg { stroke: #2dd4bf; }
 
-      /* ── Cards ─────────────────────────────────────── */
-      .card-lift { transition: box-shadow 0.18s, transform 0.18s; }
+      /* ── Cards ──────────────────────────────────────── */
+      .card-lift { transition: box-shadow 0.2s, transform 0.2s; }
       .card-lift:hover {
-        box-shadow: 0 12px 36px rgba(0,0,0,0.11), 0 3px 10px rgba(0,0,0,0.06) !important;
+        box-shadow: 0 8px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(20,184,166,0.18) !important;
         transform: translateY(-2px);
       }
 
-      /* ── Buttons ───────────────────────────────────── */
-      .btn { transition: all 0.13s; cursor: pointer; font-family: inherit; }
-      .btn:active { transform: scale(0.97); }
-      .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
-      .btn-ghost:hover   { background: #f1f5f9 !important; }
-      .btn-danger        { transition: all 0.13s; }
-      .btn-danger:hover  { background: #fee2e2 !important; color: #dc2626 !important; border-color: #fca5a5 !important; }
-      .btn-paid:hover    { background: #d1fae5 !important; color: #059669 !important; border-color: #6ee7b7 !important; }
+      /* ── Buttons ────────────────────────────────────── */
+      .btn { transition: all 0.14s; cursor: pointer; font-family: inherit; }
+      .btn:active { transform: scale(0.96); }
+      .btn-primary:hover  { filter: brightness(1.14); transform: translateY(-1px); }
+      .btn-ghost:hover    { background: rgba(255,255,255,0.07) !important; }
+      .btn-danger         { transition: all 0.14s; }
+      .btn-danger:hover   { background: rgba(239,68,68,0.14) !important; color: #f87171 !important; border-color: rgba(239,68,68,0.4) !important; }
+      .btn-paid:hover     { background: rgba(16,185,129,0.14) !important; color: #34d399 !important; border-color: rgba(16,185,129,0.4) !important; }
 
-      /* ── Period tabs ───────────────────────────────── */
-      .period-tab { transition: all 0.13s; }
+      /* ── Period tabs ────────────────────────────────── */
+      .period-tab { transition: all 0.14s; }
       .period-tab:hover:not(.period-active) {
-        background: rgba(255,255,255,0.14) !important;
-        color: rgba(255,255,255,0.92) !important;
+        background: rgba(255,255,255,0.07) !important;
+        color: rgba(255,255,255,0.75) !important;
       }
       .period-active {
-        background: rgba(255,255,255,0.96) !important;
-        color: #0f172a !important;
+        background: rgba(20,184,166,0.18) !important;
+        color: #2dd4bf !important;
         font-weight: 700 !important;
-        box-shadow: 0 1px 5px rgba(0,0,0,0.14);
+        box-shadow: 0 0 0 1px rgba(20,184,166,0.38);
       }
 
-      /* ── Table rows ────────────────────────────────── */
+      /* ── Table rows ─────────────────────────────────── */
       .tr-hover { transition: background 0.1s; cursor: default; }
-      .tr-hover:hover { background: #f8fafc !important; }
+      .tr-hover:hover { background: rgba(255,255,255,0.028) !important; }
 
-      /* ── Inputs ────────────────────────────────────── */
-      input, select { font-family: inherit; }
+      /* ── Inputs ─────────────────────────────────────── */
+      input, select { font-family: inherit; color-scheme: dark; }
       input[type="search"]:focus,
       input[type="password"]:focus,
       input[type="text"]:focus,
       select:focus {
-        outline: 2px solid rgba(99,102,241,0.45) !important;
+        outline: 2px solid rgba(20,184,166,0.55) !important;
         outline-offset: -2px !important;
       }
-      ::placeholder { color: #94a3b8; }
+      ::placeholder { color: rgba(255,255,255,0.2); }
     </style>
   </head>
   <body>

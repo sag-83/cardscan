@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
+import { saveInvoiceToDB } from '../../lib/supabase'
 import { SavedInvoice } from '../../types/invoice'
 
 type DocKind = 'invoice' | 'memo'
@@ -151,6 +152,9 @@ export function InvoiceModal() {
       saved_at: new Date().toISOString(),
     }
     addInvoice(record)
+    saveInvoiceToDB(record).catch(() => {
+      // silent — invoice is already saved locally
+    })
     sendInvoiceToSheets(record).catch(() => {
       // silent — invoice is already saved locally
     })

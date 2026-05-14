@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
+import { SavedInvoice } from '../types/invoice'
 import { contactDedupKey, findDuplicateContact, mergeContact } from './utils'
 
 export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
@@ -77,7 +78,25 @@ on contacts (dedupe_key)
 where dedupe_key <> '';
 
 -- 4. Allow anonymous read/write (no auth used in this app)
-alter table contacts disable row level security;`
+alter table contacts disable row level security;
+
+-- 5. Invoices table
+create table if not exists invoices (
+  id text primary key,
+  contact_id text default '',
+  company text default '',
+  contact_name text default '',
+  state text default '',
+  city text default '',
+  date text default '',
+  doc_kind text default 'invoice',
+  paid_by text default 'cash',
+  items jsonb default '[]',
+  total numeric default 0,
+  notes text default '',
+  saved_at timestamptz default now()
+);
+alter table invoices disable row level security;`
 
 let client: SupabaseClient | null = null
 let lastError = ''
@@ -349,6 +368,65 @@ export async function testSupabaseConnection(): Promise<void> {
     rememberSupabaseError('Supabase test failed', error)
     throw error
   }
+}
+
+export async function saveInvoiceToDB(invoice: SavedInvoice): Promise<boolean> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+
+  const { error } = await sb.from('invoices').upsert({
+    id:           invoice.id,
+    contact_id:   invoice.contactId,
+    company:      invoice.company,
+    contact_name: invoice.contactName,
+    state:        invoice.state,
+    city:         invoice.city,
+    date:         invoice.date,
+    doc_kind:     invoice.docKind,
+    paid_by:      invoice.paidBy,
+    items:        invoice.items,
+    total:        invoice.total,
+    notes:        invoice.notes,
+    saved_at:     invoice.saved_at,
+  }, { onConflict: 'id' })
+
+  if (error) {
+    rememberSupabaseError('Invoice save failed', error)
+    console.warn('Supabase invoice upsert error:', error)
+    return false
+  }
+  return true
+}
+
+export async function syncInvoicesFromDB(): Promise<SavedInvoice[]> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return []
+
+  const { data, error } = await sb
+    .from('invoices')
+    .select('*')
+    .order('saved_at', { ascending: false })
+
+  if (error) {
+    rememberSupabaseError('Invoice sync failed', error)
+    throw error
+  }
+
+  return (data ?? []).map((row) => ({
+    id:          row.id,
+    contactId:   row.contact_id,
+    company:     row.company,
+    contactName: row.contact_name,
+    state:       row.state,
+    city:        row.city,
+    date:        row.date,
+    docKind:     row.doc_kind,
+    paidBy:      row.paid_by,
+    items:       row.items ?? [],
+    total:       Number(row.total),
+    notes:       row.notes,
+    saved_at:    row.saved_at,
+  })) as SavedInvoice[]
 }
 
 export async function uploadCardPhoto(

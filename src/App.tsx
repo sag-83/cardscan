@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
-import { initSupabase, syncContactsFromDB } from './lib/supabase'
+import { initSupabase, syncContactsFromDB, syncInvoicesFromDB } from './lib/supabase'
 import { loadImages } from './lib/imageStore'
 import { dedupeContacts } from './lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
@@ -32,6 +32,8 @@ export default function App() {
   const sbKey = useStore((s) => s.sbKey)
   const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
+  const invoices = useStore((s) => s.invoices)
+  const addInvoice = useStore((s) => s.addInvoice)
   const showToast = useStore((s) => s.showToast)
   const sheetsWebhook = useStore((s) => s.sheetsWebhook)
   const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
@@ -142,6 +144,16 @@ export default function App() {
         } catch (err) {
           console.error('Supabase sync failed:', err)
           showToast('Cloud sync failed — using local data')
+        }
+
+        try {
+          const dbInvoices = await syncInvoicesFromDB()
+          const localIds = new Set(invoices.map((i) => i.id))
+          dbInvoices
+            .filter((i) => !localIds.has(i.id))
+            .forEach((i) => addInvoice(i))
+        } catch (err) {
+          console.error('Invoice sync failed:', err)
         }
       }
 

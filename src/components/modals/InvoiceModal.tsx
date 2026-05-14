@@ -6,7 +6,7 @@ import { SavedInvoice } from '../../types/invoice'
 
 type DocKind = 'invoice' | 'memo'
 type PaidBy = 'cash' | 'check' | 'pending'
-type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL'
+type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL' | 'NTRL'
 
 type InvoiceItem = {
   id: string
@@ -340,6 +340,7 @@ export function InvoiceModal() {
                     <option value="TUC">TUC</option>
                     <option value="LDW">LDW</option>
                     <option value="PRCL">PRCL</option>
+                    <option value="NTRL">NTRL</option>
                   </select>
                   <input
                     value={item.size}

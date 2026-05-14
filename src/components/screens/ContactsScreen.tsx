@@ -108,6 +108,7 @@ export function ContactsScreen() {
   }, [contacts])
   const customerCount = useMemo(() => contacts.filter((c) => c.is_customer).length, [contacts])
   const goodsShownCount = useMemo(() => contacts.filter((c) => c.visited).length, [contacts])
+  const oldCustomerCount = useMemo(() => contacts.filter((c) => c.is_old_customer).length, [contacts])
 
   const lastAddedId = useMemo(() => {
     let newestId: string | null = null
@@ -132,6 +133,7 @@ export function ContactsScreen() {
     if (filterArea && c.area !== filterArea) return false
     if (filterType === 'customer' && !c.is_customer) return false
     if (filterType === 'goods_shown' && !c.visited) return false
+    if (filterType === 'old_customer' && !c.is_old_customer) return false
     if (query) {
       const q = query.toLowerCase()
       const hay = [c.name, c.company, c.email, c.phone_mobile, c.phone_work, c.city].join(' ').toLowerCase()
@@ -239,6 +241,7 @@ export function ContactsScreen() {
             <option value="">🏷 Type</option>
             <option value="customer">🤝 Customer ({customerCount})</option>
             <option value="goods_shown">📦 Goods Shown ({goodsShownCount})</option>
+            <option value="old_customer">🕰 Old Customer ({oldCustomerCount})</option>
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -609,6 +612,16 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               fontSize: 11, fontWeight: 700,
             }}>
               🤝 Customer
+            </div>
+          )}
+          {c.is_old_customer && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 999,
+              background: 'rgba(255,149,0,0.12)', color: '#ff9500',
+              fontSize: 11, fontWeight: 700,
+            }}>
+              🕰 Old Customer
             </div>
           )}
           {c.followup_at && (() => {

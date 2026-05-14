@@ -63,6 +63,14 @@ export function ContactDetail() {
     else showToast('Supabase backup failed')
   }
 
+  const handleToggleOldCustomer = async () => {
+    const next = !c.is_old_customer
+    if (IS_DEMO_MODE) { updateContact(c.id, { is_old_customer: next }); return }
+    const saved = await saveContactToDB({ ...c, is_old_customer: next })
+    if (saved) updateContact(c.id, { is_old_customer: next })
+    else showToast('Supabase backup failed')
+  }
+
   const handleSaveToPhone = () => {
     downloadVCard(c)
     showToast('Open the .vcf file to save!')
@@ -274,6 +282,11 @@ export function ContactDetail() {
           icon="🤝" label="Current Customer" sublabel="Tap to toggle"
           active={!!c.is_customer} activeColor="#007aff"
           onToggle={handleToggleCustomer}
+        />
+        <ToggleRow
+          icon="🕰" label="Old Customer" sublabel="Tap to toggle"
+          active={!!c.is_old_customer} activeColor="#ff9500"
+          onToggle={handleToggleOldCustomer}
         />
         <FollowupDetailRow contact={c} onOpen={() => setFollowupContactId(c.id)} />
       </Section>

@@ -26,6 +26,7 @@ export interface Contact {
   sent_to_sheets: boolean
   visited: boolean
   is_customer: boolean
+  is_old_customer: boolean
   followup_at?: string
   followup_note?: string
   created_at: string

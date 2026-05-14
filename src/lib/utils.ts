@@ -211,6 +211,7 @@ export function blankContact(): Contact {
     sent_to_sheets: false,
     visited: false,
     is_customer: false,
+    is_old_customer: false,
     created_at: new Date().toISOString(),
   }
 }

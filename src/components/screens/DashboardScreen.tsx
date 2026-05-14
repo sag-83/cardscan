@@ -164,6 +164,28 @@ function RevenueTab() {
     [invoices]
   )
 
+  const byMonth = useMemo(() => {
+    const map = new Map<string, { sold: number; count: number }>()
+    invoices.forEach((inv) => {
+      const key = inv.date.slice(0, 7)
+      const row = map.get(key) ?? { sold: 0, count: 0 }
+      row.sold += inv.total
+      row.count += 1
+      map.set(key, row)
+    })
+    const rows = Array.from(map.entries())
+      .map(([key, val]) => {
+        const [year, month] = key.split('-')
+        const label = new Date(Number(year), Number(month) - 1, 1)
+          .toLocaleString('en-US', { month: 'short', year: '2-digit' })
+        return { key, label, ...val }
+      })
+      .sort((a, b) => b.key.localeCompare(a.key))
+      .slice(0, 6)
+    const max = Math.max(...rows.map((r) => r.sold), 1)
+    return rows.map((r) => ({ ...r, pct: (r.sold / max) * 100 }))
+  }, [invoices])
+
   if (!invoices.length) {
     return (
       <div style={{ textAlign: 'center', padding: '70px 24px', color: 'var(--text3)' }}>
@@ -205,14 +227,32 @@ function RevenueTab() {
         <PaymentBreakdownRow label="⏳ Pending" amount={byPayment.pending} count={byPayment.pendingCount} color="#ff9500" divider />
       </div>
 
+      {/* Monthly revenue chart */}
+      {byMonth.length > 0 && (
+        <>
+          <Section title="Revenue by Month" />
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
+            {byMonth.map((row, i) => (
+              <div key={row.key} style={{ padding: '10px 14px', borderTop: i ? '1px solid var(--border2)' : 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, minWidth: 60 }}>{row.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{row.count} inv</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', minWidth: 72, textAlign: 'right' }}>{money(row.sold)}</div>
+                  </div>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: 'var(--bg4)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${row.pct}%`, borderRadius: 99, background: 'var(--accent)', transition: 'width 0.4s ease' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Ledger by company */}
       <Section title="Ledger by Shop" />
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.8fr', gap: 4, padding: '7px 12px', borderBottom: '1px solid var(--border2)' }}>
-          {['Shop', 'Sold', 'Paid', 'Pending'].map((h) => (
-            <div key={h} style={{ fontSize: 10, fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>{h}</div>
-          ))}
-        </div>
         {ledger.map((row, i) => (
           <LedgerRowItem key={row.company + i} row={row} />
         ))}
@@ -271,17 +311,24 @@ function PaymentBreakdownRow({ label, amount, count, color, divider }: { label: 
 
 function LedgerRowItem({ row }: { row: LedgerRow }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.9fr 0.9fr 0.8fr', gap: 4, padding: '10px 12px', borderTop: '1px solid var(--border2)', alignItems: 'center', fontSize: 13 }}>
-      <div>
-        <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company}</div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-          {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv
-        </div>
+    <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border2)' }}>
+      <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3, marginBottom: 2 }}>
+        {row.company}
       </div>
-      <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(row.totalSold)}</div>
-      <div style={{ color: '#34c759', fontWeight: 600 }}>{money(row.totalPaid)}</div>
-      <div style={{ color: row.totalPending > 0 ? '#ff9500' : 'var(--text3)', fontWeight: row.totalPending > 0 ? 700 : 400 }}>
-        {row.totalPending > 0 ? money(row.totalPending) : '—'}
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+        {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv · Last: {row.lastDate}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+        {[
+          { label: 'Sold', value: money(row.totalSold), color: 'var(--accent)' },
+          { label: 'Paid', value: money(row.totalPaid), color: '#34c759' },
+          { label: 'Pending', value: row.totalPending > 0 ? money(row.totalPending) : '—', color: row.totalPending > 0 ? '#ff9500' : 'var(--text3)' },
+        ].map(({ label, value, color }) => (
+          <div key={label}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}</div>
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -429,6 +429,39 @@ export async function syncInvoicesFromDB(): Promise<SavedInvoice[]> {
   })) as SavedInvoice[]
 }
 
+export async function updateInvoiceInDB(id: string, patch: Partial<SavedInvoice>): Promise<boolean> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+
+  const dbPatch: Record<string, unknown> = {}
+  if (patch.paidBy  !== undefined) dbPatch.paid_by  = patch.paidBy
+  if (patch.notes   !== undefined) dbPatch.notes    = patch.notes
+  if (patch.total   !== undefined) dbPatch.total    = patch.total
+  if (patch.docKind !== undefined) dbPatch.doc_kind = patch.docKind
+  if (patch.date    !== undefined) dbPatch.date     = patch.date
+
+  const { error } = await sb.from('invoices').update(dbPatch).eq('id', id)
+  if (error) {
+    rememberSupabaseError('Invoice update failed', error)
+    console.warn('Supabase invoice update error:', error)
+    return false
+  }
+  return true
+}
+
+export async function deleteInvoiceFromDB(id: string): Promise<boolean> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+
+  const { error } = await sb.from('invoices').delete().eq('id', id)
+  if (error) {
+    rememberSupabaseError('Invoice delete failed', error)
+    console.warn('Supabase invoice delete error:', error)
+    return false
+  }
+  return true
+}
+
 export async function uploadCardPhoto(
   contactId: string,
   side: 'front' | 'back',

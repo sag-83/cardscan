@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { SavedInvoice } from '../../types/invoice'
+import { updateInvoiceInDB, deleteInvoiceFromDB } from '../../lib/supabase'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,19 @@ function money(value: number): string {
 
 function pct(value: number): string {
   return `${value.toFixed(1)}%`
+}
+
+function invStatusLabel(inv: SavedInvoice): string {
+  if (inv.docKind === 'memo') return 'MEMO'
+  if (inv.paidBy === 'pending') return 'PENDING'
+  if (inv.paidBy === 'cash') return 'CASH'
+  return 'CHECK'
+}
+
+function invStatusColor(inv: SavedInvoice): string {
+  if (inv.docKind === 'memo') return '#8b5cf6'
+  if (inv.paidBy === 'pending') return '#ff9500'
+  return '#34c759'
 }
 
 // ─── Stats tab (original) ────────────────────────────────────────────────────
@@ -82,6 +96,7 @@ function StatsTab() {
 // ─── Revenue tab ─────────────────────────────────────────────────────────────
 
 type LedgerRow = {
+  key: string
   company: string
   state: string
   city: string
@@ -90,31 +105,64 @@ type LedgerRow = {
   totalPaid: number
   totalPending: number
   lastDate: string
+  invoices: SavedInvoice[]
 }
 
 function RevenueTab() {
   const invoices = useStore((s) => s.invoices)
+  const updateInvoice = useStore((s) => s.updateInvoice)
+  const deleteInvoice = useStore((s) => s.deleteInvoice)
+  const showToast = useStore((s) => s.showToast)
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const [selectedCompany, setSelectedCompany] = useState('all')
+
+  const companies = useMemo(() => {
+    const names = new Set<string>()
+    invoices.forEach((inv) => {
+      const n = inv.company || inv.contactName
+      if (n) names.add(n)
+    })
+    return Array.from(names).sort()
+  }, [invoices])
+
+  const filteredInvoices = useMemo(() => {
+    if (selectedCompany === 'all') return invoices
+    return invoices.filter((inv) => (inv.company || inv.contactName) === selectedCompany)
+  }, [invoices, selectedCompany])
+
+  const handleMarkPaid = (id: string, paidBy: 'cash' | 'check') => {
+    updateInvoice(id, { paidBy })
+    updateInvoiceInDB(id, { paidBy }).catch(() => {})
+    showToast(`Marked as paid (${paidBy})`)
+  }
+
+  const handleDelete = (id: string) => {
+    deleteInvoice(id)
+    deleteInvoiceFromDB(id).catch(() => {})
+    showToast('Memo deleted')
+  }
 
   const summary = useMemo(() => {
     let totalRevenue = 0
     let thisMonth = 0
     let pending = 0
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       totalRevenue += inv.total
       if (inv.paidBy === 'pending') pending += inv.total
       const dt = new Date(inv.saved_at)
       if (dt >= monthStart) thisMonth += inv.total
     })
-    return { totalRevenue, thisMonth, pending, count: invoices.length }
-  }, [invoices, monthStart])
+    return { totalRevenue, thisMonth, pending, count: filteredInvoices.length }
+  }, [filteredInvoices, monthStart])
 
   const ledger = useMemo<LedgerRow[]>(() => {
     const map = new Map<string, LedgerRow>()
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       const key = inv.contactId || inv.company
       const row = map.get(key) ?? {
+        key,
         company: inv.company || inv.contactName || 'Unknown',
         state: inv.state,
         city: inv.city,
@@ -123,20 +171,22 @@ function RevenueTab() {
         totalPaid: 0,
         totalPending: 0,
         lastDate: inv.date,
+        invoices: [],
       }
       row.invoiceCount += 1
       row.totalSold += inv.total
       if (inv.paidBy === 'pending') row.totalPending += inv.total
       else row.totalPaid += inv.total
       if (inv.date > row.lastDate) row.lastDate = inv.date
+      row.invoices.push(inv)
       map.set(key, row)
     })
     return Array.from(map.values()).sort((a, b) => b.totalSold - a.totalSold)
-  }, [invoices])
+  }, [filteredInvoices])
 
   const byState = useMemo(() => {
     const map = new Map<string, { sold: number; pending: number; count: number }>()
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       if (!inv.state) return
       const row = map.get(inv.state) ?? { sold: 0, pending: 0, count: 0 }
       row.sold += inv.total
@@ -147,26 +197,30 @@ function RevenueTab() {
     return Array.from(map.entries())
       .map(([key, val]) => ({ key, ...val }))
       .sort((a, b) => b.sold - a.sold)
-  }, [invoices])
+  }, [filteredInvoices])
 
   const byPayment = useMemo(() => {
-    const cash = invoices.filter((i) => i.paidBy === 'cash').reduce((s, i) => s + i.total, 0)
-    const check = invoices.filter((i) => i.paidBy === 'check').reduce((s, i) => s + i.total, 0)
-    const pending = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
-    const cashCount = invoices.filter((i) => i.paidBy === 'cash').length
-    const checkCount = invoices.filter((i) => i.paidBy === 'check').length
-    const pendingCount = invoices.filter((i) => i.paidBy === 'pending').length
-    return { cash, check, pending, cashCount, checkCount, pendingCount }
-  }, [invoices])
+    const cash      = filteredInvoices.filter((i) => i.paidBy === 'cash'    && i.docKind !== 'memo')
+    const check     = filteredInvoices.filter((i) => i.paidBy === 'check'   && i.docKind !== 'memo')
+    const pending   = filteredInvoices.filter((i) => i.paidBy === 'pending')
+    const memos     = filteredInvoices.filter((i) => i.docKind === 'memo')
+    const sum = (arr: SavedInvoice[]) => arr.reduce((s, i) => s + i.total, 0)
+    return {
+      cash: sum(cash), cashCount: cash.length,
+      check: sum(check), checkCount: check.length,
+      pending: sum(pending), pendingCount: pending.length,
+      memo: sum(memos), memoCount: memos.length,
+    }
+  }, [filteredInvoices])
 
   const pendingInvoices = useMemo(
-    () => invoices.filter((i) => i.paidBy === 'pending').sort((a, b) => b.total - a.total),
-    [invoices]
+    () => filteredInvoices.filter((i) => i.paidBy === 'pending').sort((a, b) => b.total - a.total),
+    [filteredInvoices]
   )
 
   const byMonth = useMemo(() => {
     const map = new Map<string, { sold: number; count: number }>()
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       const key = inv.date.slice(0, 7)
       const row = map.get(key) ?? { sold: 0, count: 0 }
       row.sold += inv.total
@@ -184,7 +238,7 @@ function RevenueTab() {
       .slice(0, 6)
     const max = Math.max(...rows.map((r) => r.sold), 1)
     return rows.map((r) => ({ ...r, pct: (r.sold / max) * 100 }))
-  }, [invoices])
+  }, [filteredInvoices])
 
   if (!invoices.length) {
     return (
@@ -199,6 +253,26 @@ function RevenueTab() {
   return (
     <div style={{ padding: '16px 16px 24px' }}>
 
+      {/* Company filter + web dashboard link */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
+        <select
+          value={selectedCompany}
+          onChange={(e) => setSelectedCompany(e.target.value)}
+          style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14 }}
+        >
+          <option value="all">All Shops ({invoices.length})</option>
+          {companies.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => window.open('/dashboard', '_blank')}
+          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          🌐 Web
+        </button>
+      </div>
+
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
         <StatCard label="Total Revenue" value={money(summary.totalRevenue)} accent />
@@ -207,13 +281,13 @@ function RevenueTab() {
         <StatCard label="Invoices" value={String(summary.count)} />
       </div>
 
-      {/* Pending payments — most urgent */}
+      {/* Pending payments */}
       {pendingInvoices.length > 0 && (
         <>
           <Section title={`⚠️ Pending Payments · ${pendingInvoices.length}`} color="#ff9500" />
           <div style={{ background: 'var(--bg2)', border: '1.5px solid rgba(255,149,0,0.35)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-            {pendingInvoices.slice(0, 8).map((inv, i) => (
-              <PendingRow key={inv.id} inv={inv} isFirst={i === 0} />
+            {pendingInvoices.map((inv, i) => (
+              <PendingRow key={inv.id} inv={inv} isFirst={i === 0} onMarkPaid={handleMarkPaid} />
             ))}
           </div>
         </>
@@ -225,6 +299,9 @@ function RevenueTab() {
         <PaymentBreakdownRow label="💵 Cash" amount={byPayment.cash} count={byPayment.cashCount} color="#34c759" />
         <PaymentBreakdownRow label="🏦 Check" amount={byPayment.check} count={byPayment.checkCount} color="#007aff" divider />
         <PaymentBreakdownRow label="⏳ Pending" amount={byPayment.pending} count={byPayment.pendingCount} color="#ff9500" divider />
+        {byPayment.memoCount > 0 && (
+          <PaymentBreakdownRow label="📋 Memo" amount={byPayment.memo} count={byPayment.memoCount} color="#8b5cf6" divider />
+        )}
       </div>
 
       {/* Monthly revenue chart */}
@@ -250,11 +327,11 @@ function RevenueTab() {
         </>
       )}
 
-      {/* Ledger by company */}
+      {/* Ledger by company — expandable */}
       <Section title="Ledger by Shop" />
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-        {ledger.map((row, i) => (
-          <LedgerRowItem key={row.company + i} row={row} />
+        {ledger.map((row) => (
+          <LedgerRowItem key={row.key} row={row} onMarkPaid={handleMarkPaid} onDelete={handleDelete} />
         ))}
       </div>
 
@@ -278,20 +355,172 @@ function RevenueTab() {
   )
 }
 
-function PendingRow({ inv, isFirst }: { inv: SavedInvoice; isFirst: boolean }) {
+// ─── PendingRow — with mark-as-paid ──────────────────────────────────────────
+
+function PendingRow({ inv, isFirst, onMarkPaid }: {
+  inv: SavedInvoice
+  isFirst: boolean
+  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
+}) {
+  const [showPicker, setShowPicker] = useState(false)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderTop: isFirst ? 'none' : '1px solid var(--border2)' }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {inv.company || inv.contactName || 'Unknown'}
+    <div style={{ borderTop: isFirst ? 'none' : '1px solid var(--border2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {inv.company || inv.contactName || 'Unknown'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+            {[inv.city, inv.state].filter(Boolean).join(', ')} · {inv.date}
+          </div>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-          {[inv.city, inv.state].filter(Boolean).join(', ')} · {inv.date}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9500' }}>{money(inv.total)}</div>
+          {!showPicker ? (
+            <button
+              onClick={() => setShowPicker(true)}
+              style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer' }}
+            >
+              Paid ✓
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => { onMarkPaid(inv.id, 'cash'); setShowPicker(false) }}
+                style={{ fontSize: 11, fontWeight: 700, padding: '5px 9px', borderRadius: 8, border: 'none', background: '#34c759', color: '#fff', cursor: 'pointer' }}>
+                Cash
+              </button>
+              <button onClick={() => { onMarkPaid(inv.id, 'check'); setShowPicker(false) }}
+                style={{ fontSize: 11, fontWeight: 700, padding: '5px 9px', borderRadius: 8, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}>
+                Check
+              </button>
+              <button onClick={() => setShowPicker(false)}
+                style={{ fontSize: 11, padding: '5px 7px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9500', flexShrink: 0, marginLeft: 12 }}>
-        {money(inv.total)}
+    </div>
+  )
+}
+
+// ─── Individual invoice row in ledger ────────────────────────────────────────
+
+function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
+  inv: SavedInvoice
+  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
+  onDelete: (id: string) => void
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  const isMemo = inv.docKind === 'memo'
+  const isPending = inv.paidBy === 'pending' && !isMemo
+  const label = invStatusLabel(inv)
+  const color = invStatusColor(inv)
+
+  return (
+    <div style={{ padding: '9px 12px', borderTop: '1px solid var(--border2)', background: isMemo ? 'rgba(139,92,246,0.05)' : isPending ? 'rgba(255,149,0,0.05)' : 'transparent' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{inv.date}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: color + '22', color, border: `1px solid ${color}55` }}>
+              {label}
+            </div>
+          </div>
+          {inv.items.length > 0 && (
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+              {inv.items.slice(0, 3).map((it) => it.size).filter(Boolean).join(' · ')}
+              {inv.items.length > 3 ? ` +${inv.items.length - 3}` : ''}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color }}>{money(inv.total)}</div>
+          {isPending && !showPicker && (
+            <button onClick={() => setShowPicker(true)}
+              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer' }}>
+              Paid ✓
+            </button>
+          )}
+          {isPending && showPicker && (
+            <div style={{ display: 'flex', gap: 3 }}>
+              <button onClick={() => { onMarkPaid(inv.id, 'cash'); setShowPicker(false) }}
+                style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 7, border: 'none', background: '#34c759', color: '#fff', cursor: 'pointer' }}>
+                Cash
+              </button>
+              <button onClick={() => { onMarkPaid(inv.id, 'check'); setShowPicker(false) }}
+                style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 7, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}>
+                Check
+              </button>
+              <button onClick={() => setShowPicker(false)}
+                style={{ fontSize: 10, padding: '3px 6px', borderRadius: 7, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+          )}
+          {isMemo && (
+            <button onClick={() => onDelete(inv.id)}
+              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #ff3b30', background: 'transparent', color: '#ff3b30', cursor: 'pointer' }}>
+              Delete
+            </button>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Ledger row — expandable ─────────────────────────────────────────────────
+
+function LedgerRowItem({ row, onMarkPaid, onDelete }: {
+  row: LedgerRow
+  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
+  onDelete: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const sortedInvoices = useMemo(
+    () => [...row.invoices].sort((a, b) => b.date.localeCompare(a.date)),
+    [row.invoices]
+  )
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border2)' }}>
+      <div
+        onClick={() => setExpanded((v) => !v)}
+        style={{ padding: '12px 14px', cursor: 'pointer', background: expanded ? 'rgba(0,122,255,0.04)' : 'transparent', transition: 'background 0.15s' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3, marginBottom: 2 }}>{row.company}</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+              {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv · Last: {row.lastDate}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, flexShrink: 0, marginLeft: 8, marginTop: 2 }}>
+            {expanded ? '▲' : '▼'}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+          {[
+            { label: 'Sold',    value: money(row.totalSold),    color: 'var(--accent)' },
+            { label: 'Paid',    value: money(row.totalPaid),    color: '#34c759' },
+            { label: 'Pending', value: row.totalPending > 0 ? money(row.totalPending) : '—', color: row.totalPending > 0 ? '#ff9500' : 'var(--text3)' },
+          ].map(({ label, value, color }) => (
+            <div key={label}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--border2)', background: 'var(--bg3)' }}>
+          {sortedInvoices.map((inv) => (
+            <InvoiceLineItem key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -302,34 +531,9 @@ function PaymentBreakdownRow({ label, amount, count, color, divider }: { label: 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
         <div style={{ fontSize: 14, fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{count} invoice{count !== 1 ? 's' : ''}</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{count} inv</div>
       </div>
       <div style={{ fontSize: 15, fontWeight: 800, color }}>{money(amount)}</div>
-    </div>
-  )
-}
-
-function LedgerRowItem({ row }: { row: LedgerRow }) {
-  return (
-    <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border2)' }}>
-      <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3, marginBottom: 2 }}>
-        {row.company}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
-        {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv · Last: {row.lastDate}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-        {[
-          { label: 'Sold', value: money(row.totalSold), color: 'var(--accent)' },
-          { label: 'Paid', value: money(row.totalPaid), color: '#34c759' },
-          { label: 'Pending', value: row.totalPending > 0 ? money(row.totalPending) : '—', color: row.totalPending > 0 ? '#ff9500' : 'var(--text3)' },
-        ].map(({ label, value, color }) => (
-          <div key={label}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}</div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

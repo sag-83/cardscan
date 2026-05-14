@@ -29,6 +29,8 @@ interface AppState {
   // ─── Invoices ────────────────────────────────────────────────────
   invoices: SavedInvoice[]
   addInvoice: (invoice: SavedInvoice) => void
+  updateInvoice: (id: string, patch: Partial<SavedInvoice>) => void
+  deleteInvoice: (id: string) => void
 
   // ─── Settings ────────────────────────────────────────────────────
   apiKey: string
@@ -133,6 +135,10 @@ export const useStore = create<AppState>()(
       invoices: [],
       addInvoice: (invoice) =>
         set((s) => ({ invoices: [invoice, ...s.invoices] })),
+      updateInvoice: (id, patch) =>
+        set((s) => ({ invoices: s.invoices.map((inv) => inv.id === id ? { ...inv, ...patch } : inv) })),
+      deleteInvoice: (id) =>
+        set((s) => ({ invoices: s.invoices.filter((inv) => inv.id !== id) })),
 
       // ─── Settings ──────────────────────────────────────────────
       apiKey: ((import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string)) ?? '',

@@ -7,6 +7,7 @@ import {
   syncInvoicesFromDB,
   testSupabaseConnection,
   saveContactsToDB,
+  saveInvoiceToDB,
   SUPABASE_SCHEMA_SQL,
 } from '../../lib/supabase'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
@@ -85,18 +86,29 @@ export function SettingsScreen() {
       showToast('Demo mode: Supabase is disabled')
       return
     }
-    if (!contacts.length) {
-      showToast('No contacts to back up')
+    if (!contacts.length && !invoices.length) {
+      showToast('Nothing to back up')
       return
     }
     initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
-    showToast(`Backing up ${contacts.length} contacts…`)
+    showToast(`Backing up ${contacts.length} contacts + ${invoices.length} invoices…`)
     try {
-      const { ok, merged, failed } = await saveContactsToDB(contacts, { skipDedupe: force })
-      const parts = [`✅ ${ok} saved`]
-      if (!force && merged > 0) parts.push(`🔀 ${merged} merged`)
-      if (failed > 0) parts.push(`❌ ${failed} failed`)
-      showToast(parts.join(', ') + (force ? ' (force)' : '') + ' — Supabase')
+      const [contactResult, invoiceResults] = await Promise.all([
+        contacts.length
+          ? saveContactsToDB(contacts, { skipDedupe: force })
+          : Promise.resolve({ ok: 0, merged: 0, failed: 0 }),
+        Promise.allSettled(invoices.map((inv) => saveInvoiceToDB(inv))),
+      ])
+
+      const invOk = invoiceResults.filter((r) => r.status === 'fulfilled' && r.value).length
+      const invFailed = invoices.length - invOk
+
+      const parts = [`✅ ${contactResult.ok} contacts`]
+      if (!force && contactResult.merged > 0) parts.push(`🔀 ${contactResult.merged} merged`)
+      if (contactResult.failed > 0) parts.push(`❌ ${contactResult.failed} contacts failed`)
+      parts.push(`✅ ${invOk} invoices`)
+      if (invFailed > 0) parts.push(`❌ ${invFailed} invoices failed`)
+      showToast(parts.join(', ') + (force ? ' (force)' : ''))
     } catch (err) {
       showToast('❌ Backup failed: ' + (err as Error).message)
     }

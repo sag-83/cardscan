@@ -4,6 +4,7 @@ import { useTheme } from '../../hooks/useTheme'
 import {
   initSupabase,
   syncContactsFromDB,
+  syncInvoicesFromDB,
   testSupabaseConnection,
   saveContactsToDB,
   SUPABASE_SCHEMA_SQL,
@@ -36,7 +37,9 @@ export function SettingsScreen() {
     sbKey, setSbKey,
     sheetsWebhook, setSheetsWebhook,
     invoiceSheetsWebhook, setInvoiceSheetsWebhook,
-    contacts, setContacts, showToast,
+    contacts, setContacts,
+    invoices, addInvoice,
+    showToast,
   } = useStore((s) => ({
     apiKey: s.apiKey,
     setApiKey: s.setApiKey,
@@ -54,6 +57,8 @@ export function SettingsScreen() {
     setInvoiceSheetsWebhook: s.setInvoiceSheetsWebhook,
     contacts: s.contacts,
     setContacts: s.setContacts,
+    invoices: s.invoices,
+    addInvoice: s.addInvoice,
     showToast: s.showToast,
   }))
 
@@ -111,15 +116,26 @@ export function SettingsScreen() {
 
     try {
       initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
-      const cloudContacts = await syncContactsFromDB()
-      if (!cloudContacts.length) {
-        showToast('No cloud contacts found')
+      const [cloudContacts, cloudInvoices] = await Promise.all([
+        syncContactsFromDB(),
+        syncInvoicesFromDB(),
+      ])
+
+      if (!cloudContacts.length && !cloudInvoices.length) {
+        showToast('No cloud data found')
         return
       }
 
-      const restored = dedupeContacts([...cloudContacts, ...contacts])
-      setContacts(restored)
-      showToast(`Restored ${cloudContacts.length} cloud contact(s)`)
+      if (cloudContacts.length) {
+        setContacts(dedupeContacts([...cloudContacts, ...contacts]))
+      }
+
+      if (cloudInvoices.length) {
+        const localIds = new Set(invoices.map((i) => i.id))
+        cloudInvoices.filter((i) => !localIds.has(i.id)).forEach((i) => addInvoice(i))
+      }
+
+      showToast(`Restored ${cloudContacts.length} contact(s) + ${cloudInvoices.length} invoice(s)`)
     } catch (err) {
       showToast('Cloud restore failed: ' + (err as Error).message)
     }

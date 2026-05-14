@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/((?!api|dashboard\\.html|assets|delta-logo\\.png|amit-brochure\\.pdf).*)", "destination": "/index.html" }
+  ]
+}

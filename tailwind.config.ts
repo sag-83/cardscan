@@ -1,7 +1,8 @@
 import type { Config } from 'tailwindcss'
 
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: ['./index.html', './dashboard.html', './src/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -43,13 +44,33 @@ export default {
           from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
+        scaleIn: {
+          from: { opacity: '0', transform: 'scale(0.95)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+        barGrow: {
+          from: { transform: 'scaleX(0)' },
+          to: { transform: 'scaleX(1)' },
+        },
       },
       animation: {
         'pulse-glow': 'pulseGlow 3s ease infinite',
         'bounce-dot': 'bounceDot 1.4s ease infinite',
         'slide-up': 'slideUp 0.28s cubic-bezier(0.16,1,0.3,1)',
         'sheet-up': 'sheetUp 0.3s cubic-bezier(0.16,1,0.3,1)',
-        'card-in': 'cardIn 0.35s ease both',
+        'card-in': 'cardIn 0.42s cubic-bezier(0.16,1,0.3,1) both',
+        'fade-in': 'fadeIn 0.3s ease both',
+        'shimmer': 'shimmer 1.8s linear infinite',
+        'scale-in': 'scaleIn 0.3s cubic-bezier(0.16,1,0.3,1) both',
+        'bar-grow': 'barGrow 0.6s cubic-bezier(0.16,1,0.3,1) both',
       },
     },
   },

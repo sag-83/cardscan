@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './index.css'
 import { RevenueDashboard } from './pages/RevenueDashboard'
 
 ReactDOM.createRoot(document.getElementById('dash-root')!).render(

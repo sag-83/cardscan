@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie,
@@ -30,66 +30,41 @@ async function fetchInvoices(): Promise<SavedInvoice[]> {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period = '7d' | '30d' | '90d' | '6m' | '1y' | 'all'
+type IconName = 'home' | 'trending' | 'pie' | 'map' | 'users' | 'bar' | 'alert' | 'list' |
+                'refresh' | 'download' | 'dollar' | 'check' | 'clock' | 'file' | 'x' |
+                'print' | 'lock' | 'sun' | 'moon' | 'search' | 'chevron'
 
-// ─── Dark premium color system ────────────────────────────────────────────────
+// ─── Chart + KPI accent colors ────────────────────────────────────────────────
 
-const D = {
-  // backgrounds
-  page:    '#06090f',
-  sidebar: '#08101a',
-  card:    '#0d1625',
-  card2:   '#0a1220',
-  topbar:  'rgba(8,12,22,0.96)',
-  hover:   '#111e30',
-
-  // borders
-  border:  'rgba(255,255,255,0.07)',
-  borderM: 'rgba(255,255,255,0.11)',
-
-  // text
-  text:    '#e2eaf5',
-  text2:   '#6e7f94',
-  text3:   '#384555',
-
-  // accent — teal/cyan
-  teal:    '#14b8a6',
-  tealBrt: '#2dd4bf',
-  cyan:    '#22d3ee',
-
-  // chart / semantic
-  green:   '#10b981',
-  orange:  '#f59e0b',
-  red:     '#ef4444',
-  redSoft: '#f87171',
-  purple:  '#a855f7',
-  blue:    '#3b82f6',
+const C = {
   indigo:  '#6366f1',
-  amber:   '#d97706',
+  emerald: '#10b981',
+  amber:   '#f59e0b',
+  violet:  '#8b5cf6',
+  blue:    '#3b82f6',
+  rose:    '#f43f5e',
+  cyan:    '#06b6d4',
+  lime:    '#84cc16',
 }
 
-// Chart data colors (bright for dark bg)
-const CH = {
-  total:   '#22d3ee',   // cyan — total billed
-  coll:    '#10b981',   // emerald — collected
-  pending: '#f59e0b',   // amber
-  memo:    '#a855f7',   // purple
-  cash:    '#10b981',
-  check:   '#3b82f6',
-  inv:     '#6366f1',
-  mix:     ['#22d3ee','#14b8a6','#10b981','#f59e0b','#a855f7','#6366f1','#06b6d4','#84cc16'],
-}
+const KPI_ACCENTS = [C.indigo, C.emerald, C.amber, C.blue, C.violet]
+const MIX_COLORS  = [C.indigo, C.emerald, C.amber, C.violet, C.blue, C.rose, C.cyan, C.lime]
 
-const SIDEBAR_W = 224
+// ─── Theme context ────────────────────────────────────────────────────────────
 
-function dc(extra?: React.CSSProperties): React.CSSProperties {
-  return {
-    background: `linear-gradient(135deg, ${D.card} 0%, ${D.card2} 100%)`,
-    border: `1px solid ${D.border}`,
-    borderRadius: 16,
-    boxShadow: '0 4px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)',
-    overflow: 'hidden',
-    ...extra,
-  }
+const ThemeCtx = createContext(true)
+
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const stored = localStorage.getItem('dash-theme')
+    return stored ? stored === 'dark' : true
+  })
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('dash-theme', dark ? 'dark' : 'light')
+  }, [dark])
+  return [dark, () => setDark((d) => !d)] as const
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -98,210 +73,155 @@ function useCountUp(target: number, duration = 900): number {
   const [val, setVal] = useState(target)
   const rafRef  = useRef<number | null>(null)
   const prevRef = useRef(target)
-
   useEffect(() => {
-    const from = prevRef.current
-    prevRef.current = target
+    const from = prevRef.current; prevRef.current = target
     if (from === target) return
-    const startTime = performance.now()
+    const t0 = performance.now()
     const tick = (now: number) => {
-      const t     = Math.min((now - startTime) / duration, 1)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setVal(from + (target - from) * eased)
-      if (t < 1) rafRef.current = requestAnimationFrame(tick)
+      const p = Math.min((now - t0) / duration, 1)
+      setVal(from + (target - from) * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
   }, [target, duration])
-
   return val
 }
 
 function useScrollSpy(ids: string[], offset = 130): string {
   const [active, setActive] = useState(ids[0] ?? '')
   useEffect(() => {
-    const handler = () => {
-      const visible = ids
+    const h = () => {
+      const v = ids
         .map((id) => ({ id, top: document.getElementById(id)?.getBoundingClientRect().top ?? Infinity }))
         .filter((x) => x.top <= offset)
-      if (visible.length) setActive(visible[visible.length - 1].id)
+      if (v.length) setActive(v[v.length - 1].id)
     }
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
+    window.addEventListener('scroll', h, { passive: true })
+    return () => window.removeEventListener('scroll', h)
   }, [ids, offset])
   return active
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function money(v: number, decimals = 0) {
+function cn(...c: (string | false | undefined | null)[]): string {
+  return c.filter(Boolean).join(' ')
+}
+
+function money(v: number, d = 0) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'USD',
-    minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+    minimumFractionDigits: d, maximumFractionDigits: d,
   }).format(v)
+}
+
+function moneyShort(v: number): string {
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (Math.abs(v) >= 1_000)     return `$${(v / 1_000).toFixed(1)}k`
+  return `$${v.toFixed(0)}`
 }
 
 function fmtMonthShort(ym: string) {
   const [y, m] = ym.split('-')
   return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' })
 }
-
 function fmtMonthLong(ym: string) {
   const [y, m] = ym.split('-')
   return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })
 }
+function daysAgo(d: string) { return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) }
+function trendPct(c: number, p: number): number | null { return p === 0 ? null : ((c - p) / p) * 100 }
 
-function daysAgo(dateStr: string): number {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000)
-}
-
-function trendPct(curr: number, prev: number): number | null {
-  if (prev === 0) return null
-  return ((curr - prev) / prev) * 100
-}
-
-function periodBounds(period: Period): { currStart: Date | null; prevStart: Date; prevEnd: Date } {
+function periodBounds(p: Period): { currStart: Date | null; prevStart: Date; prevEnd: Date } {
   const now = new Date()
-  if (period === 'all') {
-    return {
-      currStart: null,
-      prevStart: new Date(now.getFullYear() - 1, 0, 1),
-      prevEnd:   new Date(now.getFullYear(), 0, 0),
-    }
-  }
-  const days   = { '7d': 7, '30d': 30, '90d': 90, '6m': 182, '1y': 365 }[period]
-  const ms     = days * 86_400_000
+  if (p === 'all') return { currStart: null, prevStart: new Date(now.getFullYear() - 1, 0, 1), prevEnd: new Date(now.getFullYear(), 0, 0) }
+  const days = { '7d': 7, '30d': 30, '90d': 90, '6m': 182, '1y': 365 }[p]
+  const ms = days * 86_400_000
   const currStart = new Date(now.getTime() - ms)
   const prevEnd   = new Date(currStart.getTime() - 1)
-  const prevStart = new Date(prevEnd.getTime() - ms)
-  return { currStart, prevStart, prevEnd }
+  return { currStart, prevStart: new Date(prevEnd.getTime() - ms), prevEnd }
 }
-
-function filterByPeriod(invs: SavedInvoice[], period: Period): SavedInvoice[] {
-  const { currStart } = periodBounds(period)
-  if (!currStart) return invs
-  return invs.filter((i) => new Date(i.date) >= currStart)
+function filterByPeriod(invs: SavedInvoice[], p: Period) {
+  const { currStart } = periodBounds(p)
+  return currStart ? invs.filter((i) => new Date(i.date) >= currStart) : invs
 }
-
 function groupByMonth(invs: SavedInvoice[]) {
   const map = new Map<string, SavedInvoice[]>()
-  const sorted = [...invs].sort((a, b) => b.date.localeCompare(a.date))
-  sorted.forEach((inv) => {
+  ;[...invs].sort((a, b) => b.date.localeCompare(a.date)).forEach((inv) => {
     const k = inv.date.slice(0, 7)
     if (!map.has(k)) map.set(k, [])
     map.get(k)!.push(inv)
   })
-  return Array.from(map.entries()).map(([k, list]) => ({
-    month: k, label: fmtMonthLong(k),
-    invoices: list,
-    total: list.reduce((s, i) => s + i.total, 0),
-  }))
+  return Array.from(map.entries()).map(([k, list]) => ({ month: k, label: fmtMonthLong(k), invoices: list, total: list.reduce((s, i) => s + i.total, 0) }))
 }
-
 function exportCSV(invoices: SavedInvoice[]) {
-  const headers = ['Date','Company','State','City','Type','Paid By','Items','Total','Notes']
+  const h = ['Date','Company','State','City','Type','Paid By','Items','Total','Notes']
   const rows = invoices.map((inv) => [
     inv.date, inv.company, inv.state, inv.city, inv.docKind, inv.paidBy,
     inv.items.map((it) => `${it.size} x${it.pcs} ${it.ct}ct`).join('; '),
     inv.total.toFixed(2), inv.notes,
   ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
-  const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `delta-invoices-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
+  const blob = new Blob([[h.join(','), ...rows].join('\n')], { type: 'text/csv' })
+  Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `delta-${new Date().toISOString().slice(0, 10)}.csv` }).click()
 }
 
 // ─── SVG icons ────────────────────────────────────────────────────────────────
 
-type IconName = 'home' | 'trending' | 'pie' | 'map' | 'users' | 'bar' | 'alert' | 'list' |
-                'refresh' | 'download' | 'dollar' | 'check' | 'clock' | 'file' | 'x' | 'print' | 'lock'
-
-function Icon({ name, size = 16, stroke = 'currentColor' }: { name: IconName; size?: number; stroke?: string }) {
-  const s: React.CSSProperties = { width: size, height: size, flexShrink: 0, display: 'block' }
-  const p = { fill: 'none', stroke, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+function Icon({ name, size = 16, className = '' }: { name: IconName; size?: number; className?: string }) {
+  const s = { width: size, height: size, flexShrink: 0 as const }
+  const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   switch (name) {
-    case 'home':    return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-    case 'trending':return <svg style={s} viewBox="0 0 24 24" {...p}><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>
-    case 'pie':     return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
-    case 'map':     return <svg style={s} viewBox="0 0 24 24" {...p}><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-    case 'users':   return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-    case 'bar':     return <svg style={s} viewBox="0 0 24 24" {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-    case 'alert':   return <svg style={s} viewBox="0 0 24 24" {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    case 'list':    return <svg style={s} viewBox="0 0 24 24" {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-    case 'refresh': return <svg style={s} viewBox="0 0 24 24" {...p}><polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-    case 'download':return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    case 'dollar':  return <svg style={s} viewBox="0 0 24 24" {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-    case 'check':   return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-    case 'clock':   return <svg style={s} viewBox="0 0 24 24" {...p}><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-    case 'file':    return <svg style={s} viewBox="0 0 24 24" {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-    case 'x':       return <svg style={s} viewBox="0 0 24 24" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    case 'print':   return <svg style={s} viewBox="0 0 24 24" {...p}><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    case 'lock':    return <svg style={s} viewBox="0 0 24 24" {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    case 'home':    return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+    case 'trending':return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>
+    case 'pie':     return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
+    case 'map':     return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    case 'users':   return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+    case 'bar':     return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    case 'alert':   return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    case 'list':    return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    case 'refresh': return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+    case 'download':return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    case 'dollar':  return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+    case 'check':   return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+    case 'clock':   return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+    case 'file':    return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+    case 'x':       return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    case 'print':   return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    case 'lock':    return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    case 'sun':     return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    case 'moon':    return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    case 'search':  return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    case 'chevron': return <svg style={s} className={className} viewBox="0 0 24 24" {...p}><polyline points="6,9 12,15 18,9"/></svg>
     default: return null
   }
 }
 
-// ─── Utility components ───────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-      <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-      <div style={{ fontSize: 12, color: D.text2 }}>{label}</div>
-    </div>
-  )
+function Skel({ className }: { className?: string }) {
+  return <div className={cn('skeleton rounded-lg bg-slate-200 dark:bg-slate-800', className)} />
 }
 
-function EmptyChart() {
-  return <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: D.text3, fontSize: 14 }}>No data for this period</div>
-}
+// ─── Chart tooltip ────────────────────────────────────────────────────────────
 
-function GlowTooltip({ active, payload, label, formatter }: {
-  active?: boolean
-  payload?: Array<{ name: string; value: number; color: string }>
-  label?: string
-  formatter?: (v: number, name: string) => string
+function ChartTip({ active, payload, label, fmt }: {
+  active?: boolean; payload?: Array<{ name: string; value: number; color: string }>
+  label?: string; fmt?: (v: number) => string
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: '#0a1220', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 160, border: `1px solid ${D.borderM}` }}>
-      {label && <div style={{ color: D.text3, fontSize: 10, fontWeight: 700, marginBottom: 10, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{label}</div>}
+    <div className="rounded-xl bg-slate-900 dark:bg-slate-950 border border-slate-700 dark:border-slate-800 p-3 shadow-2xl min-w-[140px]">
+      {label && <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{label}</p>}
       {payload.map((p) => (
-        <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, marginBottom: 5, alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color, boxShadow: `0 0 6px ${p.color}80`, flexShrink: 0 }} />
-            <div style={{ color: D.text2, fontSize: 12 }}>{p.name}</div>
+        <div key={p.name} className="flex items-center justify-between gap-4 mb-1 last:mb-0">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: p.color }} />
+            <span className="text-xs text-slate-400">{p.name}</span>
           </div>
-          <div style={{ color: D.text, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-            {formatter ? formatter(p.value, p.name) : money(p.value)}
-          </div>
+          <span className="text-xs font-bold text-white tabular-nums">{fmt ? fmt(p.value) : money(p.value)}</span>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
-
-function SectionLabel({ text }: { text: string }) {
-  return (
-    <div style={{ fontSize: 10, fontWeight: 700, color: D.text3, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 1, background: D.border }} />
-      {text}
-      <div style={{ flex: 1, height: 1, background: D.border }} />
-    </div>
-  )
-}
-
-function CardHeader({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: D.text, letterSpacing: '-0.1px' }}>{title}</div>
-        {sub && <div style={{ fontSize: 12, color: D.text2, marginTop: 3 }}>{sub}</div>}
-      </div>
-      {right}
     </div>
   )
 }
@@ -311,13 +231,14 @@ function CardHeader({ title, sub, right }: { title: string; sub?: string; right?
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
   const [pw, setPw]   = useState('')
   const [err, setErr] = useState('')
+  const dark = useContext(ThemeCtx)
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: D.page, fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <div style={{ width: 420 }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img src="/delta-logo.png" alt="Delta Diamonds" style={{ height: 44, objectFit: 'contain', marginBottom: 14, opacity: 0.9 }} />
-          <div style={{ fontSize: 12, color: D.text3, fontWeight: 500, letterSpacing: '1px', textTransform: 'uppercase' }}>Revenue Analytics Platform</div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <img src="/delta-logo.png" alt="Delta Diamonds" className={cn('h-10 mx-auto mb-3', dark ? 'brightness-0 invert opacity-80' : 'opacity-90')} style={{ objectFit: 'contain' }} />
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-600">Revenue Analytics</p>
         </div>
 
         <form
@@ -326,34 +247,38 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
             if (pw === APP_PASSWORD) { sessionStorage.setItem(AUTH_KEY, pw); onUnlock() }
             else setErr('Incorrect password.')
           }}
-          style={{ ...dc({ padding: '36px 40px', overflow: 'visible' }) }}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl dark:shadow-slate-950 p-8"
         >
-          {/* Lock icon ring */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: `rgba(20,184,166,0.12)`, border: `1px solid rgba(20,184,166,0.25)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="lock" size={22} stroke={D.tealBrt} />
+          <div className="flex justify-center mb-6">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20">
+              <Icon name="lock" size={22} className="text-indigo-600 dark:text-indigo-400" />
             </div>
           </div>
 
-          <div style={{ fontSize: 20, fontWeight: 800, color: D.text, marginBottom: 6, letterSpacing: '-0.3px', textAlign: 'center' }}>Protected Dashboard</div>
-          <div style={{ fontSize: 13, color: D.text2, marginBottom: 28, textAlign: 'center' }}>Delta Diamonds — internal access only</div>
+          <h2 className="text-xl font-black text-center text-slate-900 dark:text-white mb-1 tracking-tight">Protected</h2>
+          <p className="text-sm text-center text-slate-500 dark:text-slate-400 mb-6">Internal access only</p>
 
-          <div style={{ marginBottom: err ? 8 : 20 }}>
+          <div className="relative mb-4">
+            <Icon name="lock" size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600" />
             <input
               type="password" value={pw} onChange={(e) => { setPw(e.target.value); setErr('') }}
-              placeholder="Enter access password" autoFocus
-              style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: `1.5px solid ${err ? 'rgba(239,68,68,0.5)' : D.border}`, background: '#060a13', fontSize: 15, boxSizing: 'border-box', outline: 'none', color: D.text, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+              placeholder="Enter password" autoFocus
+              className={cn(
+                'w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 dark:bg-slate-800/60 border text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all duration-150',
+                'focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50',
+                err ? 'border-red-400 dark:border-red-500/50' : 'border-slate-200 dark:border-slate-700'
+              )}
             />
           </div>
 
           {err && (
-            <div style={{ color: D.redSoft, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="alert" size={13} stroke={D.redSoft} /> {err}
+            <div className="flex items-center gap-2 text-xs text-red-500 dark:text-red-400 mb-4">
+              <Icon name="alert" size={12} className="flex-shrink-0" /> {err}
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary"
-            style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${D.teal}, ${D.cyan})`, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 4px 20px rgba(20,184,166,0.3)` }}>
+          <button type="submit"
+            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white text-sm font-bold transition-all duration-150 shadow-lg shadow-indigo-500/20">
             Unlock Dashboard
           </button>
         </form>
@@ -364,48 +289,91 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accentColor, iconName, fadeClass }: {
-  label: string
-  rawValue: number
-  format: 'money' | 'count' | 'pct'
-  sub?: string
-  trend?: number | null
-  trendInverse?: boolean
-  accentColor: string
-  iconName: IconName
-  fadeClass?: string
+function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accent, icon, delay }: {
+  label: string; rawValue: number; format: 'money' | 'count'; sub?: string
+  trend?: number | null; trendInverse?: boolean; accent: string; icon: IconName; delay: number
 }) {
   const animated  = useCountUp(rawValue)
-  const formatted = format === 'money' ? money(animated) : format === 'pct' ? `${animated.toFixed(1)}%` : String(Math.round(animated))
+  const formatted = format === 'money' ? money(animated) : String(Math.round(animated))
   const isUp      = (trend ?? 0) >= 0
   const isGood    = trendInverse ? !isUp : isUp
-  const trendColor = isGood ? D.green : D.red
 
   return (
     <div
-      style={{ ...dc({ padding: '22px 22px 20px', borderTop: `2px solid ${accentColor}` }) }}
-      className={`card-lift${fadeClass ? ` fade-up ${fadeClass}` : ''}`}
+      className="relative bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 overflow-hidden animate-card-in"
+      style={{ animationDelay: `${delay}ms`, borderTopWidth: 2, borderTopColor: accent }}
     >
-      {/* Icon badge + trend */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${accentColor}18`, border: `1px solid ${accentColor}38`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 16px ${accentColor}25` }}>
-          <Icon name={iconName} size={18} stroke={accentColor} />
+      {/* subtle bg glow */}
+      <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-[0.06] blur-2xl pointer-events-none" style={{ background: accent, transform: 'translate(30%, -30%)' }} />
+
+      <div className="flex items-start justify-between mb-4 relative">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center border" style={{ background: `${accent}18`, borderColor: `${accent}35` }}>
+          <span style={{ color: accent }}><Icon name={icon} size={17} /></span>
         </div>
         {trend !== null && trend !== undefined && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: isGood ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.14)', padding: '3px 9px', borderRadius: 99, border: `1px solid ${isGood ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-            <span style={{ color: trendColor, fontSize: 10 }}>{isUp ? '▲' : '▼'}</span>
-            <span style={{ color: trendColor, fontSize: 11, fontWeight: 700 }}>{Math.abs(trend).toFixed(1)}%</span>
-          </div>
+          <span className={cn(
+            'inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ring-1',
+            isGood
+              ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-emerald-200 dark:ring-emerald-500/20'
+              : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 ring-red-200 dark:ring-red-500/20'
+          )}>
+            {isUp ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+          </span>
         )}
       </div>
 
-      {/* Big animated number */}
-      <div style={{ fontSize: 30, fontWeight: 800, color: D.text, lineHeight: 1, letterSpacing: '-0.5px', marginBottom: 7, fontVariantNumeric: 'tabular-nums' }}>
+      <div className="text-[1.75rem] font-black tracking-tight text-slate-900 dark:text-white tabular-nums mb-1 leading-none">
         {formatted}
       </div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-600 mb-1">{label}</div>
+      {sub && <div className="text-xs text-slate-500 dark:text-slate-500">{sub}</div>}
+    </div>
+  )
+}
 
-      <div style={{ fontSize: 10, fontWeight: 700, color: D.text3, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: sub ? 4 : 0 }}>{label}</div>
-      {sub && <div style={{ fontSize: 12, color: D.text2 }}>{sub}</div>}
+// ─── Section divider ──────────────────────────────────────────────────────────
+
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-600 select-none">{label}</span>
+      <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+    </div>
+  )
+}
+
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden', className)}>
+      {children}
+    </div>
+  )
+}
+
+function CardHead({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between px-6 pt-5 pb-4">
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+        {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
+      </div>
+      {right && <div className="flex-shrink-0">{right}</div>}
+    </div>
+  )
+}
+
+function LegendDots({ items }: { items: { color: string; label: string }[] }) {
+  return (
+    <div className="flex items-center gap-3">
+      {items.map((i) => (
+        <div key={i.label} className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: i.color }} />
+          <span className="text-xs text-slate-400 dark:text-slate-500">{i.label}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -413,87 +381,53 @@ function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accentColo
 // ─── Revenue trend chart ──────────────────────────────────────────────────────
 
 function RevenueTrendChart({ invoices }: { invoices: SavedInvoice[] }) {
+  const dark = useContext(ThemeCtx)
   const data = useMemo(() => {
-    const map = new Map<string, { total: number; collected: number }>()
+    const map = new Map<string, { t: number; c: number }>()
     invoices.forEach((inv) => {
       const k = inv.date.slice(0, 7)
-      const r = map.get(k) ?? { total: 0, collected: 0 }
-      r.total += inv.total
-      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.collected += inv.total
+      const r = map.get(k) ?? { t: 0, c: 0 }
+      r.t += inv.total
+      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.c += inv.total
       map.set(k, r)
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ month: fmtMonthShort(k), Total: Math.round(v.total), Collected: Math.round(v.collected) }))
+      .map(([k, v]) => ({ month: fmtMonthShort(k), 'Total Billed': Math.round(v.t), Collected: Math.round(v.c) }))
   }, [invoices])
 
-  if (!data.length) return <div style={dc({ padding: '24px' })} className="card-lift"><EmptyChart /></div>
-
-  const tickStyle = { fontSize: 11, fill: D.text3 }
-
-  return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Revenue Trend" sub="Monthly invoiced vs collected"
-        right={<div style={{ display: 'flex', gap: 16 }}><LegendDot color={CH.total} label="Total Billed" /><LegendDot color={CH.coll} label="Collected" /></div>}
-      />
-      <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
-          <defs>
-            <linearGradient id="gTotal" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={CH.total} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={CH.total} stopOpacity={0}    />
-            </linearGradient>
-            <linearGradient id="gColl" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={CH.coll} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={CH.coll} stopOpacity={0}    />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-          <XAxis dataKey="month" tick={tickStyle} axisLine={false} tickLine={false} />
-          <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} tick={tickStyle} axisLine={false} tickLine={false} width={54} />
-          <Tooltip content={<GlowTooltip />} />
-          <Area type="monotone" dataKey="Total"     stroke={CH.total} strokeWidth={2.5} fill="url(#gTotal)" name="Total Billed" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: CH.total }} />
-          <Area type="monotone" dataKey="Collected" stroke={CH.coll}  strokeWidth={2.5} fill="url(#gColl)"  name="Collected"   dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: CH.coll  }} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ─── Invoice activity chart ───────────────────────────────────────────────────
-
-function InvoiceActivityChart({ invoices }: { invoices: SavedInvoice[] }) {
-  const data = useMemo(() => {
-    const map = new Map<string, { invoices: number; memos: number }>()
-    invoices.forEach((inv) => {
-      const k = inv.date.slice(0, 7)
-      const r = map.get(k) ?? { invoices: 0, memos: 0 }
-      if (inv.docKind === 'memo') r.memos += 1; else r.invoices += 1
-      map.set(k, r)
-    })
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ month: fmtMonthShort(k), Invoices: v.invoices, Memos: v.memos }))
-  }, [invoices])
-
-  if (!data.length) return <div style={dc({ padding: '24px' })} className="card-lift"><EmptyChart /></div>
-
-  const t = { fontSize: 11, fill: D.text3 }
+  const grid = dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const tick = dark ? '#475569' : '#94a3b8'
 
   return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Invoice Activity" sub="Monthly invoice & memo count"
-        right={<div style={{ display: 'flex', gap: 14 }}><LegendDot color={CH.inv} label="Invoices" /><LegendDot color={CH.memo} label="Memos" /></div>}
+    <Card>
+      <CardHead title="Revenue Trend" sub="Monthly invoiced vs collected"
+        right={<LegendDots items={[{ color: C.indigo, label: 'Billed' }, { color: C.emerald, label: 'Collected' }]} />}
       />
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barSize={14} barGap={3}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-          <XAxis dataKey="month" tick={t} axisLine={false} tickLine={false} />
-          <YAxis allowDecimals={false} tick={t} axisLine={false} tickLine={false} width={28} />
-          <Tooltip content={<GlowTooltip formatter={(v) => String(v)} />} />
-          <Bar dataKey="Invoices" fill={CH.inv}  radius={[4,4,0,0]} name="Invoices" />
-          <Bar dataKey="Memos"    fill={CH.memo} radius={[4,4,0,0]} name="Memos" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+      <div className="px-2 pb-5">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 6 }}>
+              <defs>
+                <linearGradient id="gI" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.indigo} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={C.indigo} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gE" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.emerald} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={C.emerald} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke={grid} vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: tick }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={moneyShort} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} width={52} />
+              <Tooltip content={<ChartTip />} />
+              <Area type="monotone" dataKey="Total Billed" stroke={C.indigo}  strokeWidth={2.5} fill="url(#gI)" dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+              <Area type="monotone" dataKey="Collected"    stroke={C.emerald} strokeWidth={2.5} fill="url(#gE)" dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data for this period</div>}
+      </div>
+    </Card>
   )
 }
 
@@ -501,68 +435,124 @@ function InvoiceActivityChart({ invoices }: { invoices: SavedInvoice[] }) {
 
 function PaymentDonut({ invoices }: { invoices: SavedInvoice[] }) {
   const data = useMemo(() => {
-    const cash    = invoices.filter((i) => i.paidBy === 'cash'    && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const check   = invoices.filter((i) => i.paidBy === 'check'   && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pending = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
-    const memo    = invoices.filter((i) => i.docKind === 'memo').reduce((s, i) => s + i.total, 0)
+    const get = (fn: (i: SavedInvoice) => boolean) => invoices.filter(fn).reduce((s, i) => s + i.total, 0)
     return [
-      { name: 'Cash',    value: Math.round(cash),    color: CH.cash,    fill: CH.cash    },
-      { name: 'Check',   value: Math.round(check),   color: CH.check,   fill: CH.check   },
-      { name: 'Pending', value: Math.round(pending), color: CH.pending, fill: CH.pending },
-      { name: 'Memo',    value: Math.round(memo),    color: CH.memo,    fill: CH.memo    },
+      { name: 'Cash',    value: Math.round(get((i) => i.paidBy === 'cash'  && i.docKind !== 'memo')), color: C.emerald, fill: C.emerald },
+      { name: 'Check',   value: Math.round(get((i) => i.paidBy === 'check' && i.docKind !== 'memo')), color: C.blue,    fill: C.blue    },
+      { name: 'Pending', value: Math.round(get((i) => i.paidBy === 'pending')),                       color: C.amber,   fill: C.amber   },
+      { name: 'Memo',    value: Math.round(get((i) => i.docKind === 'memo')),                         color: C.violet,  fill: C.violet  },
     ].filter((d) => d.value > 0)
   }, [invoices])
 
   const total = data.reduce((s, d) => s + d.value, 0)
 
-  if (!data.length) return <div style={dc({ padding: '24px' })} className="card-lift"><EmptyChart /></div>
+  return (
+    <Card>
+      <CardHead title="Payment Methods" sub="Revenue by collection type" />
+      <div className="px-6 pb-6">
+        {data.length ? (
+          <div className="flex items-center gap-6">
+            <div className="relative flex-shrink-0">
+              <PieChart width={160} height={160}>
+                <Pie data={data} cx={78} cy={78} innerRadius={50} outerRadius={74} dataKey="value" stroke="none" startAngle={90} endAngle={-270} />
+                <Tooltip content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]
+                  return (
+                    <div className="rounded-xl bg-slate-900 border border-slate-700 p-3 shadow-2xl">
+                      <p className="text-xs text-slate-400 mb-1">{d.name}</p>
+                      <p className="text-sm font-bold text-white">{money(Number(d.value))}</p>
+                      <p className="text-xs text-slate-500">{total > 0 ? ((Number(d.value) / total) * 100).toFixed(1) : 0}%</p>
+                    </div>
+                  )
+                }} />
+              </PieChart>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{money(total)}</p>
+                <p className="text-[10px] text-slate-400">total</p>
+              </div>
+            </div>
+            <div className="flex-1 space-y-1">
+              {data.map((d, i) => (
+                <div key={d.name} className={cn('flex items-center justify-between py-2.5', i > 0 && 'border-t border-slate-100 dark:border-slate-800')}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: d.color }} />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{d.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold tabular-nums" style={{ color: d.color }}>{money(d.value)}</p>
+                    <p className="text-[10px] text-slate-400">{total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : <div className="h-32 flex items-center justify-center text-sm text-slate-400">No data</div>}
+      </div>
+    </Card>
+  )
+}
+
+// ─── Collection efficiency ────────────────────────────────────────────────────
+
+function CollectionCard({ invoices }: { invoices: SavedInvoice[] }) {
+  const s = useMemo(() => {
+    const total     = invoices.reduce((s, i) => s + i.total, 0)
+    const collected = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
+    const pending   = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
+    const rate      = total > 0 ? (collected / total) * 100 : 0
+    const ages      = invoices.filter((i) => i.paidBy === 'pending').map((i) => daysAgo(i.date))
+    const avg       = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0
+    const over30    = invoices.filter((i) => i.paidBy === 'pending' && daysAgo(i.date) > 30).length
+    return { rate, collected, pending, avg, over30 }
+  }, [invoices])
+
+  const circ = 2 * Math.PI * 42
+  const dash = (s.rate / 100) * circ
+  const col  = s.rate >= 80 ? C.emerald : s.rate >= 60 ? C.amber : C.rose
 
   return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Payment Methods" sub="Revenue by collection type" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <PieChart width={170} height={170}>
-            <Pie data={data} cx={83} cy={83} innerRadius={52} outerRadius={78} dataKey="value" stroke="none" startAngle={90} endAngle={-270} />
-            <Tooltip content={({ active, payload }) => {
-              if (!active || !payload?.length) return null
-              const d = payload[0]
-              return (
-                <div style={{ background: '#0a1220', borderRadius: 10, padding: '10px 14px', border: `1px solid ${D.borderM}` }}>
-                  <div style={{ color: D.text2, fontSize: 12, marginBottom: 4 }}>{d.name}</div>
-                  <div style={{ color: D.text, fontSize: 14, fontWeight: 700 }}>{money(Number(d.value))}</div>
-                  <div style={{ color: D.text3, fontSize: 12 }}>{total > 0 ? ((Number(d.value) / total) * 100).toFixed(1) : 0}%</div>
-                </div>
-              )
-            }} />
-          </PieChart>
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: D.text, fontVariantNumeric: 'tabular-nums' }}>{money(total)}</div>
-            <div style={{ fontSize: 10, color: D.text3, marginTop: 1 }}>total</div>
+    <Card>
+      <CardHead title="Collection Efficiency" sub="Payment performance" />
+      <div className="px-6 pb-6 flex items-center gap-6">
+        <div className="relative flex-shrink-0">
+          <svg width={100} height={100} className="-rotate-90">
+            <circle cx={50} cy={50} r={42} fill="none" stroke="currentColor" strokeWidth={8} className="text-slate-100 dark:text-slate-800" />
+            <circle cx={50} cy={50} r={42} fill="none"
+              strokeWidth={8} strokeLinecap="round"
+              strokeDasharray={`${dash} ${circ}`}
+              style={{ stroke: col, filter: `drop-shadow(0 0 6px ${col}60)`, transition: 'stroke-dasharray 0.8s ease' }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <p className="text-lg font-black text-slate-900 dark:text-white">{s.rate.toFixed(0)}%</p>
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider">paid</p>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
-          {data.map((d, i) => (
-            <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderTop: i ? `1px solid ${D.border}` : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: d.color, boxShadow: `0 0 6px ${d.color}70` }} />
-                <div style={{ fontSize: 13, fontWeight: 600, color: D.text }}>{d.name}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: d.color }}>{money(d.value)}</div>
-                <div style={{ fontSize: 11, color: D.text3 }}>{total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%</div>
-              </div>
+        <div className="flex-1 space-y-0">
+          {[
+            { l: 'Collected',     v: money(s.collected),       c: C.emerald },
+            { l: 'Outstanding',   v: money(s.pending),         c: C.amber   },
+            { l: 'Avg days',      v: `${s.avg.toFixed(0)}d`,   c: s.avg > 30 ? C.rose : 'text' },
+            { l: '30d+ overdue',  v: `${s.over30} inv`,        c: s.over30 > 0 ? C.rose : 'text' },
+          ].map((row, i) => (
+            <div key={row.l} className={cn('flex items-center justify-between py-2', i > 0 && 'border-t border-slate-100 dark:border-slate-800')}>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{row.l}</span>
+              <span className={cn('text-xs font-bold tabular-nums', row.c === 'text' ? 'text-slate-700 dark:text-slate-300' : undefined)} style={{ color: row.c === 'text' ? undefined : row.c }}>
+                {row.v}
+              </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
 // ─── Revenue by state ─────────────────────────────────────────────────────────
 
 function StateRevenueChart({ invoices }: { invoices: SavedInvoice[] }) {
+  const dark = useContext(ThemeCtx)
   const data = useMemo(() => {
     const map = new Map<string, { Revenue: number; Pending: number }>()
     invoices.forEach((inv) => {
@@ -577,179 +567,171 @@ function StateRevenueChart({ invoices }: { invoices: SavedInvoice[] }) {
       .sort((a, b) => b.Revenue - a.Revenue).slice(0, 10)
   }, [invoices])
 
-  if (!data.length) return <div style={dc({ padding: '24px' })} className="card-lift"><EmptyChart /></div>
-
-  const t = { fontSize: 11, fill: D.text3 }
+  const grid = dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const tick = dark ? '#475569' : '#94a3b8'
 
   return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Revenue by State" sub="Top 10 states by billed amount"
-        right={<div style={{ display: 'flex', gap: 14 }}><LegendDot color={CH.total} label="Total" /><LegendDot color={CH.pending} label="Pending" /></div>}
+    <Card>
+      <CardHead title="Revenue by State" sub="Top 10 states"
+        right={<LegendDots items={[{ color: C.indigo, label: 'Total' }, { color: C.amber, label: 'Pending' }]} />}
       />
-      <ResponsiveContainer width="100%" height={Math.max(220, data.length * 34)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: 16 }} barSize={10} barGap={2}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-          <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} tick={t} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="state" tick={{ fontSize: 12, fill: D.text2, fontWeight: 600 }} axisLine={false} tickLine={false} width={28} />
-          <Tooltip content={<GlowTooltip />} />
-          <Bar dataKey="Revenue" fill={CH.total}   radius={[0,4,4,0]} name="Total" />
-          <Bar dataKey="Pending" fill={CH.pending} radius={[0,4,4,0]} name="Pending" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+      <div className="px-2 pb-5">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height={Math.max(200, data.length * 32)}>
+            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 16 }} barSize={8} barGap={2}>
+              <CartesianGrid strokeDasharray="4 4" stroke={grid} horizontal={false} />
+              <XAxis type="number" tickFormatter={moneyShort} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="state" tick={{ fontSize: 11, fill: tick, fontWeight: 600 }} axisLine={false} tickLine={false} width={26} />
+              <Tooltip content={<ChartTip />} />
+              <Bar dataKey="Revenue" fill={C.indigo} radius={[0,4,4,0]} name="Total" />
+              <Bar dataKey="Pending" fill={C.amber}  radius={[0,4,4,0]} name="Pending" />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data</div>}
+      </div>
+    </Card>
   )
 }
 
-// ─── Product mix chart ────────────────────────────────────────────────────────
+// ─── Top customers ────────────────────────────────────────────────────────────
+
+function TopCustomers({ invoices }: { invoices: SavedInvoice[] }) {
+  const list = useMemo(() => {
+    const map = new Map<string, { t: number; p: number; n: number }>()
+    invoices.forEach((inv) => {
+      const k = inv.company || inv.contactName || 'Unknown'
+      const r = map.get(k) ?? { t: 0, p: 0, n: 0 }
+      r.t += inv.total; r.n++
+      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.p += inv.total
+      map.set(k, r)
+    })
+    const sorted = Array.from(map.entries())
+      .map(([name, v]) => ({ name, ...v, rate: v.t > 0 ? (v.p / v.t) * 100 : 0 }))
+      .sort((a, b) => b.t - a.t).slice(0, 8)
+    const max = sorted[0]?.t ?? 1
+    return sorted.map((r, i) => ({ ...r, rank: i + 1, pct: (r.t / max) * 100 }))
+  }, [invoices])
+
+  const rankStyle = (i: number) =>
+    i === 0 ? 'bg-amber-400 text-white' :
+    i === 1 ? 'bg-slate-400 text-white' :
+    i === 2 ? 'bg-amber-700/80 text-white' :
+              'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600'
+
+  return (
+    <Card>
+      <CardHead title="Top Customers" sub="By total billed value" />
+      <div className="px-6 pb-4">
+        {list.map((c, i) => (
+          <div key={c.name} className={cn('flex items-center gap-3 py-2.5', i > 0 && 'border-t border-slate-50 dark:border-slate-800/60')}>
+            <div className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0', rankStyle(i))}>
+              {c.rank}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[55%]">{c.name}</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={cn('text-[11px] font-bold', c.rate < 70 ? 'text-amber-500' : 'text-emerald-500')}>{c.rate.toFixed(0)}%</span>
+                  <span className="text-sm font-black tabular-nums text-slate-900 dark:text-white">{money(c.t)}</span>
+                </div>
+              </div>
+              <div className="h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${c.pct}%`, background: `linear-gradient(90deg, ${C.indigo}, ${C.violet})` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+        {!list.length && <p className="text-sm text-slate-400 py-6 text-center">No data</p>}
+      </div>
+    </Card>
+  )
+}
+
+// ─── Product mix ──────────────────────────────────────────────────────────────
 
 function ProductMixChart({ invoices }: { invoices: SavedInvoice[] }) {
+  const dark = useContext(ThemeCtx)
   const data = useMemo(() => {
     const map = new Map<string, number>()
-    invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
-        const key = item.size.trim().split(/\s+/)[0] || 'Other'
-        map.set(key, (map.get(key) ?? 0) + item.amount)
-      })
-    })
+    invoices.forEach((inv) => inv.items.forEach((it) => {
+      const k = it.size.trim().split(/\s+/)[0] || 'Other'
+      map.set(k, (map.get(k) ?? 0) + it.amount)
+    }))
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name, Revenue: Math.round(value) }))
+      .map(([name, v], i) => ({ name, Revenue: Math.round(v), fill: MIX_COLORS[i % MIX_COLORS.length] }))
       .sort((a, b) => b.Revenue - a.Revenue).slice(0, 8)
   }, [invoices])
 
-  const coloredData = data.map((d, i) => ({ ...d, fill: CH.mix[i % CH.mix.length] }))
-
-  if (!coloredData.length) return <div style={dc({ padding: '24px' })} className="card-lift"><EmptyChart /></div>
-
-  const t = { fontSize: 11, fill: D.text3 }
+  const tick = dark ? '#475569' : '#94a3b8'
 
   return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Product Mix" sub="Revenue by stone size prefix" />
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={coloredData} margin={{ top: 4, right: 4, bottom: 20, left: 10 }} barSize={32}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 12, fill: D.text2, fontWeight: 600 }} axisLine={false} tickLine={false} />
-          <YAxis tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} tick={t} axisLine={false} tickLine={false} width={50} />
-          <Tooltip content={<GlowTooltip />} />
-          <Bar dataKey="Revenue" name="Revenue" radius={[6,6,0,0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ─── Top customers leaderboard ────────────────────────────────────────────────
-
-function TopCustomers({ invoices }: { invoices: SavedInvoice[] }) {
-  const customers = useMemo(() => {
-    const map = new Map<string, { total: number; paid: number; count: number }>()
-    invoices.forEach((inv) => {
-      const key = inv.company || inv.contactName || 'Unknown'
-      const r = map.get(key) ?? { total: 0, paid: 0, count: 0 }
-      r.total += inv.total; r.count += 1
-      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.paid += inv.total
-      map.set(key, r)
-    })
-    const sorted = Array.from(map.entries())
-      .map(([name, v]) => ({ name, ...v, rate: v.total > 0 ? (v.paid / v.total) * 100 : 0 }))
-      .sort((a, b) => b.total - a.total).slice(0, 9)
-    const max = sorted[0]?.total ?? 1
-    return sorted.map((r, i) => ({ ...r, rank: i + 1, pct: (r.total / max) * 100 }))
-  }, [invoices])
-
-  const rankBg = (i: number) => i === 0 ? D.amber : i === 1 ? '#8892a4' : i === 2 ? '#cd7f32' : D.card2
-  const rankTx = (i: number) => i < 3 ? '#fff' : D.text3
-
-  return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Top Customers" sub="Ranked by total billed value" />
-      {customers.map((c, i) => (
-        <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: i ? `1px solid ${D.border}` : 'none' }}>
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: rankBg(i), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: rankTx(i), flexShrink: 0 }}>
-            {c.rank}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>{c.name}</div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: c.rate < 70 ? D.orange : D.green }}>{c.rate.toFixed(0)}% paid</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: D.text, fontVariantNumeric: 'tabular-nums' }}>{money(c.total)}</span>
-              </div>
-            </div>
-            <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${c.pct}%`, borderRadius: 99, background: `linear-gradient(90deg, ${D.teal}, ${D.cyan})`, boxShadow: `0 0 8px ${D.teal}60`, transition: 'width 0.6s ease' }} />
-            </div>
-          </div>
-        </div>
-      ))}
-      {!customers.length && <div style={{ padding: '24px 0', textAlign: 'center', color: D.text3, fontSize: 14 }}>No data</div>}
-    </div>
-  )
-}
-
-// ─── Collection efficiency ────────────────────────────────────────────────────
-
-function CollectionCard({ invoices }: { invoices: SavedInvoice[] }) {
-  const stats = useMemo(() => {
-    const total     = invoices.reduce((s, i) => s + i.total, 0)
-    const collected = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pending   = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
-    const rate      = total > 0 ? (collected / total) * 100 : 0
-    const avgDays   = invoices.filter((i) => i.paidBy === 'pending').map((i) => daysAgo(i.date))
-    const avgOverdue = avgDays.length ? avgDays.reduce((a, b) => a + b, 0) / avgDays.length : 0
-    const overdue30  = invoices.filter((i) => i.paidBy === 'pending' && daysAgo(i.date) > 30).length
-    return { rate, collected, pending, total, avgOverdue, overdue30 }
-  }, [invoices])
-
-  const circ = 2 * Math.PI * 44
-  const dash = (stats.rate / 100) * circ
-  const gaugeColor = stats.rate >= 80 ? D.green : stats.rate >= 60 ? D.amber : D.red
-
-  return (
-    <div style={dc({ padding: '24px' })} className="card-lift">
-      <CardHeader title="Collection Efficiency" sub="Payment collection performance" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <svg width={110} height={110}>
-            <circle cx={55} cy={55} r={44} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={10} />
-            <circle cx={55} cy={55} r={44} fill="none"
-              stroke={gaugeColor} strokeWidth={10} strokeLinecap="round"
-              strokeDasharray={`${dash} ${circ}`}
-              transform="rotate(-90 55 55)"
-              style={{ transition: 'stroke-dasharray 0.7s ease', filter: `drop-shadow(0 0 6px ${gaugeColor}80)` }}
-            />
-          </svg>
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-            <div style={{ fontSize: 19, fontWeight: 800, color: D.text }}>{stats.rate.toFixed(0)}%</div>
-            <div style={{ fontSize: 10, color: D.text3 }}>collected</div>
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          {[
-            { label: 'Collected',        value: money(stats.collected),          color: D.green  },
-            { label: 'Outstanding',      value: money(stats.pending),            color: D.orange },
-            { label: 'Avg days overdue', value: `${stats.avgOverdue.toFixed(0)}d`, color: stats.avgOverdue > 30 ? D.red : D.text2 },
-            { label: '30d+ overdue',     value: `${stats.overdue30} inv`,        color: stats.overdue30 > 0 ? D.red : D.text2 },
-          ].map((row, i) => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: i ? `1px solid ${D.border}` : 'none' }}>
-              <div style={{ fontSize: 12, color: D.text2 }}>{row.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: row.color, fontVariantNumeric: 'tabular-nums' }}>{row.value}</div>
-            </div>
-          ))}
-        </div>
+    <Card>
+      <CardHead title="Product Mix" sub="Revenue by size prefix" />
+      <div className="px-2 pb-5">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={data} margin={{ top: 4, right: 8, bottom: 16, left: 8 }} barSize={28}>
+              <CartesianGrid strokeDasharray="4 4" stroke={dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: tick, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={moneyShort} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} width={48} />
+              <Tooltip content={<ChartTip />} />
+              <Bar dataKey="Revenue" name="Revenue" radius={[5,5,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data</div>}
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ─── Pending receivables table ────────────────────────────────────────────────
+// ─── Invoice activity ─────────────────────────────────────────────────────────
+
+function ActivityChart({ invoices }: { invoices: SavedInvoice[] }) {
+  const dark = useContext(ThemeCtx)
+  const data = useMemo(() => {
+    const map = new Map<string, { i: number; m: number }>()
+    invoices.forEach((inv) => {
+      const k = inv.date.slice(0, 7)
+      const r = map.get(k) ?? { i: 0, m: 0 }
+      if (inv.docKind === 'memo') r.m++; else r.i++
+      map.set(k, r)
+    })
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, v]) => ({ month: fmtMonthShort(k), Invoices: v.i, Memos: v.m }))
+  }, [invoices])
+
+  const tick = dark ? '#475569' : '#94a3b8'
+
+  return (
+    <Card>
+      <CardHead title="Document Activity" sub="Monthly count"
+        right={<LegendDots items={[{ color: C.indigo, label: 'Invoices' }, { color: C.violet, label: 'Memos' }]} />}
+      />
+      <div className="px-2 pb-5">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }} barSize={12} barGap={3}>
+              <CartesianGrid strokeDasharray="4 4" stroke={dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'} vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: tick }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} width={24} />
+              <Tooltip content={<ChartTip fmt={(v) => String(v)} />} />
+              <Bar dataKey="Invoices" fill={C.indigo} radius={[4,4,0,0]} />
+              <Bar dataKey="Memos"    fill={C.violet} radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data</div>}
+      </div>
+    </Card>
+  )
+}
+
+// ─── Pending receivables ──────────────────────────────────────────────────────
 
 function PendingTable({ invoices, onMarkPaid }: {
   invoices: SavedInvoice[]
-  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
+  onMarkPaid: (id: string, by: 'cash' | 'check') => void
 }) {
-  const [pickerOpen, setPickerOpen] = useState<string | null>(null)
-
+  const [open, setOpen] = useState<string | null>(null)
   const rows = useMemo(() =>
     invoices.filter((i) => i.paidBy === 'pending')
       .map((i) => ({ ...i, days: daysAgo(i.date) }))
@@ -759,275 +741,261 @@ function PendingTable({ invoices, onMarkPaid }: {
 
   if (!rows.length) return null
 
-  const urgencyColor = (d: number) => d > 30 ? D.red : d > 14 ? D.orange : D.amber
-  const totalPending = rows.reduce((s, r) => s + r.total, 0)
+  const urg = (d: number) => d > 30 ? 'text-red-500 bg-red-50 dark:bg-red-500/10 ring-red-200 dark:ring-red-500/20' :
+                             d > 14 ? 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 ring-amber-200 dark:ring-amber-500/20' :
+                                      'text-yellow-600 bg-yellow-50 dark:bg-yellow-500/10 ring-yellow-200 dark:ring-yellow-500/20'
+  const total = rows.reduce((s, r) => s + r.total, 0)
 
   return (
-    <div style={dc()} className="card-lift">
-      <div style={{ padding: '18px 24px', borderBottom: `1px solid ${D.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245,158,11,0.06)' }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: D.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="alert" size={15} stroke={D.orange} /> Pending Receivables
+    <Card>
+      <div className="flex items-center justify-between px-6 py-4 bg-amber-50 dark:bg-amber-500/5 border-b border-amber-100 dark:border-amber-500/10">
+        <div className="flex items-center gap-2.5">
+          <Icon name="alert" size={16} className="text-amber-500" />
+          <div>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Pending Receivables</p>
+            <p className="text-xs text-slate-500">{rows.length} outstanding</p>
           </div>
-          <div style={{ fontSize: 12, color: D.text2, marginTop: 3 }}>{rows.length} outstanding invoice{rows.length !== 1 ? 's' : ''}</div>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: D.orange, fontVariantNumeric: 'tabular-nums' }}>{money(totalPending)}</div>
+        <span className="text-xl font-black text-amber-500 tabular-nums">{money(total)}</span>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-              {['Company', 'State', 'Invoice Date', 'Days Outstanding', 'Amount', 'Action'].map((h, i) => (
-                <th key={h} style={{ padding: '11px 16px', textAlign: i >= 3 ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: D.text3, textTransform: 'uppercase', letterSpacing: '0.6px', borderBottom: `1px solid ${D.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+            <tr className="bg-slate-50 dark:bg-slate-800/50">
+              {['Company', 'State', 'Date', 'Age', 'Amount', ''].map((h, i) => (
+                <th key={h} className={cn('px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600 border-b border-slate-100 dark:border-slate-800 whitespace-nowrap', i >= 3 ? 'text-right' : 'text-left')}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const uc = urgencyColor(row.days)
-              return (
-                <tr key={row.id} className="tr-hover" style={{ borderBottom: `1px solid ${D.border}` }}>
-                  <td style={{ padding: '13px 16px', fontWeight: 700, color: D.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company || row.contactName}</td>
-                  <td style={{ padding: '13px 16px', color: D.text2 }}>{row.state || '—'}</td>
-                  <td style={{ padding: '13px 16px', color: D.text2 }}>{row.date}</td>
-                  <td style={{ padding: '13px 16px', textAlign: 'right' }}>
-                    <span style={{ background: `${uc}18`, color: uc, fontWeight: 700, fontSize: 12, padding: '3px 10px', borderRadius: 99, border: `1px solid ${uc}35` }}>
-                      {row.days}d
-                    </span>
-                  </td>
-                  <td style={{ padding: '13px 16px', textAlign: 'right', fontWeight: 800, color: D.orange, fontVariantNumeric: 'tabular-nums' }}>{money(row.total)}</td>
-                  <td style={{ padding: '13px 16px', textAlign: 'right' }}>
-                    {pickerOpen !== row.id ? (
-                      <button onClick={() => setPickerOpen(row.id)} className="btn btn-paid"
-                        style={{ padding: '6px 14px', borderRadius: 8, border: `1.5px solid rgba(16,185,129,0.35)`, background: 'rgba(16,185,129,0.08)', fontSize: 12, fontWeight: 700, color: D.green, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
-                        Mark Paid
-                      </button>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button onClick={() => { onMarkPaid(row.id, 'cash');  setPickerOpen(null) }} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: D.green,   color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cash</button>
-                        <button onClick={() => { onMarkPaid(row.id, 'check'); setPickerOpen(null) }} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: D.blue,    color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Check</button>
-                        <button onClick={() => setPickerOpen(null)} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${D.border}`, background: 'transparent', fontSize: 12, color: D.text2, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors duration-100">
+                <td className="px-5 py-3.5 font-semibold text-slate-800 dark:text-slate-200 max-w-[180px] truncate">{r.company || r.contactName}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{r.state || '—'}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 tabular-nums">{r.date}</td>
+                <td className="px-5 py-3.5 text-right">
+                  <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full ring-1', urg(r.days))}>{r.days}d</span>
+                </td>
+                <td className="px-5 py-3.5 text-right font-black text-amber-500 tabular-nums">{money(r.total)}</td>
+                <td className="px-5 py-3.5 text-right">
+                  {open !== r.id ? (
+                    <button onClick={() => setOpen(r.id)}
+                      className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors duration-150 whitespace-nowrap">
+                      Mark Paid
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => { onMarkPaid(r.id, 'cash');  setOpen(null) }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white transition-colors duration-150">Cash</button>
+                      <button onClick={() => { onMarkPaid(r.id, 'check'); setOpen(null) }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white transition-colors duration-150">Check</button>
+                      <button onClick={() => setOpen(null)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150">✕</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   )
 }
 
 // ─── Invoice detail row ───────────────────────────────────────────────────────
 
-function InvoiceDetailRow({ inv, onMarkPaid, onDelete }: {
-  inv: SavedInvoice
-  onMarkPaid?: (id: string, paidBy: 'cash' | 'check') => void
-  onDelete?: (id: string) => void
+function InvoiceRow({ inv, onMarkPaid, onDelete }: {
+  inv: SavedInvoice; onMarkPaid?: (id: string, b: 'cash' | 'check') => void; onDelete?: (id: string) => void
 }) {
-  const [showPicker, setShowPicker] = useState(false)
+  const [show, setShow] = useState(false)
   const isMemo    = inv.docKind === 'memo'
   const isPending = inv.paidBy === 'pending' && !isMemo
-  const statusColor = isMemo ? D.purple : isPending ? D.orange : inv.paidBy === 'cash' ? D.green : D.blue
-  const statusLabel = isMemo ? 'MEMO' : isPending ? 'PENDING' : inv.paidBy === 'cash' ? 'CASH' : 'CHECK'
+  const col = isMemo ? C.violet : isPending ? C.amber : inv.paidBy === 'cash' ? C.emerald : C.blue
+  const lbl = isMemo ? 'MEMO' : isPending ? 'PENDING' : inv.paidBy === 'cash' ? 'CASH' : 'CHECK'
 
   return (
-    <div style={{ background: isMemo ? 'rgba(168,85,247,0.07)' : isPending ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)', border: `1px solid ${D.border}`, borderRadius: 10, padding: '13px 16px', marginBottom: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+    <div className={cn('rounded-xl border p-3.5 mb-2 last:mb-0', isMemo ? 'bg-violet-50 dark:bg-violet-500/5 border-violet-100 dark:border-violet-500/15' : isPending ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-100 dark:border-amber-500/15' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800')}>
+      <div className="flex items-start justify-between flex-wrap gap-2 mb-2">
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: D.text }}>{inv.date}</div>
-          <div style={{ fontSize: 12, color: D.text2, marginTop: 2 }}>
-            {inv.docKind.toUpperCase()} · <span style={{ color: statusColor, fontWeight: 700 }}>{statusLabel}</span>
-          </div>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{inv.date}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{inv.docKind.toUpperCase()} · <span className="font-bold" style={{ color: col }}>{lbl}</span></p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: statusColor, fontVariantNumeric: 'tabular-nums' }}>{money(inv.total, 2)}</div>
-          <button onClick={() => printSavedInvoice(inv)} className="btn btn-ghost"
-            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${D.border}`, background: 'transparent', fontSize: 12, fontWeight: 600, color: D.text2, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}>
-            <Icon name="print" size={12} stroke={D.text2} /> Print
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-black tabular-nums" style={{ color: col }}>{money(inv.total, 2)}</span>
+          <button onClick={() => printSavedInvoice(inv)} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150">
+            <Icon name="print" size={11} /> Print
           </button>
-          {isPending && onMarkPaid && !showPicker && (
-            <button onClick={() => setShowPicker(true)} className="btn btn-paid"
-              style={{ padding: '5px 10px', borderRadius: 8, border: `1.5px solid rgba(16,185,129,0.3)`, background: 'rgba(16,185,129,0.08)', fontSize: 12, fontWeight: 700, color: D.green, cursor: 'pointer', fontFamily: 'inherit' }}>Mark Paid</button>
+          {isPending && onMarkPaid && !show && (
+            <button onClick={() => setShow(true)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors duration-150">Mark Paid</button>
           )}
-          {isPending && onMarkPaid && showPicker && (
+          {isPending && onMarkPaid && show && (
             <>
-              <button onClick={() => { onMarkPaid(inv.id, 'cash');  setShowPicker(false) }} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: D.green, fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Cash</button>
-              <button onClick={() => { onMarkPaid(inv.id, 'check'); setShowPicker(false) }} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: D.blue,  fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Check</button>
-              <button onClick={() => setShowPicker(false)} style={{ padding: '5px 9px', borderRadius: 8, border: `1px solid ${D.border}`, background: 'transparent', fontSize: 12, color: D.text2, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+              <button onClick={() => { onMarkPaid(inv.id, 'cash');  setShow(false) }} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-400 transition-colors">Cash</button>
+              <button onClick={() => { onMarkPaid(inv.id, 'check'); setShow(false) }} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-400 transition-colors">Check</button>
+              <button onClick={() => setShow(false)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">✕</button>
             </>
           )}
           {isMemo && onDelete && (
-            <button onClick={() => { if (window.confirm('Delete this memo?')) onDelete(inv.id) }} className="btn btn-danger"
-              style={{ padding: '5px 10px', borderRadius: 8, border: `1.5px solid rgba(239,68,68,0.3)`, background: 'rgba(239,68,68,0.08)', fontSize: 12, fontWeight: 700, color: D.redSoft, cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+            <button onClick={() => { if (window.confirm('Delete this memo?')) onDelete(inv.id) }} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-500/25 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-150">Delete</button>
           )}
         </div>
       </div>
       {inv.items.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead><tr>
+        <table className="w-full text-xs mt-2">
+          <thead><tr className="text-slate-400 dark:text-slate-600">
             {['Size','Pcs','Ct','P/Ct','Amount'].map((h, i) => (
-              <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '4px 6px', fontWeight: 700, color: D.text3, borderBottom: `1px solid ${D.border}` }}>{h}</th>
+              <th key={h} className={cn('py-1.5 font-bold border-b border-slate-200 dark:border-slate-700', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {inv.items.map((item, i) => (
-              <tr key={i} className="tr-hover">
-                <td style={{ padding: '5px 6px', borderBottom: `1px solid ${D.border}`, fontWeight: 600, color: D.text }}>{item.size}</td>
-                <td style={{ padding: '5px 6px', borderBottom: `1px solid ${D.border}`, textAlign: 'right', color: D.text2 }}>{item.pcs}</td>
-                <td style={{ padding: '5px 6px', borderBottom: `1px solid ${D.border}`, textAlign: 'right', color: D.text2 }}>{item.ct.toFixed(2)}</td>
-                <td style={{ padding: '5px 6px', borderBottom: `1px solid ${D.border}`, textAlign: 'right', color: D.text2 }}>{money(item.pct, 2)}</td>
-                <td style={{ padding: '5px 6px', borderBottom: `1px solid ${D.border}`, textAlign: 'right', fontWeight: 700, color: D.text, fontVariantNumeric: 'tabular-nums' }}>{money(item.amount, 2)}</td>
+            {inv.items.map((it, i) => (
+              <tr key={i} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
+                <td className="py-1.5 font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">{it.size}</td>
+                <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.pcs}</td>
+                <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.ct.toFixed(2)}</td>
+                <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800 tabular-nums">{money(it.pct, 2)}</td>
+                <td className="py-1.5 text-right font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 tabular-nums">{money(it.amount, 2)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {inv.notes && <div style={{ fontSize: 12, color: D.text2, marginTop: 8, fontStyle: 'italic' }}>Note: {inv.notes}</div>}
+      {inv.notes && <p className="text-xs text-slate-500 mt-2 italic">{inv.notes}</p>}
     </div>
   )
 }
 
 // ─── Shop ledger ──────────────────────────────────────────────────────────────
 
-type ShopRow = {
-  key: string; company: string; state: string; city: string
-  invoiceCount: number; totalSold: number; totalPaid: number; totalPending: number
-  lastDate: string; invoices: SavedInvoice[]
-}
+type ShopRow = { key: string; company: string; state: string; city: string; n: number; sold: number; paid: number; pending: number; last: string; invoices: SavedInvoice[] }
 
 function ShopLedger({ invoices, onMarkPaid, onDelete }: {
   invoices: SavedInvoice[]
-  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
+  onMarkPaid: (id: string, b: 'cash' | 'check') => void
   onDelete: (id: string) => void
 }) {
-  const [expanded,     setExpanded]     = useState<Set<string>>(new Set())
-  const [ledgerSearch, setLedgerSearch] = useState('')
+  const [exp, setExp]   = useState<Set<string>>(new Set())
+  const [q,   setQ]     = useState('')
 
   const shops = useMemo<ShopRow[]>(() => {
     const map = new Map<string, ShopRow>()
     invoices.forEach((inv) => {
       const key = inv.contactId || inv.company
-      const row = map.get(key) ?? { key, company: inv.company || inv.contactName || 'Unknown', state: inv.state, city: inv.city, invoiceCount: 0, totalSold: 0, totalPaid: 0, totalPending: 0, lastDate: inv.date, invoices: [] }
-      row.invoiceCount++; row.totalSold += inv.total
-      if (inv.paidBy === 'pending') row.totalPending += inv.total; else row.totalPaid += inv.total
-      if (inv.date > row.lastDate) row.lastDate = inv.date
-      row.invoices.push(inv); map.set(key, row)
+      const r = map.get(key) ?? { key, company: inv.company || inv.contactName || 'Unknown', state: inv.state, city: inv.city, n: 0, sold: 0, paid: 0, pending: 0, last: inv.date, invoices: [] }
+      r.n++; r.sold += inv.total
+      if (inv.paidBy === 'pending') r.pending += inv.total; else r.paid += inv.total
+      if (inv.date > r.last) r.last = inv.date
+      r.invoices.push(inv); map.set(key, r)
     })
-    return Array.from(map.values()).sort((a, b) => b.totalSold - a.totalSold)
+    return Array.from(map.values()).sort((a, b) => b.sold - a.sold)
   }, [invoices])
 
   const filtered = useMemo(() => {
-    const q = ledgerSearch.trim().toLowerCase()
-    if (!q) return shops
-    return shops.filter((s) => s.company.toLowerCase().includes(q))
-  }, [shops, ledgerSearch])
+    const s = q.trim().toLowerCase()
+    return s ? shops.filter((sh) => sh.company.toLowerCase().includes(s)) : shops
+  }, [shops, q])
 
-  const toggle = (key: string) => setExpanded((prev) => {
-    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next
-  })
+  const toggle = (key: string) => setExp((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n })
 
   return (
-    <div style={dc()}>
-      <div style={{ padding: '18px 24px', borderBottom: `1px solid ${D.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+    <Card>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
         <div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: D.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="list" size={15} stroke={D.tealBrt} /> Shop Ledger
-          </div>
-          <div style={{ fontSize: 12, color: D.text2, marginTop: 3 }}>{filtered.length} shops · click any row to expand</div>
+          <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2"><Icon name="list" size={15} className="text-indigo-500" /> Shop Ledger</p>
+          <p className="text-xs text-slate-400 mt-0.5">{filtered.length} shops</p>
         </div>
-        <input type="search" value={ledgerSearch} onChange={(e) => setLedgerSearch(e.target.value)}
-          placeholder="Search shops…"
-          style={{ padding: '9px 14px', borderRadius: 10, border: `1.5px solid ${D.border}`, background: '#060a13', fontSize: 13, outline: 'none', width: 220, color: D.text, fontFamily: 'inherit' }} />
+        <div className="relative">
+          <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…"
+            className="pl-8 pr-3 py-1.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all duration-150 w-48" />
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 1fr 0.8fr 64px', padding: '10px 24px', background: 'rgba(255,255,255,0.02)', borderBottom: `1px solid ${D.border}` }}>
+      <div className="grid grid-cols-[2.5fr_1fr_1fr_1fr_0.8fr_40px] gap-0 px-6 py-2.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
         {['Shop', 'Sold', 'Paid', 'Pending', 'Last Sale', ''].map((h) => (
-          <div key={h} style={{ fontSize: 10, fontWeight: 700, color: D.text3, textTransform: 'uppercase', letterSpacing: '0.7px' }}>{h}</div>
+          <span key={h} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600">{h}</span>
         ))}
       </div>
 
-      {filtered.map((shop) => (
-        <div key={shop.key}>
-          <div onClick={() => toggle(shop.key)} className="tr-hover"
-            style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 1fr 0.8fr 64px', padding: '14px 24px', borderBottom: `1px solid ${D.border}`, cursor: 'pointer', background: expanded.has(shop.key) ? 'rgba(20,184,166,0.05)' : 'transparent', transition: 'background 0.15s' }}>
+      {filtered.map((sh) => (
+        <div key={sh.key}>
+          <div onClick={() => toggle(sh.key)}
+            className={cn('grid grid-cols-[2.5fr_1fr_1fr_1fr_0.8fr_40px] px-6 py-3.5 border-b border-slate-50 dark:border-slate-800/60 cursor-pointer transition-colors duration-150', exp.has(sh.key) ? 'bg-indigo-50/50 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30')}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>{shop.company}</div>
-              <div style={{ fontSize: 12, color: D.text2, marginTop: 2 }}>{[shop.city, shop.state].filter(Boolean).join(', ')} · {shop.invoiceCount} inv</div>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{sh.company}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{[sh.city, sh.state].filter(Boolean).join(', ')} · {sh.n} inv</p>
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: CH.total, alignSelf: 'center', fontVariantNumeric: 'tabular-nums' }}>{money(shop.totalSold)}</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: D.green, alignSelf: 'center', fontVariantNumeric: 'tabular-nums' }}>{money(shop.totalPaid)}</div>
-            <div style={{ fontSize: 14, fontWeight: shop.totalPending > 0 ? 700 : 400, color: shop.totalPending > 0 ? D.orange : D.text3, alignSelf: 'center', fontVariantNumeric: 'tabular-nums' }}>{shop.totalPending > 0 ? money(shop.totalPending) : '—'}</div>
-            <div style={{ fontSize: 13, color: D.text2, alignSelf: 'center' }}>{shop.lastDate}</div>
-            <div style={{ fontSize: 12, color: D.tealBrt, fontWeight: 700, alignSelf: 'center', textAlign: 'right' }}>{expanded.has(shop.key) ? '▲' : '▼'}</div>
+            <p className="text-sm font-bold tabular-nums self-center" style={{ color: C.indigo }}>{money(sh.sold)}</p>
+            <p className="text-sm font-semibold tabular-nums self-center text-emerald-500">{money(sh.paid)}</p>
+            <p className={cn('text-sm tabular-nums self-center', sh.pending > 0 ? 'font-bold text-amber-500' : 'text-slate-300 dark:text-slate-700')}>{sh.pending > 0 ? money(sh.pending) : '—'}</p>
+            <p className="text-xs text-slate-400 self-center tabular-nums">{sh.last}</p>
+            <Icon name="chevron" size={16} className={cn('self-center text-slate-400 dark:text-slate-600 transition-transform duration-200', exp.has(sh.key) ? 'rotate-180' : '')} />
           </div>
-          {expanded.has(shop.key) && (
-            <div style={{ padding: '16px 24px', background: 'rgba(20,184,166,0.04)', borderBottom: `1px solid ${D.border}` }}>
-              {groupByMonth(shop.invoices).map(({ month, label, invoices: mInvs, total }) => (
-                <div key={month} style={{ marginBottom: 18 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: CH.total, fontVariantNumeric: 'tabular-nums' }}>{money(total)} · {mInvs.length} inv</div>
+          {exp.has(sh.key) && (
+            <div className="px-6 py-4 bg-indigo-50/30 dark:bg-indigo-500/[0.03] border-b border-slate-100 dark:border-slate-800 animate-fade-in">
+              {groupByMonth(sh.invoices).map(({ month, label, invoices: mi, total }) => (
+                <div key={month} className="mb-5 last:mb-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600">{label}</span>
+                    <span className="text-xs font-bold tabular-nums" style={{ color: C.indigo }}>{money(total)} · {mi.length} inv</span>
                   </div>
-                  {mInvs.map((inv) => (
-                    <InvoiceDetailRow key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} />
-                  ))}
+                  {mi.map((inv) => <InvoiceRow key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} />)}
                 </div>
               ))}
             </div>
           )}
         </div>
       ))}
-      {!filtered.length && (
-        <div style={{ padding: '48px', textAlign: 'center', color: D.text3, fontSize: 14 }}>No shops match your search.</div>
-      )}
-    </div>
+      {!filtered.length && <p className="text-sm text-slate-400 text-center py-12">No shops found.</p>}
+    </Card>
   )
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const SECTION_IDS = ['overview', 'revenue', 'payments', 'geography', 'customers', 'products', 'receivables', 'ledger'] as const
-type SectionId = typeof SECTION_IDS[number]
+const SECTIONS = ['overview', 'revenue', 'payments', 'geography', 'customers', 'products', 'receivables', 'ledger'] as const
+type SectionId = typeof SECTIONS[number]
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: IconName }[] = [
+const NAV: { id: SectionId; label: string; icon: IconName }[] = [
   { id: 'overview',    label: 'Overview',      icon: 'home'     },
-  { id: 'revenue',     label: 'Revenue Trend', icon: 'trending' },
+  { id: 'revenue',     label: 'Revenue',       icon: 'trending' },
   { id: 'payments',    label: 'Payments',      icon: 'pie'      },
   { id: 'geography',   label: 'By State',      icon: 'map'      },
   { id: 'customers',   label: 'Customers',     icon: 'users'    },
-  { id: 'products',    label: 'Product Mix',   icon: 'bar'      },
+  { id: 'products',    label: 'Products',      icon: 'bar'      },
   { id: 'receivables', label: 'Receivables',   icon: 'alert'    },
   { id: 'ledger',      label: 'Shop Ledger',   icon: 'list'     },
 ]
 
-function Sidebar({ active, pendingCount, onNav, onRefresh, onExport, loading }: {
-  active: string; pendingCount: number
+function Sidebar({ active, badge, onNav, onRefresh, onExport, loading }: {
+  active: string; badge: number
   onNav: (id: SectionId) => void; onRefresh: () => void; onExport: () => void; loading: boolean
 }) {
   return (
-    <aside style={{ position: 'fixed', left: 0, top: 0, bottom: 0, width: SIDEBAR_W, background: D.sidebar, display: 'flex', flexDirection: 'column', zIndex: 200, borderRight: `1px solid ${D.border}`, overflowY: 'auto' }}>
+    <aside className="fixed inset-y-0 left-0 w-[240px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-50 overflow-y-auto">
       {/* Logo */}
-      <div style={{ padding: '22px 20px 18px', borderBottom: `1px solid ${D.border}` }}>
-        <img src="/delta-logo.png" alt="Delta Diamonds" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.85 }} />
-        <div style={{ fontSize: 10, color: D.text3, marginTop: 8, fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase' }}>Revenue Analytics</div>
+      <div className="px-5 py-6 border-b border-slate-100 dark:border-slate-800">
+        <img src="/delta-logo.png" alt="Delta Diamonds" className="h-7 object-contain dark:brightness-0 dark:invert dark:opacity-80" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-600 mt-2">Revenue Analytics</p>
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '12px 10px' }}>
-        {NAV_ITEMS.map((item) => {
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {NAV.map((item) => {
           const isActive = active === item.id
           return (
             <button key={item.id} onClick={() => onNav(item.id)}
-              className={`nav-btn${isActive ? ' nav-active' : ''}`}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', color: isActive ? D.tealBrt : 'rgba(255,255,255,0.38)', fontSize: 13, fontWeight: isActive ? 600 : 400, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', marginBottom: 2, position: 'relative' }}>
-              <Icon name={item.icon} size={16} stroke="currentColor" />
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.id === 'receivables' && pendingCount > 0 && (
-                <span style={{ background: D.red, color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 99, padding: '1px 6px', minWidth: 18, textAlign: 'center', boxShadow: `0 0 8px ${D.red}60` }}>
-                  {pendingCount}
+              className={cn(
+                'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm transition-all duration-150 group relative',
+                isActive
+                  ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'
+              )}>
+              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-indigo-500 dark:bg-indigo-400" />}
+              <Icon name={item.icon} size={16} className="flex-shrink-0 transition-colors duration-150" />
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.id === 'receivables' && badge > 0 && (
+                <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight shadow-sm shadow-red-500/30">
+                  {badge}
                 </span>
               )}
             </button>
@@ -1036,15 +1004,15 @@ function Sidebar({ active, pendingCount, onNav, onRefresh, onExport, loading }: 
       </nav>
 
       {/* Bottom actions */}
-      <div style={{ padding: '12px 10px 20px', borderTop: `1px solid ${D.border}` }}>
-        <button onClick={onRefresh} disabled={loading} className="nav-btn"
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', color: loading ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.38)', fontSize: 13, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit', borderRadius: 9, marginBottom: 2 }}>
-          <Icon name="refresh" size={15} stroke="currentColor" />
+      <div className="px-3 py-4 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
+        <button onClick={onRefresh} disabled={loading}
+          className={cn('flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm transition-all duration-150', loading ? 'text-slate-300 dark:text-slate-700 cursor-default' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300')}>
+          <Icon name="refresh" size={16} className={cn('flex-shrink-0', loading && 'animate-spin')} />
           {loading ? 'Refreshing…' : 'Refresh Data'}
         </button>
-        <button onClick={onExport} className="nav-btn"
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.38)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 9 }}>
-          <Icon name="download" size={15} stroke="currentColor" />
+        <button onClick={onExport}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 transition-all duration-150">
+          <Icon name="download" size={16} className="flex-shrink-0" />
           Export CSV
         </button>
       </div>
@@ -1055,232 +1023,261 @@ function Sidebar({ active, pendingCount, onNav, onRefresh, onExport, loading }: 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 export function RevenueDashboard() {
+  const [dark, toggleDark] = useTheme()
   const [unlocked, setUnlocked] = useState(!APP_PASSWORD || sessionStorage.getItem(AUTH_KEY) === APP_PASSWORD)
-  const [allInvoices, setAllInvoices] = useState<SavedInvoice[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [error,   setError]     = useState('')
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [allInvoices, setAll] = useState<SavedInvoice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+  const [lastRefresh, setLR]  = useState<Date | null>(null)
 
-  const [period,      setPeriod]      = useState<Period>('all')
-  const [stateFilter, setStateFilter] = useState('all')
-  const [search,      setSearch]      = useState('')
+  const [period,  setPeriod]  = useState<Period>('all')
+  const [state,   setState]   = useState('all')
+  const [search,  setSearch]  = useState('')
 
-  const activeSection = useScrollSpy([...SECTION_IDS])
+  const active = useScrollSpy([...SECTIONS])
 
   const load = async () => {
     setLoading(true); setError('')
-    try { const data = await fetchInvoices(); setAllInvoices(data); setLastRefresh(new Date()) }
-    catch (err) { setError((err as Error).message) }
+    try { const d = await fetchInvoices(); setAll(d); setLR(new Date()) }
+    catch (e) { setError((e as Error).message) }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { if (unlocked) { void load() } }, [unlocked])
+  useEffect(() => { if (unlocked) void load() }, [unlocked])
 
   const markPaid = async (id: string, paidBy: 'cash' | 'check') => {
-    const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
-    setAllInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, paidBy } : inv))
-    await sb.from('invoices').update({ paid_by: paidBy }).eq('id', id)
+    setAll((p) => p.map((i) => i.id === id ? { ...i, paidBy } : i))
+    await createClient(SUPABASE_URL, SUPABASE_KEY).from('invoices').update({ paid_by: paidBy }).eq('id', id)
   }
 
   const deleteMemo = async (id: string) => {
-    const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
-    setAllInvoices((prev) => prev.filter((inv) => inv.id !== id))
-    await sb.from('invoices').delete().eq('id', id)
+    setAll((p) => p.filter((i) => i.id !== id))
+    await createClient(SUPABASE_URL, SUPABASE_KEY).from('invoices').delete().eq('id', id)
   }
 
   const navTo = (id: SectionId) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  const allStates = useMemo(() => {
-    const s = new Set(allInvoices.map((i) => i.state).filter(Boolean))
-    return Array.from(s).sort()
-  }, [allInvoices])
+  const allStates = useMemo(() => Array.from(new Set(allInvoices.map((i) => i.state).filter(Boolean))).sort(), [allInvoices])
 
   const invoices = useMemo(() => {
-    let data = filterByPeriod(allInvoices, period)
-    if (stateFilter !== 'all') data = data.filter((i) => i.state === stateFilter)
+    let d = filterByPeriod(allInvoices, period)
+    if (state !== 'all') d = d.filter((i) => i.state === state)
     const q = search.trim().toLowerCase()
-    if (q) data = data.filter((i) => i.company.toLowerCase().includes(q) || i.contactName.toLowerCase().includes(q))
-    return data
-  }, [allInvoices, period, stateFilter, search])
+    if (q) d = d.filter((i) => i.company.toLowerCase().includes(q) || i.contactName.toLowerCase().includes(q))
+    return d
+  }, [allInvoices, period, state, search])
 
   const kpi = useMemo(() => {
     const { currStart, prevStart, prevEnd } = periodBounds(period)
-    const prevInvs = allInvoices.filter((i) => { const d = new Date(i.date); return d >= prevStart && d <= prevEnd })
-    const total         = invoices.reduce((s, i) => s + i.total, 0)
-    const prevTotal     = prevInvs.reduce((s, i) => s + i.total, 0)
-    const collected     = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const prevCollected = prevInvs.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pending       = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
-    const count         = invoices.length
-    const prevCount     = prevInvs.length
-    const avg           = count > 0 ? total / count : 0
-    const prevAvg       = prevCount > 0 ? prevTotal / prevCount : 0
-    const collRate      = total > 0 ? (collected / total) * 100 : 0
-    const pendingCount  = invoices.filter((i) => i.paidBy === 'pending').length
+    const prev = allInvoices.filter((i) => { const d = new Date(i.date); return d >= prevStart && d <= prevEnd })
+    const total    = invoices.reduce((s, i) => s + i.total, 0)
+    const pTotal   = prev.reduce((s, i) => s + i.total, 0)
+    const coll     = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
+    const pColl    = prev.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
+    const pending  = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
+    const n        = invoices.length
+    const pN       = prev.length
+    const avg      = n > 0 ? total / n : 0
+    const pAvg     = pN > 0 ? pTotal / pN : 0
     void currStart
     return {
-      total, collected, pending, count, avg, collRate, pendingCount,
-      totalTrend: trendPct(total, prevTotal),
-      collTrend:  trendPct(collected, prevCollected),
-      countTrend: trendPct(count, prevCount),
-      avgTrend:   trendPct(avg, prevAvg),
+      total, coll, pending, n, avg,
+      collRate:     total > 0 ? (coll / total) * 100 : 0,
+      pendingCount: invoices.filter((i) => i.paidBy === 'pending').length,
+      totalT:  trendPct(total, pTotal),
+      collT:   trendPct(coll, pColl),
+      countT:  trendPct(n, pN),
+      avgT:    trendPct(avg, pAvg),
     }
   }, [invoices, allInvoices, period])
 
-  if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />
+  if (!unlocked) return (
+    <ThemeCtx.Provider value={dark}>
+      <PasswordGate onUnlock={() => setUnlocked(true)} />
+    </ThemeCtx.Provider>
+  )
 
   const PERIODS: [Period, string][] = [['7d','7D'],['30d','30D'],['90d','90D'],['6m','6M'],['1y','1Y'],['all','All']]
-  const hasFilters = search || stateFilter !== 'all'
-  const activeLabel = NAV_ITEMS.find((n) => n.id === activeSection)?.label ?? 'Dashboard'
+  const hasFilter = search || state !== 'all'
+  const activeLabel = NAV.find((n) => n.id === active)?.label ?? 'Dashboard'
 
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', background: D.page, minHeight: '100vh', color: D.text, display: 'flex' }}>
+    <ThemeCtx.Provider value={dark}>
+      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
 
-      {/* ── Sidebar ── */}
-      <Sidebar active={activeSection} pendingCount={kpi.pendingCount}
-        onNav={navTo} onRefresh={load} onExport={() => exportCSV(invoices)} loading={loading} />
+        {/* ── Sidebar ── */}
+        <Sidebar active={active} badge={kpi.pendingCount}
+          onNav={navTo} onRefresh={load} onExport={() => exportCSV(invoices)} loading={loading} />
 
-      {/* ── Main ── */}
-      <div style={{ marginLeft: SIDEBAR_W, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* ── Main ── */}
+        <div className="ml-[240px] flex-1 min-w-0 flex flex-col">
 
-        {/* Sticky top bar */}
-        <header style={{ position: 'sticky', top: 0, zIndex: 90, background: D.topbar, backdropFilter: 'blur(16px)', borderBottom: `1px solid ${D.border}`, padding: '0 32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', height: 58, gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: D.text, marginRight: 4, minWidth: 120 }}>{activeLabel}</div>
-            <div style={{ width: 1, height: 18, background: D.border, flexShrink: 0 }} />
+          {/* Sticky top bar */}
+          <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 px-8">
+            <div className="flex items-center h-14 gap-3">
+              <h1 className="text-sm font-bold text-slate-900 dark:text-white min-w-[120px]">{activeLabel}</h1>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
 
-            {/* Period tabs */}
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 3, flexShrink: 0 }}>
-              {PERIODS.map(([p, label]) => (
-                <button key={p} onClick={() => setPeriod(p)}
-                  className={`period-tab${period === p ? ' period-active' : ''}`}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: period === p ? D.tealBrt : 'rgba(255,255,255,0.32)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {label}
+              {/* Period tabs */}
+              <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                {PERIODS.map(([p, label]) => (
+                  <button key={p} onClick={() => setPeriod(p)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150',
+                      period === p
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    )}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* State filter */}
+              <select value={state} onChange={(e) => setState(e.target.value)}
+                className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all duration-150">
+                <option value="all">All States</option>
+                {allStates.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+
+              {/* Search */}
+              <div className="relative flex-1 max-w-[200px]">
+                <Icon name="search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all duration-150" />
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                {lastRefresh && <p className="text-[11px] text-slate-400 dark:text-slate-600 tabular-nums">{lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                {loading && <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-indigo-500 animate-spin" />}
+                <button onClick={toggleDark}
+                  className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150 text-slate-500 dark:text-slate-400">
+                  <Icon name={dark ? 'sun' : 'moon'} size={16} />
                 </button>
-              ))}
-            </div>
-
-            {/* State filter */}
-            <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}
-              style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${D.border}`, background: '#0a0e18', color: D.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
-              <option value="all">All States</option>
-              {allStates.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            {/* Search */}
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search company…"
-              style={{ flex: 1, maxWidth: 210, padding: '7px 12px', borderRadius: 8, border: `1px solid ${D.border}`, background: '#0a0e18', color: D.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-              {lastRefresh && (
-                <div style={{ fontSize: 11, color: D.text3, whiteSpace: 'nowrap' }}>
-                  {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              )}
-              {loading && <div className="spin" style={{ width: 16, height: 16, border: `2px solid ${D.border}`, borderTopColor: D.teal, borderRadius: '50%' }} />}
-            </div>
-          </div>
-
-          {hasFilters && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, fontSize: 12 }}>
-              <span style={{ color: D.text2 }}>Filtered: <strong style={{ color: D.text }}>{invoices.length}</strong> of <strong style={{ color: D.text }}>{allInvoices.length}</strong></span>
-              {search && <span style={{ background: 'rgba(20,184,166,0.14)', color: D.tealBrt, padding: '2px 10px', borderRadius: 99, fontWeight: 700, border: `1px solid rgba(20,184,166,0.3)` }}>{search}</span>}
-              {stateFilter !== 'all' && <span style={{ background: 'rgba(20,184,166,0.14)', color: D.tealBrt, padding: '2px 10px', borderRadius: 99, fontWeight: 700, border: `1px solid rgba(20,184,166,0.3)` }}>{stateFilter}</span>}
-              <button onClick={() => { setSearch(''); setStateFilter('all') }}
-                style={{ marginLeft: 4, fontSize: 12, color: D.tealBrt, border: 'none', background: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Clear</button>
-            </div>
-          )}
-        </header>
-
-        {/* Page content */}
-        <div style={{ flex: 1, padding: '32px 32px 80px' }}>
-
-          {error && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.25)`, borderRadius: 12, padding: '14px 18px', marginBottom: 24, color: D.redSoft, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon name="alert" size={16} stroke={D.redSoft} /> {error}
-            </div>
-          )}
-
-          {loading && !allInvoices.length ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 0', gap: 18 }}>
-              <div className="spin" style={{ width: 40, height: 40, border: `3px solid ${D.border}`, borderTopColor: D.teal, borderRadius: '50%', boxShadow: `0 0 20px ${D.teal}30` }} />
-              <div style={{ fontSize: 15, color: D.text3 }}>Loading from Supabase…</div>
-            </div>
-          ) : allInvoices.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 0', gap: 14 }}>
-              <div style={{ fontSize: 52, opacity: 0.4 }}>🧾</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: D.text }}>No invoices yet</div>
-              <div style={{ fontSize: 14, color: D.text2 }}>Create invoices in the app — they'll appear here automatically.</div>
-            </div>
-          ) : (
-            <>
-              {/* ── KPIs ── */}
-              <div id="overview" style={{ marginBottom: 32, scrollMarginTop: 80 }}>
-                <SectionLabel text="Overview" />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-                  <KpiCard label="Total Revenue"    rawValue={kpi.total}     format="money" sub="All billed"                                   trend={kpi.totalTrend}  accentColor={D.teal}    iconName="dollar"   fadeClass="fade-up-1" />
-                  <KpiCard label="Collected"         rawValue={kpi.collected} format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collTrend}  accentColor={D.green}   iconName="check"    fadeClass="fade-up-2" />
-                  <KpiCard label="Outstanding"       rawValue={kpi.pending}   format="money" sub={`${kpi.pendingCount} pending invoices`}          trend={null}           accentColor={D.orange}  iconName="clock"    fadeClass="fade-up-3" />
-                  <KpiCard label="Total Documents"   rawValue={kpi.count}     format="count" sub="Invoices + memos"                              trend={kpi.countTrend} accentColor={D.indigo}  iconName="file"     fadeClass="fade-up-4" />
-                  <KpiCard label="Avg Deal Size"     rawValue={kpi.avg}       format="money" sub="Per invoice"                                   trend={kpi.avgTrend}   accentColor={D.purple}  iconName="trending" fadeClass="fade-up-5" />
-                </div>
               </div>
+            </div>
 
-              {/* ── Revenue Trend ── */}
-              <div id="revenue" style={{ marginBottom: 20, scrollMarginTop: 80 }}>
-                <SectionLabel text="Revenue Trend" />
-                <RevenueTrendChart invoices={invoices} />
+            {/* Filter pills */}
+            {hasFilter && (
+              <div className="flex items-center gap-2 pb-2.5 text-xs">
+                <span className="text-slate-500"><strong className="text-slate-800 dark:text-slate-200">{invoices.length}</strong> of <strong className="text-slate-800 dark:text-slate-200">{allInvoices.length}</strong></span>
+                {search && <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold ring-1 ring-indigo-200 dark:ring-indigo-500/20">{search}</span>}
+                {state !== 'all' && <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold ring-1 ring-indigo-200 dark:ring-indigo-500/20">{state}</span>}
+                <button onClick={() => { setSearch(''); setState('all') }} className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline ml-1">Clear</button>
               </div>
+            )}
+          </header>
 
-              {/* ── Payments + Collection ── */}
-              <div id="payments" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, scrollMarginTop: 80 }}>
-                <PaymentDonut invoices={invoices} />
-                <CollectionCard invoices={invoices} />
+          {/* Content */}
+          <main className="flex-1 px-8 py-8 space-y-8">
+
+            {error && (
+              <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+                <Icon name="alert" size={16} className="flex-shrink-0" /> {error}
               </div>
+            )}
 
-              {/* ── By State + Customers ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                <div id="geography" style={{ scrollMarginTop: 80 }}>
-                  <StateRevenueChart invoices={invoices} />
-                </div>
-                <div id="customers" style={{ scrollMarginTop: 80 }}>
-                  <TopCustomers invoices={invoices} />
-                </div>
-              </div>
-
-              {/* ── Product Mix + Activity ── */}
-              <div id="products" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, scrollMarginTop: 80 }}>
-                <ProductMixChart invoices={invoices} />
-                <InvoiceActivityChart invoices={invoices} />
-              </div>
-
-              {/* ── Receivables ── */}
-              <div id="receivables" style={{ marginBottom: 24, scrollMarginTop: 80 }}>
-                {invoices.some((i) => i.paidBy === 'pending') ? (
-                  <PendingTable invoices={invoices} onMarkPaid={markPaid} />
-                ) : (
-                  <div style={{ ...dc({ padding: '24px' }), display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="check" size={20} stroke={D.green} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>All caught up</div>
-                      <div style={{ fontSize: 13, color: D.text2, marginTop: 2 }}>No pending receivables in this period.</div>
-                    </div>
+            {loading && !allInvoices.length ? (
+              /* Loading skeleton */
+              <div className="space-y-8">
+                <div>
+                  <SectionDivider label="Overview" />
+                  <div className="grid grid-cols-5 gap-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
+                        <Skel className="w-9 h-9 mb-4 rounded-xl" />
+                        <Skel className="w-28 h-7 mb-2" />
+                        <Skel className="w-16 h-2.5 mb-2" />
+                        <Skel className="w-20 h-3" />
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 h-72">
+                  <div className="p-6"><Skel className="w-36 h-4 mb-2" /><Skel className="w-48 h-3" /></div>
+                  <div className="px-6"><Skel className="w-full h-44" /></div>
+                </div>
               </div>
+            ) : allInvoices.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32 gap-4">
+                <div className="text-5xl opacity-30">🧾</div>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">No invoices yet</h2>
+                <p className="text-sm text-slate-400">Create invoices in the app — they'll appear here automatically.</p>
+              </div>
+            ) : (
+              <>
+                {/* KPIs */}
+                <section id="overview" className="scroll-mt-20">
+                  <SectionDivider label="Overview" />
+                  <div className="grid grid-cols-5 gap-4">
+                    <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   />
+                    <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  />
+                    <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} />
+                    <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub="Invoices + memos"                              trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={180} />
+                    <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
+                  </div>
+                </section>
 
-              {/* ── Shop Ledger ── */}
-              <div id="ledger" style={{ scrollMarginTop: 80 }}>
-                <SectionLabel text="Shop Ledger" />
-                <ShopLedger invoices={invoices} onMarkPaid={markPaid} onDelete={deleteMemo} />
-              </div>
-            </>
-          )}
+                {/* Revenue trend */}
+                <section id="revenue" className="scroll-mt-20">
+                  <SectionDivider label="Revenue Trend" />
+                  <RevenueTrendChart invoices={invoices} />
+                </section>
+
+                {/* Payments + Collection */}
+                <section id="payments" className="scroll-mt-20">
+                  <SectionDivider label="Payments" />
+                  <div className="grid grid-cols-2 gap-5">
+                    <PaymentDonut   invoices={invoices} />
+                    <CollectionCard invoices={invoices} />
+                  </div>
+                </section>
+
+                {/* Geography + Customers */}
+                <div className="grid grid-cols-2 gap-5">
+                  <section id="geography" className="scroll-mt-20"><StateRevenueChart invoices={invoices} /></section>
+                  <section id="customers" className="scroll-mt-20"><TopCustomers      invoices={invoices} /></section>
+                </div>
+
+                {/* Products + Activity */}
+                <section id="products" className="scroll-mt-20">
+                  <SectionDivider label="Products" />
+                  <div className="grid grid-cols-2 gap-5">
+                    <ProductMixChart invoices={invoices} />
+                    <ActivityChart   invoices={invoices} />
+                  </div>
+                </section>
+
+                {/* Receivables */}
+                <section id="receivables" className="scroll-mt-20">
+                  <SectionDivider label="Receivables" />
+                  {invoices.some((i) => i.paidBy === 'pending') ? (
+                    <PendingTable invoices={invoices} onMarkPaid={markPaid} />
+                  ) : (
+                    <Card>
+                      <div className="flex items-center gap-3 p-6">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 flex-shrink-0">
+                          <Icon name="check" size={18} className="text-emerald-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">All caught up</p>
+                          <p className="text-xs text-slate-400 mt-0.5">No pending receivables in this period.</p>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                </section>
+
+                {/* Shop ledger */}
+                <section id="ledger" className="scroll-mt-20 pb-20">
+                  <SectionDivider label="Shop Ledger" />
+                  <ShopLedger invoices={invoices} onMarkPaid={markPaid} onDelete={deleteMemo} />
+                </section>
+              </>
+            )}
+          </main>
         </div>
       </div>
-    </div>
+    </ThemeCtx.Provider>
   )
 }

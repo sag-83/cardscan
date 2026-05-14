@@ -1,120 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/delta-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&display=swap" rel="stylesheet" />
     <title>Revenue Analytics — Delta Diamonds</title>
     <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      /* Base resets not covered by Tailwind preflight */
+      *, *::before, *::after { box-sizing: border-box; }
+
+      /* Smooth scrolling */
       html { scroll-behavior: smooth; }
-      body {
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        background: #06090f;
-        color: #dde3ed;
-      }
 
-      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      /* Thin scrollbar */
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+      ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.35); border-radius: 99px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.55); }
 
-      /* ── Keyframes ──────────────────────────────────── */
-      @keyframes shimmer {
-        0%   { background-position: 200% 0; }
+      /* Shimmer for loading skeleton */
+      .skeleton {
+        background: linear-gradient(90deg, transparent 25%, rgba(148,163,184,0.12) 50%, transparent 75%);
+        background-size: 200% 100%;
+        animation: shimmerAnim 1.6s infinite;
+      }
+      @keyframes shimmerAnim {
+        0% { background-position: 200% 0; }
         100% { background-position: -200% 0; }
       }
-      @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(14px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
 
-      /* ── Utilities ──────────────────────────────────── */
-      .fade-up  { animation: fadeUp 0.44s cubic-bezier(0.16, 1, 0.3, 1) both; }
-      .fade-up-1{ animation-delay: 0.04s; }
-      .fade-up-2{ animation-delay: 0.10s; }
-      .fade-up-3{ animation-delay: 0.16s; }
-      .fade-up-4{ animation-delay: 0.22s; }
-      .fade-up-5{ animation-delay: 0.28s; }
-
-      .shimmer {
-        background: linear-gradient(90deg, #0e1420 25%, #1c2d44 50%, #0e1420 75%);
-        background-size: 200% 100%;
-        animation: shimmer 1.8s infinite;
-        border-radius: 8px;
-      }
-      .spin { animation: spin 0.75s linear infinite; }
-
-      /* ── Sidebar nav ────────────────────────────────── */
-      .nav-btn {
-        transition: background 0.14s, color 0.14s;
-        border-radius: 9px;
-      }
-      .nav-btn:hover:not(.nav-active) {
-        background: rgba(255,255,255,0.05) !important;
-        color: rgba(255,255,255,0.78) !important;
-      }
-      .nav-active {
-        background: rgba(20,184,166,0.13) !important;
-        color: #2dd4bf !important;
-        font-weight: 600 !important;
-      }
-      .nav-active svg { stroke: #2dd4bf; }
-
-      /* ── Cards ──────────────────────────────────────── */
-      .card-lift { transition: box-shadow 0.2s, transform 0.2s; }
-      .card-lift:hover {
-        box-shadow: 0 8px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(20,184,166,0.18) !important;
-        transform: translateY(-2px);
-      }
-
-      /* ── Buttons ────────────────────────────────────── */
-      .btn { transition: all 0.14s; cursor: pointer; font-family: inherit; }
-      .btn:active { transform: scale(0.96); }
-      .btn-primary:hover  { filter: brightness(1.14); transform: translateY(-1px); }
-      .btn-ghost:hover    { background: rgba(255,255,255,0.07) !important; }
-      .btn-danger         { transition: all 0.14s; }
-      .btn-danger:hover   { background: rgba(239,68,68,0.14) !important; color: #f87171 !important; border-color: rgba(239,68,68,0.4) !important; }
-      .btn-paid:hover     { background: rgba(16,185,129,0.14) !important; color: #34d399 !important; border-color: rgba(16,185,129,0.4) !important; }
-
-      /* ── Period tabs ────────────────────────────────── */
-      .period-tab { transition: all 0.14s; }
-      .period-tab:hover:not(.period-active) {
-        background: rgba(255,255,255,0.07) !important;
-        color: rgba(255,255,255,0.75) !important;
-      }
-      .period-active {
-        background: rgba(20,184,166,0.18) !important;
-        color: #2dd4bf !important;
-        font-weight: 700 !important;
-        box-shadow: 0 0 0 1px rgba(20,184,166,0.38);
-      }
-
-      /* ── Table rows ─────────────────────────────────── */
-      .tr-hover { transition: background 0.1s; cursor: default; }
-      .tr-hover:hover { background: rgba(255,255,255,0.028) !important; }
-
-      /* ── Inputs ─────────────────────────────────────── */
-      input, select { font-family: inherit; color-scheme: dark; }
-      input[type="search"]:focus,
-      input[type="password"]:focus,
-      input[type="text"]:focus,
-      select:focus {
-        outline: 2px solid rgba(20,184,166,0.55) !important;
-        outline-offset: -2px !important;
-      }
-      ::placeholder { color: rgba(255,255,255,0.2); }
+      /* Recharts tooltip override */
+      .recharts-tooltip-wrapper { outline: none !important; }
+      .recharts-tooltip-cursor { fill: rgba(148,163,184,0.06) !important; }
     </style>
   </head>
-  <body>
+  <body class="bg-slate-950 text-slate-50 font-sans antialiased">
     <div id="dash-root"></div>
     <script type="module" src="/src/dashboard-main.tsx"></script>
   </body>

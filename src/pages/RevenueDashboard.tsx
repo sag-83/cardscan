@@ -7,7 +7,6 @@ import {
 } from 'recharts'
 import { SavedInvoice } from '../types/invoice'
 import { printSavedInvoice } from '../lib/invoicePrint'
-import { Hero195 } from '@/components/ui/hero-195'
 import { TracingBeam } from '@/components/ui/tracing-beam'
 import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
 import JobListingComponent, { type Job } from '@/components/ui/joblisting-component'
@@ -1205,11 +1204,6 @@ export function RevenueDashboard() {
 
           {/* Content */}
           <main className="flex-1 px-8 py-8 space-y-8">
-            <Hero195
-              className="scroll-mt-24 border border-slate-200/80 shadow-sm dark:border-slate-800"
-              onPrimaryAction={() => navTo('overview')}
-            />
-
             <TracingBeam className="space-y-8">
             {error && (
               <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Calendar, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
@@ -83,7 +84,9 @@ export function FollowupModal() {
               {contact.name || contact.company || 'Contact'}
             </div>
           </div>
-          <button onClick={close} style={{ background: 'none', border: 'none', color: 'var(--text3)', fontSize: 22, cursor: 'pointer', padding: '2px 6px' }}>✕</button>
+          <button type="button" onClick={close} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: '2px 6px', display: 'flex' }} aria-label="Close">
+            <X size={22} strokeWidth={2} />
+          </button>
         </div>
 
         {/* Date & Time */}
@@ -111,8 +114,9 @@ export function FollowupModal() {
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={handleSave} style={{ ...btnStyle, flex: 2, background: 'var(--accent)' }}>
-            📅 Set Reminder
+          <button type="button" onClick={handleSave} style={{ ...btnStyle, flex: 2, background: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Calendar size={18} strokeWidth={2} aria-hidden />
+            Set Reminder
           </button>
           {contact.followup_at && (
             <button onClick={handleClear} style={{ ...btnStyle, flex: 1, background: 'var(--danger)' }}>

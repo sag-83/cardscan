@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceToDB } from '../../lib/supabase'
@@ -290,7 +291,9 @@ export function InvoiceModal() {
         <div style={{ width: 36, height: 4, borderRadius: 4, background: 'var(--bg4)', margin: '0 auto 14px' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 19, fontWeight: 800 }}>{isPreview ? 'Invoice Preview' : 'Create Invoice'}</div>
-          <button onClick={close} style={{ border: 'none', background: 'none', fontSize: 22, color: 'var(--text3)' }}>✕</button>
+          <button type="button" onClick={close} style={{ border: 'none', background: 'none', color: 'var(--text3)', display: 'flex', padding: 4 }} aria-label="Close">
+            <X size={22} strokeWidth={2} />
+          </button>
         </div>
         {!isPreview ? (
           <>
@@ -378,7 +381,9 @@ export function InvoiceModal() {
                     inputMode="decimal"
                     style={{ ...inputStyle, flex: 1 }}
                   />
-                  <button onClick={() => removeItem(item.id)} style={removeBtnStyle}>✕</button>
+                  <button type="button" onClick={() => removeItem(item.id)} style={{ ...removeBtnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <X size={14} strokeWidth={2.5} aria-hidden />
+                  </button>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
                   Line total: {money(rowTotal(item))}

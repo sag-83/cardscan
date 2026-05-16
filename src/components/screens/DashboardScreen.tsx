@@ -1,4 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  Banknote,
+  Check,
+  ClipboardList,
+  FileText,
+  Globe,
+  Landmark,
+  Loader,
+  X,
+} from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { SavedInvoice } from '../../types/invoice'
 import { updateInvoiceInDB, deleteInvoiceFromDB } from '../../lib/supabase'
@@ -243,7 +253,9 @@ function RevenueTab() {
   if (!invoices.length) {
     return (
       <div style={{ textAlign: 'center', padding: '70px 24px', color: 'var(--text3)' }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }}>🧾</div>
+        <div style={{ fontSize: 44, marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text3)' }}>
+          <FileText size={44} strokeWidth={1.25} aria-hidden />
+        </div>
         <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text2)', marginBottom: 6 }}>No invoices yet</div>
         <div>Create an invoice from any contact card — it will appear here automatically.</div>
       </div>
@@ -266,10 +278,12 @@ function RevenueTab() {
           ))}
         </select>
         <button
+          type="button"
           onClick={() => window.open('/dashboard', '_blank')}
-          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          🌐 Web
+          <Globe size={16} strokeWidth={2} aria-hidden />
+          Web
         </button>
       </div>
 
@@ -284,7 +298,7 @@ function RevenueTab() {
       {/* Pending payments */}
       {pendingInvoices.length > 0 && (
         <>
-          <Section title={`⚠️ Pending Payments · ${pendingInvoices.length}`} color="#ff9500" />
+          <Section title={`Pending payments · ${pendingInvoices.length}`} color="#ff9500" />
           <div style={{ background: 'var(--bg2)', border: '1.5px solid rgba(255,149,0,0.35)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
             {pendingInvoices.map((inv, i) => (
               <PendingRow key={inv.id} inv={inv} isFirst={i === 0} onMarkPaid={handleMarkPaid} />
@@ -296,11 +310,11 @@ function RevenueTab() {
       {/* Payment breakdown */}
       <Section title="Payment Breakdown" />
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-        <PaymentBreakdownRow label="💵 Cash" amount={byPayment.cash} count={byPayment.cashCount} color="#34c759" />
-        <PaymentBreakdownRow label="🏦 Check" amount={byPayment.check} count={byPayment.checkCount} color="#007aff" divider />
-        <PaymentBreakdownRow label="⏳ Pending" amount={byPayment.pending} count={byPayment.pendingCount} color="#ff9500" divider />
+        <PaymentBreakdownRow label="Cash" amount={byPayment.cash} count={byPayment.cashCount} color="#34c759" icon={<Banknote className="size-3.5 shrink-0" aria-hidden />} />
+        <PaymentBreakdownRow label="Check" amount={byPayment.check} count={byPayment.checkCount} color="#007aff" divider icon={<Landmark className="size-3.5 shrink-0" aria-hidden />} />
+        <PaymentBreakdownRow label="Pending" amount={byPayment.pending} count={byPayment.pendingCount} color="#ff9500" divider icon={<Loader className="size-3.5 shrink-0" aria-hidden />} />
         {byPayment.memoCount > 0 && (
-          <PaymentBreakdownRow label="📋 Memo" amount={byPayment.memo} count={byPayment.memoCount} color="#8b5cf6" divider />
+          <PaymentBreakdownRow label="Memo" amount={byPayment.memo} count={byPayment.memoCount} color="#8b5cf6" divider icon={<ClipboardList className="size-3.5 shrink-0" aria-hidden />} />
         )}
       </div>
 
@@ -378,10 +392,12 @@ function PendingRow({ inv, isFirst, onMarkPaid }: {
           <div style={{ fontSize: 15, fontWeight: 800, color: '#ff9500' }}>{money(inv.total)}</div>
           {!showPicker ? (
             <button
+              type="button"
               onClick={() => setShowPicker(true)}
-              style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer' }}
+              style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              Paid ✓
+              <Check size={12} strokeWidth={3} aria-hidden />
+              Paid
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 4 }}>
@@ -393,9 +409,9 @@ function PendingRow({ inv, isFirst, onMarkPaid }: {
                 style={{ fontSize: 11, fontWeight: 700, padding: '5px 9px', borderRadius: 8, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}>
                 Check
               </button>
-              <button onClick={() => setShowPicker(false)}
-                style={{ fontSize: 11, padding: '5px 7px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}>
-                ✕
+              <button type="button" onClick={() => setShowPicker(false)}
+                style={{ fontSize: 11, padding: '5px 7px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <X size={14} strokeWidth={2.5} aria-hidden />
               </button>
             </div>
           )}
@@ -438,9 +454,10 @@ function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color }}>{money(inv.total)}</div>
           {isPending && !showPicker && (
-            <button onClick={() => setShowPicker(true)}
-              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer' }}>
-              Paid ✓
+            <button type="button" onClick={() => setShowPicker(true)}
+              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Check size={12} strokeWidth={3} aria-hidden />
+              Paid
             </button>
           )}
           {isPending && showPicker && (
@@ -453,9 +470,9 @@ function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
                 style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 7, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}>
                 Check
               </button>
-              <button onClick={() => setShowPicker(false)}
-                style={{ fontSize: 10, padding: '3px 6px', borderRadius: 7, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}>
-                ✕
+              <button type="button" onClick={() => setShowPicker(false)}
+                style={{ fontSize: 10, padding: '3px 6px', borderRadius: 7, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <X size={12} strokeWidth={2.5} aria-hidden />
               </button>
             </div>
           )}
@@ -525,11 +542,22 @@ function LedgerRowItem({ row, onMarkPaid, onDelete }: {
   )
 }
 
-function PaymentBreakdownRow({ label, amount, count, color, divider }: { label: string; amount: number; count: number; color: string; divider?: boolean }) {
+function PaymentBreakdownRow({ label, amount, count, color, divider, icon }: {
+  label: string
+  amount: number
+  count: number
+  color: string
+  divider?: boolean
+  icon?: ReactNode
+}) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderTop: divider ? '1px solid var(--border2)' : 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        {icon ? (
+          <span style={{ color, display: 'flex', alignItems: 'center' }}>{icon}</span>
+        ) : (
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        )}
         <div style={{ fontSize: 14, fontWeight: 700 }}>{label}</div>
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>{count} inv</div>
       </div>

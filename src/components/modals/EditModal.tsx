@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Check, Trash2, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { normalizeContact } from '../../lib/utils'
 import { saveContactToDB } from '../../lib/supabase'
@@ -11,9 +12,9 @@ const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
   { key: 'title', label: 'Job Title' },
   { key: 'company', label: 'Company' },
   { key: 'email', label: 'Email', type: 'email' },
-  { key: 'phone_mobile', label: '📱 Mobile Phone', type: 'tel' },
-  { key: 'phone_work', label: '📞 Work Phone', type: 'tel' },
-  { key: 'phone_fax', label: '📠 Fax', type: 'tel' },
+  { key: 'phone_mobile', label: 'Mobile Phone', type: 'tel' },
+  { key: 'phone_work', label: 'Work Phone', type: 'tel' },
+  { key: 'phone_fax', label: 'Fax', type: 'tel' },
   { key: 'website', label: 'Website' },
   { key: 'address', label: 'Address' },
 ]
@@ -101,10 +102,10 @@ export function EditModal() {
           <div style={{ fontSize: 19, fontWeight: 800 }}>
             {isNew ? 'Add Contact' : 'Edit Contact'}
           </div>
-          <button onClick={() => setEditModal(null)} style={{
+          <button type="button" onClick={() => setEditModal(null)} style={{
             background: 'none', border: 'none', color: 'var(--text3)',
-            fontSize: 22, cursor: 'pointer', padding: '2px 6px',
-          }}>✕</button>
+            cursor: 'pointer', padding: '2px 6px', display: 'flex', alignItems: 'center',
+          }} aria-label="Close"><X size={22} strokeWidth={2} /></button>
         </div>
 
         {/* Simple text fields */}
@@ -172,9 +173,14 @@ export function EditModal() {
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button onClick={handleSave} style={{ ...btn('primary'), flex: 2 }}>✓ Save</button>
+          <button type="button" onClick={handleSave} style={{ ...btn('primary'), flex: 2, gap: 8 }}>
+            <Check size={18} strokeWidth={2.5} aria-hidden />
+            Save
+          </button>
           {!isNew && (
-            <button onClick={handleDelete} style={{ ...btn('danger'), flex: 1 }}>🗑</button>
+            <button type="button" onClick={handleDelete} style={{ ...btn('danger'), flex: 1, gap: 8 }}>
+              <Trash2 size={18} aria-hidden />
+            </button>
           )}
         </div>
       </div>

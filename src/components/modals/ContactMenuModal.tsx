@@ -1,3 +1,4 @@
+import { Camera, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { deleteImages } from '../../lib/imageStore'
 
@@ -69,10 +70,10 @@ export function ContactMenuModal() {
           {contact.name || contact.company || 'Contact'}
         </div>
 
-        <MenuBtn onClick={handleView}>👁 View</MenuBtn>
-        <MenuBtn onClick={handleEdit}>✏️ Edit</MenuBtn>
-        <MenuBtn onClick={handleScanBack}>📸 Scan Back Side</MenuBtn>
-        <MenuBtn onClick={handleDelete} danger>🗑 Delete</MenuBtn>
+        <MenuBtn onClick={handleView}><Eye size={18} strokeWidth={2} aria-hidden /> View</MenuBtn>
+        <MenuBtn onClick={handleEdit}><Pencil size={18} strokeWidth={2} aria-hidden /> Edit</MenuBtn>
+        <MenuBtn onClick={handleScanBack}><Camera size={18} strokeWidth={2} aria-hidden /> Scan Back Side</MenuBtn>
+        <MenuBtn onClick={handleDelete} danger><Trash2 size={18} aria-hidden /> Delete</MenuBtn>
       </div>
     </div>
   )

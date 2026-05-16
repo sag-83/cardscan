@@ -1,4 +1,22 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, type CSSProperties } from 'react'
+import {
+  ArrowUpRight,
+  Calendar,
+  Check,
+  CircleAlert,
+  Clock,
+  ContactRound,
+  Handshake,
+  History,
+  Loader2,
+  MapPin,
+  MessageSquare,
+  Package,
+  Phone,
+  Search,
+  Star,
+  X,
+} from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
@@ -200,52 +218,54 @@ export function ContactsScreen() {
               background: 'var(--bg3)', border: 'none', borderRadius: 10,
               fontSize: 15, color: 'var(--text)' }} />
           {query && (
-            <button onClick={() => setQuery('')} style={{
+            <button type="button" onClick={() => setQuery('')} style={{
               position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
               width: 20, height: 20, borderRadius: '50%',
               background: 'var(--text3)', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--bg)', fontSize: 12, fontWeight: 800, lineHeight: 1,
-              padding: 0,
-            }}>✕</button>
+              color: 'var(--bg)', padding: 0,
+            }} aria-label="Clear search">
+              <X size={12} strokeWidth={3} />
+            </button>
           )}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}
             style={dropdownStyle(filterStars > 0)}>
-            <option value={0}>⭐</option>
-            <option value={1}>★ 1 ({starCounts.get(1) ?? 0})</option>
-            <option value={2}>★★ 2 ({starCounts.get(2) ?? 0})</option>
-            <option value={3}>★★★ 3 ({starCounts.get(3) ?? 0})</option>
-            <option value={4}>★★★★ 4 ({starCounts.get(4) ?? 0})</option>
+            <option value={0}>Stars</option>
+            <option value={1}>1 star ({starCounts.get(1) ?? 0})</option>
+            <option value={2}>2 stars ({starCounts.get(2) ?? 0})</option>
+            <option value={3}>3 stars ({starCounts.get(3) ?? 0})</option>
+            <option value={4}>4 stars ({starCounts.get(4) ?? 0})</option>
           </select>
           <select value={filterState} onChange={(e) => onStateChange(e.target.value)}
             style={dropdownStyle(!!filterState)}>
-            <option value="">📍 ST</option>
+            <option value="">ST</option>
             {states.map((s) => <option key={s} value={s}>{s} ({stateCounts.get(s) ?? 0})</option>)}
           </select>
           <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)}
             style={dropdownStyle(!!filterCity)}>
-            <option value="">🏙 City</option>
+            <option value="">City</option>
             {cities.map((c) => <option key={c} value={c}>{c} ({cityCounts.get(c) ?? 0})</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
             style={{ ...dropdownStyle(!!filterArea), flex: 1 }}>
-            <option value="">🗺 Area</option>
+            <option value="">Area</option>
             {areas.map((a) => <option key={a} value={a}>{a} ({areaCounts.get(a) ?? 0})</option>)}
           </select>
           <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
             style={{ ...dropdownStyle(!!filterType), flex: 1 }}>
-            <option value="">🏷 Type</option>
-            <option value="customer">🤝 Customer ({customerCount})</option>
-            <option value="goods_shown">📦 Goods Shown ({goodsShownCount})</option>
-            <option value="old_customer">🕰 Old Customer ({oldCustomerCount})</option>
+            <option value="">Type</option>
+            <option value="customer">Customer ({customerCount})</option>
+            <option value="goods_shown">Goods shown ({goodsShownCount})</option>
+            <option value="old_customer">Old customer ({oldCustomerCount})</option>
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
+            type="button"
             onClick={handleNearMe}
             style={{
               flex: 1,
@@ -254,12 +274,33 @@ export function ContactsScreen() {
               border: `1.5px solid ${nearMeActive ? '#34c759' : 'var(--border)'}`,
               background: nearMeActive ? 'rgba(52,199,89,0.12)' : 'var(--bg3)',
               color: nearMeActive ? '#34c759' : 'var(--text2)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
             }}
           >
-            {nearMeLoading ? '⏳ Locating…' : nearMeActive ? '📍 Near Me ✓' : '📍 Near Me'}
+            {nearMeLoading ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                Locating…
+              </>
+            ) : nearMeActive ? (
+              <>
+                <MapPin className="size-3.5 shrink-0" aria-hidden />
+                Near Me
+                <Check className="size-3.5 shrink-0" aria-hidden />
+              </>
+            ) : (
+              <>
+                <MapPin className="size-3.5 shrink-0" aria-hidden />
+                Near Me
+              </>
+            )}
           </button>
           {lastAddedId && (
             <button
+              type="button"
               onClick={jumpToLastAdded}
               style={{
                 flex: 1,
@@ -268,18 +309,27 @@ export function ContactsScreen() {
                 background: 'rgba(0,122,255,0.1)',
                 color: 'var(--accent)', fontSize: 12, fontWeight: 800,
                 cursor: 'pointer', whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
               }}
             >
-              ★ Last
+              <Star className="size-3.5 shrink-0 fill-[var(--accent)] text-[var(--accent)]" aria-hidden />
+              Last
             </button>
           )}
         </div>
         {hasFilters && (
-          <button onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea(''); setFilterType('') }}
+          <button
+            type="button"
+            onClick={() => { setFilterStars(0); setFilterState(''); setFilterCity(''); setFilterArea(''); setFilterType('') }}
             style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 99,
               border: '1.5px solid var(--danger)', background: 'transparent',
-              color: 'var(--danger)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ✕ Clear filters
+              color: 'var(--danger)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <X className="size-3.5" aria-hidden />
+            Clear filters
           </button>
         )}
       </div>
@@ -295,7 +345,9 @@ export function ContactsScreen() {
 
       {!filtered.length && (
         <div style={{ textAlign: 'center', padding: '70px 24px', color: 'var(--text3)' }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>{contacts.length ? '🔍' : '📇'}</div>
+          <div style={{ fontSize: 44, marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text3)' }}>
+            {contacts.length ? <Search size={44} strokeWidth={1.25} aria-hidden /> : <ContactRound size={44} strokeWidth={1.25} aria-hidden />}
+          </div>
           <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text2)', marginBottom: 6 }}>
             {contacts.length ? 'No matches' : 'No contacts yet'}
           </div>
@@ -307,7 +359,7 @@ export function ContactsScreen() {
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)',
           padding: '14px 16px 5px', textTransform: 'uppercase',
           letterSpacing: '0.6px', background: 'var(--bg)' }}>
-          {nearMeActive ? '📍 Nearest First' : 'Contacts A-Z'}
+          {nearMeActive ? 'Nearest first' : 'Contacts A–Z'}
         </div>
       )}
 
@@ -323,7 +375,7 @@ export function ContactsScreen() {
   )
 }
 
-function dropdownStyle(active: boolean): React.CSSProperties {
+function dropdownStyle(active: boolean): CSSProperties {
   return {
     flex: 1, padding: '8px 6px', borderRadius: 10, fontSize: 11, fontWeight: 600,
     border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
@@ -419,18 +471,20 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
         }}
       >
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); void shareBusinessCard(); closeSwipe() }}
           style={{
             minWidth: 66, height: 54, borderRadius: 16,
             border: 'none', background: 'rgba(255,255,255,0.96)',
             color: 'var(--accent)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             padding: '0 12px',
           }}
           title="Share"
           aria-label="Share contact card"
         >
-          ↗ Share
+          <ArrowUpRight className="size-3.5 shrink-0" aria-hidden />
+          Share
         </button>
       </div>
       <div
@@ -445,18 +499,20 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
         }}
       >
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); void sendColdMessage(); closeSwipe() }}
           style={{
             minWidth: 70, height: 54, borderRadius: 16,
             border: 'none', background: 'rgba(255,255,255,0.96)',
             color: '#1f8f44', fontSize: 12, fontWeight: 800, cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             padding: '0 12px',
           }}
           title="Cold message"
           aria-label="Send cold message"
         >
-          💬 Msg
+          <MessageSquare className="size-3.5 shrink-0" aria-hidden />
+          Msg
         </button>
       </div>
       <div
@@ -570,7 +626,14 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
         )}
         <div style={{ display: 'flex', gap: 1, marginTop: 3 }}>
           {[1, 2, 3, 4].map((n) => (
-            <span key={n} style={{ fontSize: 11, color: c.stars >= n ? 'var(--star)' : 'var(--bg4)' }}>★</span>
+            <Star
+              key={n}
+              size={11}
+              className="shrink-0"
+              fill={c.stars >= n ? 'var(--star)' : 'none'}
+              stroke={c.stars >= n ? 'var(--star)' : 'var(--bg4)'}
+              aria-hidden
+            />
           ))}
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
@@ -581,7 +644,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               background: 'rgba(52,199,89,0.12)', color: '#34c759',
               fontSize: 11, fontWeight: 800,
             }}>
-              📍 {formatDistance(distance)}
+              <MapPin className="size-3 shrink-0" aria-hidden />
+              {formatDistance(distance)}
             </div>
           )}
           {isLastAdded && (
@@ -591,7 +655,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               background: 'rgba(255,59,48,0.12)', color: '#ff3b30',
               fontSize: 11, fontWeight: 800,
             }}>
-              ★ Last added
+              <Star className="size-3 shrink-0 fill-current" aria-hidden />
+              Last added
             </div>
           )}
           {c.visited && (
@@ -601,7 +666,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               background: 'rgba(52,199,89,0.12)', color: '#34c759',
               fontSize: 11, fontWeight: 700,
             }}>
-              📦 Goods Shown
+              <Package className="size-3 shrink-0" aria-hidden />
+              Goods shown
             </div>
           )}
           {c.is_customer && (
@@ -611,7 +677,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
               fontSize: 11, fontWeight: 700,
             }}>
-              🤝 Customer
+              <Handshake className="size-3 shrink-0" aria-hidden />
+              Customer
             </div>
           )}
           {c.is_old_customer && (
@@ -621,7 +688,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               background: 'rgba(255,149,0,0.12)', color: '#ff9500',
               fontSize: 11, fontWeight: 700,
             }}>
-              🕰 Old Customer
+              <History className="size-3 shrink-0" aria-hidden />
+              Old customer
             </div>
           )}
           {c.followup_at && (() => {
@@ -634,7 +702,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
                 color: isOverdue ? '#ff3b30' : '#ff9500',
                 fontSize: 11, fontWeight: 700,
               }}>
-                📅 {isOverdue ? 'Overdue' : 'Follow-up'}
+                <Calendar className="size-3 shrink-0" aria-hidden />
+                {isOverdue ? 'Overdue' : 'Follow-up'}
               </div>
             )
           })()}
@@ -644,15 +713,17 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
         {(c.phone_mobile || c.phone_work) && (
           <>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${c.phone_mobile || c.phone_work}` }}
               style={quickBtnStyle('#e1f0ff')}
               title="Call"
-            >📞</button>
+            ><Phone size={16} strokeWidth={2} /></button>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); window.location.href = `sms:${c.phone_mobile || c.phone_work}` }}
               style={quickBtnStyle('#e8f5e9')}
               title="Message"
-            >✉️</button>
+            ><MessageSquare size={16} strokeWidth={2} /></button>
           </>
         )}
         <div onClick={(e) => { e.stopPropagation(); onMenu() }}
@@ -680,7 +751,7 @@ function contactColdMessageText(contact: Contact): string {
   return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.\nHappy to assist with any requirements.`
 }
 
-function quickBtnStyle(bg: string): React.CSSProperties {
+function quickBtnStyle(bg: string): CSSProperties {
   return {
     width: 34, height: 34, borderRadius: '50%',
     background: bg, border: 'none', cursor: 'pointer',
@@ -697,15 +768,28 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
   onEditFollowup: (id: string) => void
 }) {
   const groups = [
-    { label: '🔴 Overdue', items: overdue, color: '#ff3b30', bg: 'rgba(255,59,48,0.08)' },
-    { label: '🟠 Due this week', items: dueSoon, color: '#ff9500', bg: 'rgba(255,149,0,0.08)' },
+    {
+      label: 'Overdue',
+      labelIcon: <CircleAlert className="size-3 shrink-0" aria-hidden />,
+      items: overdue,
+      color: '#ff3b30',
+      bg: 'rgba(255,59,48,0.08)',
+    },
+    {
+      label: 'Due this week',
+      labelIcon: <Clock className="size-3 shrink-0" aria-hidden />,
+      items: dueSoon,
+      color: '#ff9500',
+      bg: 'rgba(255,149,0,0.08)',
+    },
   ].filter((g) => g.items.length > 0)
 
   return (
     <div style={{ borderBottom: '1px solid var(--border2)' }}>
       {groups.map((group) => (
         <div key={group.label} style={{ background: group.bg, padding: '10px 16px 6px' }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: group.color, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: group.color, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {group.labelIcon}
             {group.label} · {group.items.length}
           </div>
           {group.items.map((c) => (

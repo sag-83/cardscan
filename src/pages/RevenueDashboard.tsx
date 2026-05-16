@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { FileText, TrendingDown, TrendingUp, X } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -317,7 +318,8 @@ function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accent, ic
               ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-emerald-200 dark:ring-emerald-500/20'
               : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 ring-red-200 dark:ring-red-500/20'
           )}>
-            {isUp ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+            {isUp ? <TrendingUp className="size-3 shrink-0" aria-hidden /> : <TrendingDown className="size-3 shrink-0" aria-hidden />}{' '}
+            {Math.abs(trend).toFixed(1)}%
           </span>
         )}
       </div>
@@ -788,7 +790,9 @@ function PendingTable({ invoices, onMarkPaid }: {
                     <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => { onMarkPaid(r.id, 'cash');  setOpen(null) }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white transition-colors duration-150">Cash</button>
                       <button onClick={() => { onMarkPaid(r.id, 'check'); setOpen(null) }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white transition-colors duration-150">Check</button>
-                      <button onClick={() => setOpen(null)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150">✕</button>
+                      <button type="button" onClick={() => setOpen(null)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150 inline-flex items-center justify-center">
+                        <X className="size-3.5" aria-hidden />
+                      </button>
                     </div>
                   )}
                 </td>
@@ -831,7 +835,9 @@ function InvoiceRow({ inv, onMarkPaid, onDelete }: {
             <>
               <button onClick={() => { onMarkPaid(inv.id, 'cash');  setShow(false) }} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-400 transition-colors">Cash</button>
               <button onClick={() => { onMarkPaid(inv.id, 'check'); setShow(false) }} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-400 transition-colors">Check</button>
-              <button onClick={() => setShow(false)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">✕</button>
+              <button type="button" onClick={() => setShow(false)} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors inline-flex items-center justify-center">
+                <X className="size-3.5" aria-hidden />
+              </button>
             </>
           )}
           {isMemo && onDelete && (
@@ -1200,7 +1206,7 @@ export function RevenueDashboard() {
               </div>
             ) : allInvoices.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <div className="text-5xl opacity-30">🧾</div>
+                <FileText className="w-14 h-14 opacity-30 text-slate-400" strokeWidth={1.25} aria-hidden />
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">No invoices yet</h2>
                 <p className="text-sm text-slate-400">Create invoices in the app — they'll appear here automatically.</p>
               </div>

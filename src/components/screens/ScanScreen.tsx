@@ -1,5 +1,17 @@
-import { useRef, useEffect, useState, type CSSProperties, type ChangeEvent } from 'react'
+import { useRef, useEffect, useState, lazy, Suspense, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  Check,
+  ContactRound,
+  CornerDownLeft,
+  Loader2,
+  Mail,
+  Sparkles,
+} from 'lucide-react'
 import { useStore } from '../../store/useStore'
+import { AmbientShadowOverlay } from '@/components/ui/ambient-shadow-overlay'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
 import { findDuplicateContact, normalizeContact, uid, blankContact } from '../../lib/utils'
 import {
@@ -22,6 +34,10 @@ const ENV_GEMINI_KEYS = [
   (import.meta.env.VITE_GEMINI_KEY2 as string) || (import.meta.env.VITE_GEMINI_API_KEY2 as string),
   (import.meta.env.VITE_GEMINI_KEY3 as string) || (import.meta.env.VITE_GEMINI_API_KEY3 as string),
 ].filter(Boolean)
+
+const ScannerCardStreamLazy = lazy(() =>
+  import('@/components/ui/scanner-card-stream').then((m) => ({ default: m.ScannerCardStream }))
+)
 
 function isSupportedScanFile(file: File): boolean {
   return file.type.startsWith('image/') || SUPPORTED_SCAN_TYPES.includes(file.type)
@@ -99,6 +115,7 @@ export function ScanScreen() {
     setActiveScreen,
     setDetailContactId,
     showToast,
+    theme,
   } = useStore((s) => ({
     contacts: s.contacts,
     apiKey: s.apiKey,
@@ -117,6 +134,7 @@ export function ScanScreen() {
     setActiveScreen: s.setActiveScreen,
     setDetailContactId: s.setDetailContactId,
     showToast: s.showToast,
+    theme: s.theme,
   }))
 
   const geminiKeys = [apiKey, apiKey2, apiKey3, ...ENV_GEMINI_KEYS]
@@ -149,7 +167,7 @@ export function ScanScreen() {
     }
 
     if (!geminiKeys.length) {
-      showToast('Set Gemini API key in Settings ⚙️')
+      showToast('Set Gemini API key in Settings')
       setActiveScreen('settings')
       return
     }
@@ -439,7 +457,36 @@ export function ScanScreen() {
   const cancelPreview = () => setPreviewCards([])
 
   if (isScanning) {
-    return <ScanningLoader />
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[300] flex flex-col bg-[#050508]"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Suspense
+            fallback={
+              <div className="flex h-full min-h-[40vh] flex-1 items-center justify-center bg-[#050508]">
+                <Loader2 className="h-10 w-10 animate-spin text-violet-400" aria-hidden />
+              </div>
+            }
+          >
+            <ScannerCardStreamLazy repeat={5} initialSpeed={120} friction={0.97} />
+          </Suspense>
+        </div>
+        <div
+          className="pointer-events-none shrink-0 px-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4 text-center"
+          style={{ paddingBottom: 'calc(88px + env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto max-w-sm rounded-2xl border border-white/10 bg-black/45 px-5 py-4 text-white shadow-lg backdrop-blur-md">
+            <div className="text-lg font-extrabold tracking-tight">Extracting contacts…</div>
+            <div className="mt-1 text-sm text-white/70">Gemini AI is reading your card</div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
   }
 
   if (previewCards.length) {
@@ -455,6 +502,7 @@ export function ScanScreen() {
 
   return (
     <div
+      className="relative"
       style={{
         minHeight: '100%',
         display: 'grid',
@@ -462,6 +510,19 @@ export function ScanScreen() {
         padding: 20,
       }}
     >
+      <div
+        className="pointer-events-none absolute inset-0 -z-0 overflow-hidden rounded-[20px] opacity-[0.92] sm:rounded-[24px]"
+        aria-hidden
+      >
+        <AmbientShadowOverlay
+          color={
+            theme === 'dark' ? 'rgba(10, 132, 255, 0.14)' : 'rgba(0, 122, 255, 0.11)'
+          }
+          animation={{ scale: 42, speed: 58 }}
+          noise={{ opacity: 0.22, scale: 1 }}
+        />
+      </div>
+
       <input
         ref={frontInputRef}
         type="file"
@@ -512,142 +573,73 @@ export function ScanScreen() {
         }}
       />
 
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 460,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 18,
-          padding: 22,
-          boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-        }}
-      >
-        <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 10 }}>📇</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>Scan Business Cards</h1>
-          <p
-            style={{
-              margin: '10px 0 0',
-              color: 'var(--muted)',
-              fontSize: 15,
-              lineHeight: 1.5,
-            }}
-          >
+      <Card className="relative z-10 w-full max-w-[460px] border-b1 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        <CardHeader className="pb-2 text-center">
+          <div className="mx-auto mb-2 flex h-[52px] items-center justify-center text-[var(--accent)]">
+            <ContactRound className="h-12 w-12" strokeWidth={1.75} aria-hidden />
+          </div>
+          <CardTitle className="text-[28px] font-extrabold leading-tight">Scan Business Cards</CardTitle>
+          <CardDescription className="text-base leading-relaxed text-tx3">
             Point your camera at a card.
             <br />
             AI extracts all contacts instantly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2.5 px-[22px] pb-2 pt-0">
+          <Button
+            type="button"
+            className="h-12 w-full rounded-[10px] border-0 bg-[var(--accent)] text-[15px] font-bold text-white shadow-none hover:bg-[var(--accent)]/90"
+            onClick={() => startScan('front')}
+          >
+            Scan Card (Front)
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 w-full rounded-[10px] border-b1 bg-bg3 text-[15px] font-bold text-tx1 shadow-none hover:bg-bg4"
+            onClick={() => startScan('front', 'files')}
+          >
+            Choose Better Scan / Files
+          </Button>
+
+          {contacts.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full rounded-[10px] border-b1 bg-bg3 text-[15px] font-bold text-tx1 shadow-none hover:bg-bg4"
+              onClick={() => startScan('back')}
+            >
+              <CornerDownLeft className="size-4 shrink-0" aria-hidden />
+              Scan Back of Last Card
+            </Button>
+          )}
+
+          {contacts.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full rounded-[10px] border-b1 bg-bg3 text-[15px] font-bold text-tx1 shadow-none hover:bg-bg4"
+              onClick={() => startScan('back', 'files')}
+            >
+              Choose Back from Files
+            </Button>
+          )}
+
+          <p className="mt-1 text-center text-xs leading-snug text-tx3">
+            Tip: for iPhone document scan quality, scan in Files first, then use “Choose Better Scan / Files.”
           </p>
-        </div>
-
-        <button onClick={() => startScan('front')} style={btnStyle('primary')}>
-          Scan Card (Front)
-        </button>
-
-        <button onClick={() => startScan('front', 'files')} style={{ ...btnStyle('secondary'), marginTop: 10 }}>
-          Choose Better Scan / Files
-        </button>
+        </CardContent>
 
         {contacts.length > 0 && (
-          <button
-            onClick={() => startScan('back')}
-            style={{ ...btnStyle('secondary'), marginTop: 10 }}
-          >
-            ↩ Scan Back of Last Card
-          </button>
+          <CardFooter className="flex flex-col gap-0 border-t-0 bg-transparent px-[22px] pb-[22px] pt-0">
+            <div className="w-full rounded-xl border border-b1 bg-bg3 py-3.5 text-center">
+              <div className="text-2xl font-extrabold">{contacts.length}</div>
+              <div className="text-[13px] text-tx3">Total Contacts</div>
+            </div>
+          </CardFooter>
         )}
-
-        {contacts.length > 0 && (
-          <button
-            onClick={() => startScan('back', 'files')}
-            style={{ ...btnStyle('secondary'), marginTop: 10 }}
-          >
-            Choose Back from Files
-          </button>
-        )}
-
-        <div style={{ marginTop: 12, color: 'var(--muted)', fontSize: 12, lineHeight: 1.45, textAlign: 'center' }}>
-          Tip: for iPhone document scan quality, scan in Files first, then use “Choose Better Scan / Files.”
-        </div>
-
-        {contacts.length > 0 && (
-          <div
-            style={{
-              marginTop: 18,
-              padding: 14,
-              borderRadius: 12,
-              background: 'var(--bg3)',
-              border: '1px solid var(--border)',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{contacts.length}</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>Total Contacts</div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ScanningLoader() {
-  return (
-    <div
-      style={{
-        minHeight: '100%',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 340,
-          textAlign: 'center',
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 18,
-          padding: 24,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          {[0, 150, 300].map((delay) => (
-            <span
-              key={delay}
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: 'var(--accent)',
-                animation: `cardscan-bounce 0.9s ${delay}ms infinite ease-in-out`,
-                display: 'inline-block',
-              }}
-            />
-          ))}
-        </div>
-
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
-          Extracting contacts...
-        </div>
-        <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-          Gemini AI is reading your card
-        </div>
-
-        <style>{`
-          @keyframes cardscan-bounce {
-            0%, 80%, 100% { transform: scale(0.7); opacity: 0.6; }
-            40% { transform: scale(1); opacity: 1; }
-          }
-        `}</style>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -664,74 +656,52 @@ function PreviewPanel({
   isSaving: boolean
 }) {
   return (
-    <div
-      style={{
-        minHeight: '100%',
-        padding: 18,
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 680,
-          margin: '0 auto',
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 18,
-          padding: 18,
-        }}
-      >
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
-          Found {cards.length} card{cards.length > 1 ? 's' : ''} ✨
-        </div>
-
-        <div style={{ display: 'grid', gap: 12 }}>
+    <div className="min-h-full p-[18px]">
+      <Card className="mx-auto w-full max-w-[680px] border-b1">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-[22px] font-extrabold">
+            <Sparkles className="size-6 shrink-0 text-[var(--star)]" aria-hidden />
+            Found {cards.length} card{cards.length > 1 ? 's' : ''}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 px-[18px]">
           {cards.map((c, i) => (
             <div
               key={c.id || i}
+              className="grid items-start gap-3 rounded-[14px] border border-b1 bg-bg3 p-3"
               style={{
-                display: 'grid',
                 gridTemplateColumns: c.front_image ? '92px 1fr' : '1fr',
-                gap: 12,
-                alignItems: 'start',
-                padding: 12,
-                borderRadius: 14,
-                background: 'var(--bg3)',
-                border: '1px solid var(--border)',
               }}
             >
               {c.front_image && (
                 <img
                   src={`data:image/jpeg;base64,${c.front_image}`}
                   alt={c.name || `Scanned card ${i + 1}`}
-                  style={{
-                    width: 92,
-                    height: 68,
-                    objectFit: 'cover',
-                    borderRadius: 10,
-                    border: '1px solid var(--border)',
-                  }}
+                  className="h-[68px] w-[92px] rounded-[10px] border border-b1 object-cover"
                 />
               )}
 
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>
-                  {c.name || 'Unknown'}
-                </div>
+                <div className="mb-1 text-lg font-extrabold">{c.name || 'Unknown'}</div>
 
                 {(c.title || c.company) && (
-                  <div style={{ color: 'var(--muted)', marginBottom: 8 }}>
+                  <div className="mb-2 text-tx3">
                     {c.title}
                     {c.company ? (c.title ? ' · ' : '') + c.company : ''}
                   </div>
                 )}
 
-                {c.email && <div style={{ marginBottom: 4 }}>✉ {c.email}</div>}
-                {c.phone_mobile && <div style={{ marginBottom: 4 }}>{c.phone_mobile}</div>}
-                {c.phone_work && <div style={{ marginBottom: 4 }}>{c.phone_work}</div>}
+                {c.email && (
+                  <div className="mb-1 flex items-center gap-2">
+                    <Mail className="size-3.5 shrink-0 text-[var(--accent)]" aria-hidden />
+                    {c.email}
+                  </div>
+                )}
+                {c.phone_mobile && <div className="mb-1">{c.phone_mobile}</div>}
+                {c.phone_work && <div className="mb-1">{c.phone_work}</div>}
 
                 {c.city && (
-                  <div style={{ color: 'var(--muted)' }}>
+                  <div className="text-tx3">
                     {c.city}
                     {c.state ? ', ' + c.state : ''}
                     {c.zip ? ' ' + c.zip : ''}
@@ -740,73 +710,34 @@ function PreviewPanel({
               </div>
             </div>
           ))}
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 10,
-            marginTop: 16,
-          }}
-        >
-          <button onClick={onCancel} style={btnStyle('secondary')}>
-            Rescan
-          </button>
-
-          <button
-            onClick={onAccept}
-            disabled={isSaving}
-            style={{
-              ...btnStyle('primary'),
-              opacity: isSaving ? 0.65 : 1,
-              pointerEvents: isSaving ? 'none' : 'auto',
-            }}
+        </CardContent>
+        <CardFooter className="grid grid-cols-2 gap-2.5 border-t-0 px-[18px] pb-[18px] pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 rounded-[10px] border-b1 bg-bg3 text-[15px] font-bold"
+            onClick={onCancel}
           >
-            {isSaving ? 'Saving...' : `✓ Add ${cards.length > 1 ? 'All' : 'Contact'}`}
-          </button>
-        </div>
-      </div>
+            Rescan
+          </Button>
+
+          <Button
+            type="button"
+            disabled={isSaving}
+            className="h-12 rounded-[10px] border-0 bg-[var(--accent)] text-[15px] font-bold text-white hover:bg-[var(--accent)]/90 disabled:opacity-65"
+            onClick={onAccept}
+          >
+            {isSaving ? (
+              'Saving...'
+            ) : (
+              <>
+                <Check className="size-4 shrink-0" aria-hidden />
+                Add {cards.length > 1 ? 'All' : 'Contact'}
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
-}
-
-function btnStyle(variant: 'primary' | 'secondary' | 'danger'): CSSProperties {
-  const base: CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    padding: '13px 18px',
-    borderRadius: 10,
-    border: 'none',
-    fontWeight: 700,
-    fontSize: 15,
-    cursor: 'pointer',
-    width: '100%',
-    transition: '0.18s',
-  }
-
-  if (variant === 'primary') {
-    return {
-      ...base,
-      background: 'var(--accent)',
-      color: '#fff',
-    }
-  }
-
-  if (variant === 'danger') {
-    return {
-      ...base,
-      background: 'var(--danger)',
-      color: '#fff',
-    }
-  }
-
-  return {
-    ...base,
-    background: 'var(--bg3)',
-    color: 'var(--text)',
-    border: '1px solid var(--border)',
-  }
 }

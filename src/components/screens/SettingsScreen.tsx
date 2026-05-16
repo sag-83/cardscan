@@ -1,4 +1,17 @@
 import { useRef, useState } from 'react'
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Cloud,
+  CloudOff,
+  Download,
+  Moon,
+  RefreshCw,
+  Sun,
+  Undo2,
+  Upload,
+} from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useTheme } from '../../hooks/useTheme'
 import {
@@ -76,9 +89,9 @@ export function SettingsScreen() {
     try {
       initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
       await testSupabaseConnection()
-      showToast('✅ Supabase connected!')
+      showToast('Supabase connected!')
     }
-    catch (err) { showToast('❌ ' + (err as Error).message) }
+    catch (err) { showToast('Error: ' + (err as Error).message) }
   }
 
   const handleBackupToSupabase = async (force = false) => {
@@ -103,14 +116,14 @@ export function SettingsScreen() {
       const invOk = invoiceResults.filter((r) => r.status === 'fulfilled' && r.value).length
       const invFailed = invoices.length - invOk
 
-      const parts = [`✅ ${contactResult.ok} contacts`]
-      if (!force && contactResult.merged > 0) parts.push(`🔀 ${contactResult.merged} merged`)
-      if (contactResult.failed > 0) parts.push(`❌ ${contactResult.failed} contacts failed`)
-      parts.push(`✅ ${invOk} invoices`)
-      if (invFailed > 0) parts.push(`❌ ${invFailed} invoices failed`)
+      const parts = [`${contactResult.ok} contacts`]
+      if (!force && contactResult.merged > 0) parts.push(`${contactResult.merged} merged`)
+      if (contactResult.failed > 0) parts.push(`${contactResult.failed} contacts failed`)
+      parts.push(`${invOk} invoices`)
+      if (invFailed > 0) parts.push(`${invFailed} invoices failed`)
       showToast(parts.join(', ') + (force ? ' (force)' : ''))
     } catch (err) {
-      showToast('❌ Backup failed: ' + (err as Error).message)
+      showToast('Backup failed: ' + (err as Error).message)
     }
   }
 
@@ -222,12 +235,12 @@ export function SettingsScreen() {
       <SettingsGroup>
         <div onClick={() => handleBackupToSupabase()} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup All to Supabase</div>
-          <div style={{ color: 'var(--accent)' }}>☁</div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}><Cloud size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={handleRestoreFromSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Restore from Supabase</div>
-          <div style={{ color: 'var(--accent)' }}>☁</div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}><Cloud size={18} strokeWidth={2} aria-hidden /></div>
         </div>
       </SettingsGroup>
 
@@ -275,14 +288,23 @@ export function SettingsScreen() {
           <div style={{ flex: 1, fontSize: 15 }}>Theme</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(['light', 'dark'] as const).map((t) => (
-              <button key={t} onClick={() => setTheme(t)} style={{
-                padding: '5px 13px', borderRadius: 99, cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, transition: '0.18s',
-                border: `1.5px solid ${theme === t ? 'var(--accent)' : 'var(--border)'}`,
-                background: theme === t ? 'rgba(0,122,255,0.1)' : 'var(--bg3)',
-                color: theme === t ? 'var(--accent)' : 'var(--text3)',
-              }}>
-                {t === 'light' ? '☀️ Light' : '🌙 Dark'}
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTheme(t)}
+                style={{
+                  padding: '5px 13px', borderRadius: 99, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 700, transition: '0.18s',
+                  border: `1.5px solid ${theme === t ? 'var(--accent)' : 'var(--border)'}`,
+                  background: theme === t ? 'rgba(0,122,255,0.1)' : 'var(--bg3)',
+                  color: theme === t ? 'var(--accent)' : 'var(--text3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {t === 'light' ? <Sun size={14} aria-hidden /> : <Moon size={14} aria-hidden />}
+                {t === 'light' ? 'Light' : 'Dark'}
               </button>
             ))}
           </div>
@@ -294,27 +316,27 @@ export function SettingsScreen() {
       <SettingsGroup>
         <div onClick={() => backupToJSON(contacts)} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Backup Contacts (JSON)</div>
-          <div style={{ color: 'var(--accent)' }}>⬇</div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}><Download size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={handleRefreshApp} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Refresh to Latest Version</div>
-          <div style={{ color: 'var(--accent)' }}>↻</div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}><RefreshCw size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={handleNormalizeNow} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Normalize Existing Data Now (ALL CAPS + dedupe)</div>
-          <div style={{ color: '#34c759' }}>✓</div>
+          <div style={{ color: '#34c759', display: 'flex' }}><Check size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={handleUndoNormalize} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Undo Last Normalize (restore backup)</div>
-          <div style={{ color: '#ff9500' }}>↩</div>
+          <div style={{ color: '#ff9500', display: 'flex' }}><Undo2 size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={() => restoreInputRef.current?.click()} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Restore from File</div>
-          <div style={{ color: 'var(--accent)' }}>⬆</div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}><Upload size={18} strokeWidth={2} aria-hidden /></div>
         </div>
       </SettingsGroup>
 
@@ -322,7 +344,7 @@ export function SettingsScreen() {
       <SettingsGroup>
         <div onClick={() => setShowAdvanced((v) => !v)} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</div>
-          <div style={{ color: 'var(--text3)' }}>{showAdvanced ? '▴' : '▾'}</div>
+          <div style={{ color: 'var(--text3)', display: 'flex' }}>{showAdvanced ? <ChevronUp size={18} aria-hidden /> : <ChevronDown size={18} aria-hidden />}</div>
         </div>
       </SettingsGroup>
 
@@ -366,7 +388,7 @@ export function SettingsScreen() {
             <Divider />
             <div onClick={() => handleBackupToSupabase(true)} style={{ ...rowStyle, cursor: 'pointer' }}>
               <div style={{ flex: 1, fontSize: 15 }}>Force Backup (save all, skip dedup)</div>
-              <div style={{ color: '#ff9500' }}>☁!</div>
+              <div style={{ color: '#ff9500', display: 'flex' }}><CloudOff size={18} strokeWidth={2} aria-hidden /></div>
             </div>
             <Divider />
             <div onClick={handleClearAll} style={{ ...rowStyle, cursor: 'pointer' }}>

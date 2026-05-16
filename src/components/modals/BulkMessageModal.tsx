@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Send } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
 
@@ -96,6 +97,7 @@ export function BulkMessageModal() {
         </div>
 
         <button
+          type="button"
           onClick={handleSend}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -104,7 +106,8 @@ export function BulkMessageModal() {
             fontSize: 15, cursor: 'pointer', width: '100%',
           }}
         >
-          ✈ Send
+          <Send size={18} strokeWidth={2} aria-hidden />
+          Send
         </button>
       </div>
     </div>

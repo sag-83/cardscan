@@ -1,3 +1,4 @@
+import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
@@ -45,7 +46,7 @@ export function Header() {
         }}
         aria-label="Toggle theme"
       >
-        {theme === 'dark' ? '☀️' : '🌙'}
+        {theme === 'dark' ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
       </button>
 
       <h1

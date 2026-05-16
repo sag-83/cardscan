@@ -1,4 +1,12 @@
 import { useState } from 'react'
+import {
+  BarChart3,
+  Download,
+  Loader2,
+  Mail,
+  MessageSquare,
+  Trash2,
+} from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import {
   exportToCSV,
@@ -90,27 +98,30 @@ export function BulkScreen() {
           : 'Actions apply to all contacts.'}
       </div>
 
-      <ActionButton emoji="⬇" label="Export CSV" onClick={handleExportCSV} />
+      <ActionButton icon={<Download className="size-[18px] shrink-0" />} label="Export CSV" onClick={handleExportCSV} />
       <ActionButton
-        emoji={isSendingSheets ? '⏳' : '📊'}
+        icon={isSendingSheets ? <Loader2 className="size-[18px] shrink-0 animate-spin" /> : <BarChart3 className="size-[18px] shrink-0" />}
         label={isSendingSheets ? 'Sending to Google Sheets...' : 'Send to Google Sheets'}
         onClick={handleSendToSheets}
         disabled={isSendingSheets}
       />
-      <ActionButton emoji="✉" label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
-      <ActionButton emoji="💬" label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
+      <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
+      <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
 
       {IS_DEMO_MODE && <SheetsPreview contacts={targetContacts} />}
 
       {selectedIds.length > 0 && (
         <button
+          type="button"
           onClick={handleDeleteSelected}
           style={{
             ...btnBase,
             background: 'var(--danger)', color: '#fff', marginTop: 8,
+            gap: 8,
           }}
         >
-          🗑 Delete Selected ({selectedIds.length})
+          <Trash2 className="size-[18px] shrink-0" aria-hidden />
+          Delete Selected ({selectedIds.length})
         </button>
       )}
     </div>
@@ -183,12 +194,15 @@ function SheetsPreview({ contacts }: { contacts: Array<{
   )
 }
 
-function ActionButton({ emoji, label, onClick, disabled }: {
-  emoji: string; label: string; onClick: () => void; disabled?: boolean
+import type { ReactNode } from 'react'
+
+function ActionButton({ icon, label, onClick, disabled }: {
+  icon: ReactNode; label: string; onClick: () => void; disabled?: boolean
 }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ ...btnBase, marginBottom: 10, opacity: disabled ? 0.65 : 1 }}>
-      {emoji} {label}
+    <button type="button" onClick={onClick} disabled={disabled} style={{ ...btnBase, marginBottom: 10, opacity: disabled ? 0.65 : 1 }}>
+      {icon}
+      {label}
     </button>
   )
 }

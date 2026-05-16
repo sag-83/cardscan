@@ -105,6 +105,9 @@ export default {
           from: { transform: 'scaleX(0)' },
           to: { transform: 'scaleX(1)' },
         },
+        borderBeam: {
+          '100%': { offsetDistance: '100%' },
+        },
       },
       animation: {
         'pulse-glow': 'pulseGlow 3s ease infinite',
@@ -116,6 +119,7 @@ export default {
         'shimmer': 'shimmer 1.8s linear infinite',
         'scale-in': 'scaleIn 0.3s cubic-bezier(0.16,1,0.3,1) both',
         'bar-grow': 'barGrow 0.6s cubic-bezier(0.16,1,0.3,1) both',
+        'border-beam': 'borderBeam calc(var(--duration, 15) * 1s) linear infinite',
       },
     },
   },

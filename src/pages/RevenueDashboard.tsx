@@ -1,12 +1,16 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { FileText, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { FileText, TrendingDown, TrendingUp, X, Building2 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { SavedInvoice } from '../types/invoice'
 import { printSavedInvoice } from '../lib/invoicePrint'
+import { Hero195 } from '@/components/ui/hero-195'
+import { TracingBeam } from '@/components/ui/tracing-beam'
+import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
+import JobListingComponent, { type Job } from '@/components/ui/joblisting-component'
 
 // ─── Supabase / auth ──────────────────────────────────────────────────────────
 
@@ -958,7 +962,7 @@ function ShopLedger({ invoices, onMarkPaid, onDelete }: {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const SECTIONS = ['overview', 'revenue', 'payments', 'geography', 'customers', 'products', 'receivables', 'ledger'] as const
+const SECTIONS = ['overview', 'revenue', 'payments', 'geography', 'customers', 'products', 'reminders', 'receivables', 'ledger'] as const
 type SectionId = typeof SECTIONS[number]
 
 const NAV: { id: SectionId; label: string; icon: IconName }[] = [
@@ -968,6 +972,7 @@ const NAV: { id: SectionId; label: string; icon: IconName }[] = [
   { id: 'geography',   label: 'By State',      icon: 'map'      },
   { id: 'customers',   label: 'Customers',     icon: 'users'    },
   { id: 'products',    label: 'Products',      icon: 'bar'      },
+  { id: 'reminders',   label: 'Reminders',     icon: 'clock'    },
   { id: 'receivables', label: 'Receivables',   icon: 'alert'    },
   { id: 'ledger',      label: 'Shop Ledger',   icon: 'list'     },
 ]
@@ -1073,6 +1078,30 @@ export function RevenueDashboard() {
     return d
   }, [allInvoices, period, state, search])
 
+  const reminderJobs = useMemo((): Job[] => {
+    return invoices
+      .filter((i) => i.paidBy === 'pending')
+      .slice(0, 12)
+      .map((inv) => ({
+        id: inv.id,
+        company: inv.company || inv.contactName || 'Shop',
+        title: 'Outstanding balance',
+        salary: money(inv.total),
+        location: [inv.city, inv.state].filter(Boolean).join(', ') || '—',
+        remote: 'No',
+        job_time: `Invoice ${inv.date}`,
+        job_description: ['Open invoice — follow up for payment.', inv.notes && `Notes: ${inv.notes}`]
+          .filter(Boolean)
+          .join(' '),
+        logo: (
+          <Building2
+            className="size-9 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-amber-600 dark:border-slate-700 dark:bg-slate-800 dark:text-amber-400"
+            aria-hidden
+          />
+        ),
+      }))
+  }, [invoices])
+
   const kpi = useMemo(() => {
     const { currStart, prevStart, prevEnd } = periodBounds(period)
     const prev = allInvoices.filter((i) => { const d = new Date(i.date); return d >= prevStart && d <= prevEnd })
@@ -1176,7 +1205,12 @@ export function RevenueDashboard() {
 
           {/* Content */}
           <main className="flex-1 px-8 py-8 space-y-8">
+            <Hero195
+              className="scroll-mt-24 border border-slate-200/80 shadow-sm dark:border-slate-800"
+              onPrimaryAction={() => navTo('overview')}
+            />
 
+            <TracingBeam className="space-y-8">
             {error && (
               <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
                 <Icon name="alert" size={16} className="flex-shrink-0" /> {error}
@@ -1215,12 +1249,24 @@ export function RevenueDashboard() {
                 {/* KPIs */}
                 <section id="overview" className="scroll-mt-20">
                   <SectionDivider label="Overview" />
-                  <div className="grid grid-cols-5 gap-4">
-                    <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   />
-                    <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  />
-                    <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} />
-                    <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub="Invoices + memos"                              trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={180} />
-                    <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+                    <BonusesIncentivesCard
+                      className="mx-auto w-full max-w-md shrink-0 xl:mx-0"
+                      bonusText="Collected"
+                      incentivesText="Outstanding"
+                      bonusesValue={kpi.coll}
+                      incentivesValue={kpi.pending}
+                      backgroundColor="bg-slate-50/80 dark:bg-slate-950/60"
+                      borderColor="border-slate-200/80 dark:border-slate-800"
+                      onMoreDetails={() => navTo('receivables')}
+                    />
+                    <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   />
+                      <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  />
+                      <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} />
+                      <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub="Invoices + memos"                              trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={180} />
+                      <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
+                    </div>
                   </div>
                 </section>
 
@@ -1254,6 +1300,15 @@ export function RevenueDashboard() {
                   </div>
                 </section>
 
+                {reminderJobs.length > 0 && (
+                  <section id="reminders" className="scroll-mt-20">
+                    <SectionDivider label="Reminders" />
+                    <div className="relative min-h-[100px] overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                      <JobListingComponent jobs={reminderJobs} className="p-4 md:p-6" />
+                    </div>
+                  </section>
+                )}
+
                 {/* Receivables */}
                 <section id="receivables" className="scroll-mt-20">
                   <SectionDivider label="Receivables" />
@@ -1281,6 +1336,7 @@ export function RevenueDashboard() {
                 </section>
               </>
             )}
+            </TracingBeam>
           </main>
         </div>
       </div>

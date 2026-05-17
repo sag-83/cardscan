@@ -1,6 +1,6 @@
 {
-  "name": "CardScan AI",
-  "short_name": "CardScan",
+  "name": "CardHolder",
+  "short_name": "CardHolder",
   "description": "Business card scanner and follow-up reminders",
   "start_url": "/",
   "display": "standalone",

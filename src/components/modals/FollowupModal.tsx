@@ -4,11 +4,10 @@ import { useStore } from '../../store/useStore'
 import { saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import {
-  clearNotifiedFollowup,
   enableReminderPush,
   isReminderPushEnabled,
+  onFollowupScheduleChanged,
   supportsReminderPush,
-  syncFollowupReminders,
 } from '../../lib/reminderNotifications'
 
 function toDatetimeLocal(iso: string): string {
@@ -24,10 +23,6 @@ export function FollowupModal() {
   const contacts = useStore((s) => s.contacts)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
-
-  const syncReminders = (nextContacts: typeof contacts) => {
-    void syncFollowupReminders(nextContacts)
-  }
 
   const [dateValue, setDateValue] = useState('')
   const [noteValue, setNoteValue] = useState('')
@@ -53,10 +48,9 @@ export function FollowupModal() {
       const saved = await saveContactToDB({ ...contact, followup_at, followup_note })
       if (!saved) { showToast('Supabase backup failed'); return }
     }
-    clearNotifiedFollowup(contact.id)
     updateContact(contact.id, { followup_at, followup_note })
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at, followup_note } : c))
-    syncReminders(nextContacts)
+    await onFollowupScheduleChanged(contact.id, nextContacts)
     if (supportsReminderPush() && !isReminderPushEnabled() && Notification.permission === 'default') {
       const result = await enableReminderPush(nextContacts)
       showToast(result === 'granted' ? 'Follow-up set · notifications on' : 'Follow-up set!')
@@ -70,9 +64,9 @@ export function FollowupModal() {
     if (!IS_DEMO_MODE) {
       await saveContactToDB({ ...contact, followup_at: '', followup_note: '' })
     }
-    clearNotifiedFollowup(contact.id)
     updateContact(contact.id, { followup_at: '', followup_note: '' })
-    syncReminders(contacts.map((c) => (c.id === contact.id ? { ...c, followup_at: '', followup_note: '' } : c)))
+    const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at: '', followup_note: '' } : c))
+    await onFollowupScheduleChanged(contact.id, nextContacts)
     showToast('Follow-up cleared')
     close()
   }

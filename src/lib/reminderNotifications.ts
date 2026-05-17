@@ -1,10 +1,16 @@
 import type { Contact } from '../types/contact'
+import { resetFollowupNotification } from './supabase'
+import { isStandalonePwa } from './pwa'
+
+export { isStandalonePwa } from './pwa'
 
 const ENABLED_KEY = 'cardscan_reminders_push_enabled'
 const NOTIFIED_KEY = 'cardscan_followup_notified'
 const SW_URL = '/sw.js'
 const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000
 const POLL_MS = 30_000
+
+const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string)?.trim() ?? ''
 
 export type FollowupReminder = {
   id: string
@@ -19,10 +25,20 @@ export type ReminderPushStatus = {
   permission: NotificationPermission | 'unsupported'
   scheduledCount: number
   isStandalone: boolean
+  serverPushConfigured: boolean
 }
 
 function reminderKey(contactId: string, at: string): string {
   return `${contactId}:${at}`
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  const out = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+  return out
 }
 
 export function isReminderPushEnabled(): boolean {
@@ -70,7 +86,7 @@ export function remindersFromContacts(contacts: Contact[]): FollowupReminder[] {
         id: c.id,
         at: c.followup_at!,
         title: `Follow-up: ${name}`,
-        body: note || 'Tap to open CardScan',
+        body: note || 'Tap to open CardHolder',
       }
     })
 }
@@ -79,12 +95,8 @@ export function supportsReminderPush(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator
 }
 
-export function isStandalonePwa(): boolean {
-  if (typeof window === 'undefined') return false
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  )
+export function isServerPushConfigured(): boolean {
+  return VAPID_PUBLIC_KEY.length > 0
 }
 
 export function getReminderPushStatus(contacts: Contact[]): ReminderPushStatus {
@@ -97,6 +109,7 @@ export function getReminderPushStatus(contacts: Contact[]): ReminderPushStatus {
     permission,
     scheduledCount: future.length,
     isStandalone: isStandalonePwa(),
+    serverPushConfigured: isServerPushConfigured(),
   }
 }
 
@@ -126,14 +139,41 @@ function clearAllSchedules(): void {
   mainTimers.clear()
 }
 
+/** Register device for server-sent push (works when app is closed). */
+export async function registerPushSubscription(): Promise<boolean> {
+  if (!VAPID_PUBLIC_KEY) return false
+  if (!('PushManager' in window)) return false
+
+  const reg = await registerReminderServiceWorker()
+  if (!reg?.pushManager) return false
+
+  try {
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+      })
+    }
+
+    const res = await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub.toJSON()),
+    })
+    return res.ok
+  } catch (err) {
+    console.warn('Push subscription failed:', err)
+    return false
+  }
+}
+
 async function postRemindersToWorker(reminders: FollowupReminder[]): Promise<void> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return
   if (Notification.permission !== 'granted') return
 
   const reg = await registerReminderServiceWorker()
-  if (!reg) return
-
-  const worker = reg.active
+  const worker = reg?.active
   if (!worker) return
 
   const future = reminders.filter((r) => {
@@ -157,7 +197,7 @@ function scheduleMainThreadReminders(reminders: FollowupReminder[]): void {
       window.setTimeout(() => {
         mainTimers.delete(reminderKey(reminder.id, reminder.at))
         void showFollowupNotification(reminder)
-      }, delay)
+      }, delay),
     )
   }
 }
@@ -189,7 +229,7 @@ async function showFollowupNotification(reminder: FollowupReminder): Promise<boo
   }
 }
 
-/** Fire notifications for reminders whose time has passed (e.g. app reopened). */
+/** Fire notifications for reminders whose time has passed (backup when app is open). */
 export async function checkDueFollowupReminders(contacts: Contact[]): Promise<number> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return 0
   if (Notification.permission !== 'granted') return 0
@@ -211,6 +251,13 @@ export async function syncFollowupReminders(contacts: Contact[]): Promise<void> 
   const reminders = remindersFromContacts(contacts)
   scheduleMainThreadReminders(reminders)
   await postRemindersToWorker(reminders)
+  await registerPushSubscription()
+}
+
+export async function onFollowupScheduleChanged(contactId: string, contacts: Contact[]): Promise<void> {
+  clearNotifiedFollowup(contactId)
+  await resetFollowupNotification(contactId)
+  await syncFollowupReminders(contacts)
 }
 
 export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
@@ -219,9 +266,10 @@ export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 
 
   try {
     await registerReminderServiceWorker()
+    await registerPushSubscription()
     const reg = await navigator.serviceWorker.ready
-    await reg.showNotification('CardScan test reminder', {
-      body: 'If you see this, follow-up alerts are working.',
+    await reg.showNotification('CardHolder test reminder', {
+      body: 'If you see this, follow-up alerts are working on this device.',
       tag: 'cardscan-test',
       icon: '/delta-logo.png',
       requireInteraction: true,
@@ -259,6 +307,7 @@ export async function enableReminderPush(contacts: Contact[]): Promise<'granted'
   if (permission !== 'granted') return 'denied'
   setReminderPushEnabled(true)
   await registerReminderServiceWorker()
+  await registerPushSubscription()
   await syncFollowupReminders(contacts)
   await checkDueFollowupReminders(contacts)
   return 'granted'

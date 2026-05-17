@@ -112,7 +112,7 @@ interface AppState {
   // ─── Toast ───────────────────────────────────────────────────────
   toastMessage: string
   toastVisible: boolean
-  showToast: (msg: string) => void
+  showToast: (msg: string, durationMs?: number) => void
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -243,10 +243,10 @@ export const useStore = create<AppState>()(
       // ─── Toast ─────────────────────────────────────────────────
       toastMessage: '',
       toastVisible: false,
-      showToast: (msg) => {
+      showToast: (msg, durationMs = 2700) => {
         if (toastTimer) clearTimeout(toastTimer)
         set({ toastMessage: msg, toastVisible: true })
-        toastTimer = setTimeout(() => set({ toastVisible: false }), 2700)
+        toastTimer = setTimeout(() => set({ toastVisible: false }), durationMs)
       },
     }),
     {

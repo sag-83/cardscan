@@ -10,6 +10,26 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+self.addEventListener('push', (event) => {
+  let data = { title: 'CardHolder reminder', body: 'You have a follow-up due.' }
+  try {
+    if (event.data) data = { ...data, ...event.data.json() }
+  } catch {
+    /* ignore */
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      tag: data.contactId ? `followup-${data.contactId}` : 'cardscan-followup',
+      icon: '/delta-logo.png',
+      badge: '/delta-logo.png',
+      data: { contactId: data.contactId || '' },
+      requireInteraction: true,
+    }),
+  )
+})
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   event.waitUntil(

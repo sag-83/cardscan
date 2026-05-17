@@ -502,7 +502,10 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
       )}
 
       <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
-        Alerts appear in Notification Center at each follow-up date and time. Overdue reminders alert when you open the app after enabling.
+        {status.serverPushConfigured
+          ? 'Server sends push every few minutes even when the app is closed. Each phone with notifications enabled gets the alert.'
+          : 'Add VAPID keys in Vercel for reminders when the app is closed (see .env.example).'}
+        {' '}Overdue reminders also alert when you open the app.
       </div>
 
       {ready && (

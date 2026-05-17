@@ -47,7 +47,20 @@ alter table contacts add column if not exists visited boolean default false;
 alter table contacts add column if not exists is_customer boolean default false;
 alter table contacts add column if not exists followup_at timestamptz;
 alter table contacts add column if not exists followup_note text default '';
+alter table contacts add column if not exists followup_notified_at timestamptz;
 alter table contacts add column if not exists is_old_customer boolean default false;
+
+-- Web push subscriptions (server sends reminders when app is closed)
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  endpoint text unique not null,
+  p256dh text not null,
+  auth text not null,
+  user_agent text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table push_subscriptions disable row level security;
 alter table contacts add column if not exists updated_at timestamptz default now();
 
 -- 3. Backfill and enforce duplicate protection
@@ -393,6 +406,16 @@ export async function saveContactToDB(contact: Contact): Promise<'new' | 'merged
   const ok = await upsertContactRow(sb, row, dedupeColumnMissing)
   if (!ok) return false
   return wasMerged ? 'merged' : 'new'
+}
+
+/** Allow server cron to send a new push after follow-up time is changed. */
+export async function resetFollowupNotification(contactId: string): Promise<void> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return
+  const { error } = await sb.from('contacts').update({ followup_notified_at: null }).eq('id', contactId)
+  if (error && !error.message?.includes('followup_notified_at')) {
+    console.warn('resetFollowupNotification:', error.message)
+  }
 }
 
 async function saveContactToDBForce(contact: Contact): Promise<'new' | false> {

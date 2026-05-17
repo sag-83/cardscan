@@ -22,7 +22,8 @@ import {
 import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
-import { getUserPosition, geocodeContacts, formatDistance } from '../../lib/geocode'
+import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
+import { getLocationPermissionHelp } from '../../lib/pwa'
 
 function useFollowups(contacts: Contact[]) {
   const now = new Date()
@@ -68,13 +69,17 @@ export function ContactsScreen() {
       setNearMeActive(true)
       await geocodeContacts(contacts, pos, (d) => setDistances(new Map(d)))
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not get location'
-      if (message.includes('HTTPS')) {
-        showToast('Location needs HTTPS on iPhone Safari')
-      } else if (message.includes('blocked') || message.includes('denied')) {
-        showToast('iPhone: Settings > Safari > Location > Allow, then reload')
+      if (err instanceof LocationError && err.code === 'https') {
+        showToast('Location needs HTTPS. Open the live site, not a file preview.', 5000)
+      } else if (err instanceof LocationError && err.code === 'denied') {
+        showToast(getLocationPermissionHelp(), 12000)
+      } else if (err instanceof LocationError && err.code === 'timeout') {
+        showToast('Location timed out. Try again outdoors or with Wi‑Fi on.', 5000)
       } else {
-        showToast(`${message}. Try again near a window or turn Wi-Fi on`)
+        showToast(
+          `${err instanceof Error ? err.message : 'Could not get location'}. Try again near a window or with Wi‑Fi on.`,
+          5000
+        )
       }
     } finally {
       setNearMeLoading(false)

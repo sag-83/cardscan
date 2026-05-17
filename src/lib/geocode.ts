@@ -1,4 +1,5 @@
 import type { Contact } from '../types/contact'
+import { isStandalonePwa } from './pwa'
 
 const CACHE_KEY = 'cs_geo_v1'
 
@@ -50,22 +51,38 @@ function isSecureLocationContext(): boolean {
   return window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname)
 }
 
+export class LocationError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'https' | 'denied' | 'unavailable' | 'timeout' | 'unsupported'
+  ) {
+    super(message)
+    this.name = 'LocationError'
+  }
+}
+
 function getPositionOnce(options: PositionOptions): Promise<{ lat: number; lng: number }> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Location not supported on this device'))
+      reject(new LocationError('Location not supported on this device', 'unsupported'))
       return
     }
 
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
       (e) => {
-        const fallbackMessages: Record<number, string> = {
+        const codes: Record<number, LocationError['code']> = {
+          [e.PERMISSION_DENIED]: 'denied',
+          [e.POSITION_UNAVAILABLE]: 'unavailable',
+          [e.TIMEOUT]: 'timeout',
+        }
+        const messages: Record<number, string> = {
           [e.PERMISSION_DENIED]: 'Location permission was denied',
           [e.POSITION_UNAVAILABLE]: 'Location is unavailable right now',
           [e.TIMEOUT]: 'Location timed out',
         }
-        reject(new Error(e.message || fallbackMessages[e.code] || 'Could not get location'))
+        const code = codes[e.code] ?? 'unavailable'
+        reject(new LocationError(e.message || messages[e.code] || 'Could not get location', code))
       },
       options
     )
@@ -74,25 +91,53 @@ function getPositionOnce(options: PositionOptions): Promise<{ lat: number; lng: 
 
 export async function getUserPosition(): Promise<{ lat: number; lng: number }> {
   if (!isSecureLocationContext()) {
-    throw new Error('Location requires HTTPS on iPhone Safari')
+    throw new LocationError('Location requires HTTPS', 'https')
   }
 
-  try {
-    const permissions = navigator.permissions
-    if (permissions?.query) {
-      const status = await permissions.query({ name: 'geolocation' as PermissionName })
-      if (status.state === 'denied') throw new Error('Location permission is blocked for this site')
+  // iOS home-screen apps use a separate permission bucket; Permissions API often
+  // reports Safari's state and blocks the prompt if we bail out early.
+  if (!isStandalonePwa()) {
+    try {
+      const permissions = navigator.permissions
+      if (permissions?.query) {
+        const status = await permissions.query({ name: 'geolocation' as PermissionName })
+        if (status.state === 'denied') {
+          throw new LocationError('Location permission is blocked', 'denied')
+        }
+      }
+    } catch (err) {
+      if (err instanceof LocationError) throw err
     }
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('blocked')) throw err
   }
 
+  const baseTimeout = isStandalonePwa() ? 35000 : 20000
+
   try {
-    return await getPositionOnce({ enableHighAccuracy: false, timeout: 20000, maximumAge: 5 * 60 * 1000 })
+    return await getPositionOnce({
+      enableHighAccuracy: false,
+      timeout: baseTimeout,
+      maximumAge: 5 * 60 * 1000,
+    })
   } catch (err) {
-    const message = err instanceof Error ? err.message : ''
-    if (!/timed out|unavailable/i.test(message)) throw err
-    return getPositionOnce({ enableHighAccuracy: true, timeout: 30000, maximumAge: 0 })
+    if (err instanceof LocationError && err.code !== 'timeout' && err.code !== 'unavailable') {
+      throw err
+    }
+    const first = err instanceof LocationError ? err : null
+    if (first && first.code === 'denied') throw first
+
+    try {
+      return await getPositionOnce({
+        enableHighAccuracy: true,
+        timeout: isStandalonePwa() ? 45000 : 30000,
+        maximumAge: 0,
+      })
+    } catch (retryErr) {
+      if (retryErr instanceof LocationError) throw retryErr
+      throw new LocationError(
+        retryErr instanceof Error ? retryErr.message : 'Could not get location',
+        'unavailable'
+      )
+    }
   }
 }
 

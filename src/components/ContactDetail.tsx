@@ -190,31 +190,31 @@ export function ContactDetail() {
       {/* Quick action row */}
       <div style={{ display: 'flex', background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
         {(c.phone_mobile || c.phone_work) && (
-          <ActionBtn icon={<Phone size={18} strokeWidth={2} />} bg="#e1f0ff" label="Call"
+          <ActionBtn icon={<Phone size={18} strokeWidth={2.25} />} token="call" label="Call"
             onClick={() => window.location.href = `tel:${c.phone_mobile || c.phone_work}`} />
         )}
         {(c.phone_mobile || c.phone_work) && (
-          <ActionBtn icon={<MessageCircle size={18} strokeWidth={2} />} bg="#e8f5e9" label="WhatsApp" onClick={handleWhatsApp} />
+          <ActionBtn icon={<MessageCircle size={18} strokeWidth={2.25} />} token="message" label="WhatsApp" onClick={handleWhatsApp} />
         )}
         {(c.address || c.city) && (
-          <ActionBtn icon={<MapPin size={18} strokeWidth={2} />} bg="#fff3e0" label="Map"
+          <ActionBtn icon={<MapPin size={18} strokeWidth={2.25} />} token="map" label="Map"
             onClick={() => {
               const q = [c.company, fullAddress].filter(Boolean).join(' ')
               window.open(`https://maps.google.com/?q=${encodeURIComponent(q)}`, '_blank')
             }} />
         )}
         {c.email && (
-          <ActionBtn icon={<Mail size={18} strokeWidth={2} />} bg="#ede7f6" label="Email"
+          <ActionBtn icon={<Mail size={18} strokeWidth={2.25} />} token="email" label="Email"
             onClick={() => window.location.href = `mailto:${c.email}`} />
         )}
         <ActionBtn
           icon={isSendingSheets ? <Loader2 size={18} className="animate-spin" /> : <BarChart3 size={18} strokeWidth={2} />}
-          bg="#e8f5e9"
+          token="sheets"
           label={isSendingSheets ? 'Sending…' : 'Sheets'}
           onClick={handleSendToSheets}
         />
-        <ActionBtn icon={<FileText size={18} strokeWidth={2} />} bg="#fff4e5" label="Invoice" onClick={() => setInvoiceContactId(c.id)} />
-        <ActionBtn icon={<Pencil size={18} strokeWidth={2} />} bg="#f5f5f5" label="Edit"
+        <ActionBtn icon={<FileText size={18} strokeWidth={2.25} />} token="invoice" label="Invoice" onClick={() => setInvoiceContactId(c.id)} />
+        <ActionBtn icon={<Pencil size={18} strokeWidth={2.25} />} token="edit" label="Edit"
           onClick={() => setEditModal({ contact: c, isNew: false })} />
       </div>
 
@@ -224,7 +224,7 @@ export function ContactDetail() {
           <SectionTitle>Card Images</SectionTitle>
           <Section>
             {(c.front_image || c.front_image_url) && (
-              <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="#8e8e93">
+              <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Front Side</div>
                 <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
                   onError={(e) => { e.currentTarget.style.display = 'none' }}
@@ -233,7 +233,7 @@ export function ContactDetail() {
               </DetailRow>
             )}
             {(c.back_image || c.back_image_url) && (
-              <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="#8e8e93">
+              <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Back Side</div>
                 <img src={c.back_image ? `data:image/jpeg;base64,${c.back_image}` : c.back_image_url}
                   onError={(e) => { e.currentTarget.style.display = 'none' }}
@@ -248,29 +248,29 @@ export function ContactDetail() {
       {/* Contact details */}
       <SectionTitle>Contact Details</SectionTitle>
       <Section>
-        {c.company && <SimpleRow icon={<Building2 size={16} strokeWidth={2} />} bg="#8e8e93" value={c.company} label="Company" />}
-        {c.title && <SimpleRow icon={<Briefcase size={16} strokeWidth={2} />} bg="#8e8e93" value={c.title} label="Job Title" />}
+        {c.company && <SimpleRow icon={<Building2 size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.company} label="Company" />}
+        {c.title && <SimpleRow icon={<Briefcase size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.title} label="Job Title" />}
         {c.email && (
-          <DetailRow icon={<Mail size={16} strokeWidth={2} />} bg="#007aff">
+          <DetailRow icon={<Mail size={16} strokeWidth={2} />} bg="var(--accent)">
             <a href={`mailto:${c.email}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.email}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Email</div>
           </DetailRow>
         )}
         {c.phone_mobile && (
-          <DetailRow icon={<Smartphone size={16} strokeWidth={2} />} bg="#34c759">
+          <DetailRow icon={<Smartphone size={16} strokeWidth={2} />} bg="var(--chip-success-fg)">
             <a href={`tel:${c.phone_mobile}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.phone_mobile}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Mobile</div>
           </DetailRow>
         )}
         {c.phone_work && (
-          <DetailRow icon={<Phone size={16} strokeWidth={2} />} bg="#8e8e93">
+          <DetailRow icon={<Phone size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
             <a href={`tel:${c.phone_work}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.phone_work}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Work Tel</div>
           </DetailRow>
         )}
-        {c.phone_fax && <SimpleRow icon={<Printer size={16} strokeWidth={2} />} bg="#8e8e93" value={c.phone_fax} label="Fax" />}
+        {c.phone_fax && <SimpleRow icon={<Printer size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.phone_fax} label="Fax" />}
         {c.website && (
-          <DetailRow icon={<Globe size={16} strokeWidth={2} />} bg="#5856d6">
+          <DetailRow icon={<Globe size={16} strokeWidth={2} />} bg="var(--action-email-fg)">
             <a href={mUrl(c.website)} target="_blank" rel="noreferrer"
               style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.website}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Website</div>
@@ -282,7 +282,7 @@ export function ContactDetail() {
         <>
           <SectionTitle>Address</SectionTitle>
           <Section>
-            <DetailRow icon={<MapPin size={16} strokeWidth={2} />} bg="#ff9500">
+            <DetailRow icon={<MapPin size={16} strokeWidth={2} />} bg="var(--chip-warning-fg)">
               <div style={{ fontSize: 14, whiteSpace: 'normal' }}>{fullAddress}</div>
               <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Company Address</div>
             </DetailRow>
@@ -305,17 +305,17 @@ export function ContactDetail() {
       <Section>
         <ToggleRow
           icon={<Package size={16} strokeWidth={2} />} label="Showed Goods" sublabel="Tap to toggle"
-          active={!!c.visited} activeColor="#34c759"
+          active={!!c.visited} activeColor="var(--chip-success-fg)"
           onToggle={handleToggleVisited}
         />
         <ToggleRow
           icon={<Handshake size={16} strokeWidth={2} />} label="Current Customer" sublabel="Tap to toggle"
-          active={!!c.is_customer} activeColor="#007aff"
+          active={!!c.is_customer} activeColor="var(--accent)"
           onToggle={handleToggleCustomer}
         />
         <ToggleRow
           icon={<History size={16} strokeWidth={2} />} label="Old Customer" sublabel="Tap to toggle"
-          active={!!c.is_old_customer} activeColor="#ff9500"
+          active={!!c.is_old_customer} activeColor="var(--chip-warning-fg)"
           onToggle={handleToggleOldCustomer}
         />
         <FollowupDetailRow contact={c} onOpen={() => setFollowupContactId(c.id)} />
@@ -323,8 +323,8 @@ export function ContactDetail() {
 
       <SectionTitle>Info</SectionTitle>
       <Section>
-        {c.area && <SimpleRow icon={<Map size={16} strokeWidth={2} />} bg="#8e8e93" value={c.area} label="Area" />}
-        <SimpleRow icon={<Calendar size={16} strokeWidth={2} />} bg="#8e8e93" value={c.scanned_at || '—'} label="Scanned On" />
+        {c.area && <SimpleRow icon={<Map size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.area} label="Area" />}
+        <SimpleRow icon={<Calendar size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.scanned_at || '—'} label="Scanned On" />
       </Section>
 
       <div style={{ height: 20 }} />
@@ -363,8 +363,10 @@ const saveBtnStyle: React.CSSProperties = {
   fontSize: 15, cursor: 'pointer',
 }
 
-function ActionBtn({ icon, bg, label, onClick }: {
-  icon: ReactNode; bg: string; label: string; onClick: () => void
+type ActionToken = 'call' | 'message' | 'map' | 'email' | 'sheets' | 'invoice' | 'edit' | 'neutral'
+
+function ActionBtn({ icon, token, label, onClick }: {
+  icon: ReactNode; token: ActionToken; label: string; onClick: () => void
 }) {
   return (
     <button onClick={onClick} style={{
@@ -374,8 +376,12 @@ function ActionBtn({ icon, bg, label, onClick }: {
       borderRight: '1px solid var(--border2)', transition: '0.1s',
       textTransform: 'uppercase', letterSpacing: '0.3px',
     }}>
-      <div style={{ width: 36, height: 36, borderRadius: '50%', background: bg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+      <div className="icon-btn-circle" style={{
+        width: 36, height: 36, borderRadius: '50%',
+        background: `var(--action-${token}-bg)`,
+        color: `var(--action-${token}-fg)`,
+        fontSize: 16,
+      }}>
         {icon}
       </div>
       {label}
@@ -402,10 +408,12 @@ function Section({ children }: { children: React.ReactNode }) {
 }
 
 function DetailRow({ icon, bg, children }: { icon: ReactNode; bg: string; children: React.ReactNode }) {
+  const isNeutral = bg === 'var(--action-neutral-bg)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
       borderBottom: '1px solid var(--border2)' }}>
       <div style={{ width: 32, height: 32, borderRadius: '50%', background: bg,
+        color: isNeutral ? 'var(--action-neutral-fg)' : 'var(--icon-on-accent)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>
         {icon}
       </div>
@@ -435,8 +443,8 @@ function NoteRow({ label, text }: { label: string; text: string }) {
 function FollowupDetailRow({ contact: c, onOpen }: { contact: Contact; onOpen: () => void }) {
   const hasFollowup = !!c.followup_at
   const isOverdue = hasFollowup && new Date(c.followup_at!) < new Date()
-  const color = isOverdue ? '#ff3b30' : hasFollowup ? '#ff9500' : 'var(--text3)'
-  const bgColor = isOverdue ? 'rgba(255,59,48,0.12)' : hasFollowup ? 'rgba(255,149,0,0.12)' : 'var(--bg4)'
+  const color = isOverdue ? 'var(--chip-danger-fg)' : hasFollowup ? 'var(--chip-warning-fg)' : 'var(--text3)'
+  const bgColor = isOverdue ? 'var(--chip-danger-bg)' : hasFollowup ? 'var(--chip-warning-bg)' : 'var(--bg4)'
 
   const label = hasFollowup
     ? new Date(c.followup_at!).toLocaleString('en-US', {

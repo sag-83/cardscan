@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { AlertTriangle } from 'lucide-react'
 import './index.css'
 import App from './App'
+import { applyDocumentTheme, readPersistedTheme } from './lib/theme'
+
+applyDocumentTheme(readPersistedTheme())
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }

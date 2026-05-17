@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { applyDocumentTheme } from '../lib/theme'
 import { useStore } from '../store/useStore'
 
 export function useTheme() {
@@ -6,7 +7,7 @@ export function useTheme() {
   const setTheme = useStore((s) => s.setTheme)
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
+    applyDocumentTheme(theme)
     const meta = document.getElementById('metaTheme')
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#000' : '#fff')
   }, [theme])

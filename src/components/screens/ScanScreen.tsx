@@ -573,12 +573,12 @@ export function ScanScreen() {
         }}
       />
 
-      <Card className="relative z-10 w-full max-w-[460px] border-b1 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+      <Card className="relative z-10 w-full max-w-[460px] border border-b2 bg-bg2 text-tx1 shadow-[0_10px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_32px_rgba(0,0,0,0.45)] ring-0">
         <CardHeader className="pb-2 text-center">
           <div className="mx-auto mb-2 flex h-[52px] items-center justify-center text-[var(--accent)]">
             <ContactRound className="h-12 w-12" strokeWidth={1.75} aria-hidden />
           </div>
-          <CardTitle className="text-[28px] font-extrabold leading-tight">Scan Business Cards</CardTitle>
+          <CardTitle className="text-[28px] font-extrabold leading-tight text-tx1">Scan Business Cards</CardTitle>
           <CardDescription className="text-base leading-relaxed text-tx3">
             Point your camera at a card.
             <br />
@@ -657,9 +657,9 @@ function PreviewPanel({
 }) {
   return (
     <div className="min-h-full p-[18px]">
-      <Card className="mx-auto w-full max-w-[680px] border-b1">
+      <Card className="mx-auto w-full max-w-[680px] border border-b2 bg-bg2 text-tx1 ring-0">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-[22px] font-extrabold">
+          <CardTitle className="flex items-center gap-2 text-[22px] font-extrabold text-tx1">
             <Sparkles className="size-6 shrink-0 text-[var(--star)]" aria-hidden />
             Found {cards.length} card{cards.length > 1 ? 's' : ''}
           </CardTitle>

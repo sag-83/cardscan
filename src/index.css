@@ -18,22 +18,154 @@
   --accent: #007aff;
   --danger: #ff3b30;
   --star: #ff9500;
+  --star-empty: #d1d1d6;
   --hdr: #1c3a5e;
   --modal-bg: rgba(0, 0, 0, 0.45);
+  --icon-on-accent: #fff;
+
+  --action-call-bg: #e8f4ff;
+  --action-call-fg: #007aff;
+  --action-message-bg: #e8f8ed;
+  --action-message-fg: #248a3d;
+  --action-map-bg: #fff4e5;
+  --action-map-fg: #c77800;
+  --action-email-bg: #f0ebfa;
+  --action-email-fg: #6b4fa3;
+  --action-sheets-bg: #e8f8ed;
+  --action-sheets-fg: #248a3d;
+  --action-invoice-bg: #fff8eb;
+  --action-invoice-fg: #b8860b;
+  --action-edit-bg: #f2f2f7;
+  --action-edit-fg: #3c3c43;
+  --action-neutral-bg: #e5e5ea;
+  --action-neutral-fg: #636366;
+
+  --chip-success-bg: rgba(52, 199, 89, 0.14);
+  --chip-success-fg: #248a3d;
+  --chip-warning-bg: rgba(255, 149, 0, 0.14);
+  --chip-warning-fg: #b86a00;
+  --chip-danger-bg: rgba(255, 59, 48, 0.12);
+  --chip-danger-fg: #d70015;
+  --chip-info-bg: rgba(0, 122, 255, 0.12);
+  --chip-info-fg: #007aff;
+  --chip-accent-bg: rgba(0, 122, 255, 0.12);
+  --chip-accent-fg: #007aff;
+
+  --swipe-panel-share: #007aff;
+  --swipe-panel-message: #34c759;
+  --swipe-btn-bg: rgba(255, 255, 255, 0.96);
+  --swipe-btn-share-fg: #007aff;
+  --swipe-btn-message-fg: #1f8f44;
 }
 
 [data-theme='dark'] {
   --bg: #000;
   --bg2: #1c1c1e;
   --bg3: #2c2c2e;
-  --bg4: #3a3a3c;
-  --border: #38383a;
-  --border2: #2c2c2e;
+  --bg4: #48484a;
+  --border: #48484a;
+  --border2: #38383a;
   --text: #fff;
-  --text2: rgba(235, 235, 245, 0.8);
-  --text3: rgba(235, 235, 245, 0.4);
-  --hdr: #0d1f3c;
-  --modal-bg: rgba(0, 0, 0, 0.7);
+  --text2: rgba(235, 235, 245, 0.88);
+  --text3: rgba(235, 235, 245, 0.5);
+  --accent: #0a84ff;
+  --danger: #ff453a;
+  --star: #ff9f0a;
+  --star-empty: rgba(235, 235, 245, 0.22);
+  --hdr: #1a2f4d;
+  --modal-bg: rgba(0, 0, 0, 0.72);
+  --icon-on-accent: #fff;
+
+  --action-call-bg: rgba(10, 132, 255, 0.14);
+  --action-call-fg: #5eb0ff;
+  --action-call-border: rgba(94, 176, 255, 0.38);
+  --action-message-bg: rgba(48, 209, 88, 0.14);
+  --action-message-fg: #5ee08a;
+  --action-message-border: rgba(94, 224, 138, 0.38);
+  --action-map-bg: rgba(255, 159, 10, 0.18);
+  --action-map-fg: #ffb340;
+  --action-email-bg: rgba(191, 90, 242, 0.18);
+  --action-email-fg: #d8a8ff;
+  --action-sheets-bg: rgba(48, 209, 88, 0.18);
+  --action-sheets-fg: #6ee79a;
+  --action-invoice-bg: rgba(255, 159, 10, 0.16);
+  --action-invoice-fg: #ffc866;
+  --action-edit-bg: rgba(235, 235, 245, 0.1);
+  --action-edit-fg: rgba(235, 235, 245, 0.85);
+  --action-neutral-bg: rgba(235, 235, 245, 0.12);
+  --action-neutral-fg: rgba(235, 235, 245, 0.75);
+
+  --chip-success-bg: rgba(48, 209, 88, 0.18);
+  --chip-success-fg: #5ee08a;
+  --chip-warning-bg: rgba(255, 159, 10, 0.18);
+  --chip-warning-fg: #ffb340;
+  --chip-danger-bg: rgba(255, 69, 58, 0.2);
+  --chip-danger-fg: #ff6961;
+  --chip-info-bg: rgba(10, 132, 255, 0.2);
+  --chip-info-fg: #64b5ff;
+  --chip-accent-bg: rgba(10, 132, 255, 0.2);
+  --chip-accent-fg: #64b5ff;
+
+  --swipe-panel-share: #0a84ff;
+  --swipe-panel-message: #30d158;
+  --swipe-btn-bg: #2c2c2e;
+  --swipe-btn-share-fg: #64b5ff;
+  --swipe-btn-message-fg: #6ee79a;
+
+  /* Shadcn / Tailwind tokens (`.dark` class also toggled via applyDocumentTheme) */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+[data-theme='light'] {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+/* Lucide icons inherit button/link color */
+[data-theme='dark'] button svg.lucide,
+[data-theme='dark'] a svg.lucide {
+  stroke: currentColor;
+}
+
+.contact-quick-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+[data-theme='dark'] .contact-quick-btn--call {
+  background: var(--action-call-bg);
+  color: var(--action-call-fg);
+  border: 1px solid var(--action-call-border);
+}
+[data-theme='dark'] .contact-quick-btn--message {
+  background: var(--action-message-bg);
+  color: var(--action-message-fg);
+  border: 1px solid var(--action-message-border);
 }
 
 *,
@@ -62,6 +194,30 @@ button {
   font-family: inherit;
   color: var(--text);
 }
+
+.icon-btn-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.chip--success { background: var(--chip-success-bg); color: var(--chip-success-fg); }
+.chip--warning { background: var(--chip-warning-bg); color: var(--chip-warning-fg); }
+.chip--danger { background: var(--chip-danger-bg); color: var(--chip-danger-fg); }
+.chip--info { background: var(--chip-info-bg); color: var(--chip-info-fg); }
+.chip--accent { background: var(--chip-accent-bg); color: var(--chip-accent-fg); }
 
 ::-webkit-scrollbar {
   width: 3px;

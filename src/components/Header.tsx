@@ -40,13 +40,13 @@ export function Header() {
         onClick={toggle}
         style={{
           width: 32, height: 32, borderRadius: '50%', border: 'none',
-          background: 'var(--bg3)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', cursor: 'pointer', fontSize: 15, flexShrink: 0,
-          transition: '0.15s',
+          background: 'var(--bg3)', color: 'var(--text2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', fontSize: 15, flexShrink: 0, transition: '0.15s',
         }}
         aria-label="Toggle theme"
       >
-        {theme === 'dark' ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
+        {theme === 'dark' ? <Sun size={18} strokeWidth={2.25} /> : <Moon size={18} strokeWidth={2.25} />}
       </button>
 
       <h1
@@ -66,8 +66,9 @@ export function Header() {
           onPointerCancel={() => setQrPressed(false)}
           style={{
             width: 32, height: 32, borderRadius: '50%', border: 'none',
-            background: 'var(--bg3)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', cursor: 'pointer', fontSize: 14, flexShrink: 0,
+            background: 'var(--bg3)', color: 'var(--text2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: 14, fontWeight: 700, flexShrink: 0,
             transition: '0.12s',
             transform: qrPressed ? 'scale(0.93)' : 'scale(1)',
             boxShadow: qrPressed ? 'inset 0 0 0 2px rgba(0,122,255,0.35)' : 'none',

@@ -273,9 +273,9 @@ export function ContactsScreen() {
               flex: 1,
               padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
               fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
-              border: `1.5px solid ${nearMeActive ? '#34c759' : 'var(--border)'}`,
-              background: nearMeActive ? 'rgba(52,199,89,0.12)' : 'var(--bg3)',
-              color: nearMeActive ? '#34c759' : 'var(--text2)',
+              border: `1.5px solid ${nearMeActive ? 'var(--chip-success-fg)' : 'var(--border)'}`,
+              background: nearMeActive ? 'var(--chip-success-bg)' : 'var(--bg3)',
+              color: nearMeActive ? 'var(--chip-success-fg)' : 'var(--text2)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -308,7 +308,7 @@ export function ContactsScreen() {
                 flex: 1,
                 padding: '7px 12px', borderRadius: 999,
                 border: '1.5px solid var(--accent)',
-                background: 'rgba(0,122,255,0.1)',
+                background: 'var(--chip-accent-bg)',
                 color: 'var(--accent)', fontSize: 12, fontWeight: 800,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 display: 'inline-flex',
@@ -381,7 +381,7 @@ function dropdownStyle(active: boolean): CSSProperties {
   return {
     flex: 1, padding: '8px 6px', borderRadius: 10, fontSize: 11, fontWeight: 600,
     border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-    background: active ? 'rgba(0,122,255,0.08)' : 'var(--bg3)',
+    background: active ? 'var(--chip-accent-bg)' : 'var(--bg3)',
     color: active ? 'var(--accent)' : 'var(--text2)',
     cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none',
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e93' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
@@ -477,8 +477,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           onClick={(e) => { e.stopPropagation(); void shareBusinessCard(); closeSwipe() }}
           style={{
             minWidth: 66, height: 54, borderRadius: 16,
-            border: 'none', background: 'rgba(255,255,255,0.96)',
-            color: 'var(--accent)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            border: 'none', background: 'var(--swipe-btn-bg)',
+            color: 'var(--swipe-btn-share-fg)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             padding: '0 12px',
           }}
@@ -497,7 +497,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#34c759',
+          background: 'var(--swipe-panel-message)',
         }}
       >
         <button
@@ -505,8 +505,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           onClick={(e) => { e.stopPropagation(); void sendColdMessage(); closeSwipe() }}
           style={{
             minWidth: 70, height: 54, borderRadius: 16,
-            border: 'none', background: 'rgba(255,255,255,0.96)',
-            color: '#1f8f44', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            border: 'none', background: 'var(--swipe-btn-bg)',
+            color: 'var(--swipe-btn-message-fg)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             padding: '0 12px',
           }}
@@ -633,7 +633,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               size={11}
               className="shrink-0"
               fill={c.stars >= n ? 'var(--star)' : 'none'}
-              stroke={c.stars >= n ? 'var(--star)' : 'var(--bg4)'}
+              stroke={c.stars >= n ? 'var(--star)' : 'var(--star-empty)'}
               aria-hidden
             />
           ))}
@@ -643,7 +643,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(52,199,89,0.12)', color: '#34c759',
+              background: 'var(--chip-success-bg)', color: 'var(--chip-success-fg)',
               fontSize: 11, fontWeight: 800,
             }}>
               <MapPin className="size-3 shrink-0" aria-hidden />
@@ -654,7 +654,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(255,59,48,0.12)', color: '#ff3b30',
+              background: 'var(--chip-danger-bg)', color: 'var(--chip-danger-fg)',
               fontSize: 11, fontWeight: 800,
             }}>
               <Star className="size-3 shrink-0 fill-current" aria-hidden />
@@ -665,7 +665,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(52,199,89,0.12)', color: '#34c759',
+              background: 'var(--chip-success-bg)', color: 'var(--chip-success-fg)',
               fontSize: 11, fontWeight: 700,
             }}>
               <Package className="size-3 shrink-0" aria-hidden />
@@ -676,7 +676,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(0,122,255,0.12)', color: 'var(--accent)',
+              background: 'var(--chip-accent-bg)', color: 'var(--chip-accent-fg)',
               fontSize: 11, fontWeight: 700,
             }}>
               <Handshake className="size-3 shrink-0" aria-hidden />
@@ -687,7 +687,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               padding: '3px 8px', borderRadius: 999,
-              background: 'rgba(255,149,0,0.12)', color: '#ff9500',
+              background: 'var(--chip-warning-bg)', color: 'var(--chip-warning-fg)',
               fontSize: 11, fontWeight: 700,
             }}>
               <History className="size-3 shrink-0" aria-hidden />
@@ -700,8 +700,8 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 padding: '3px 8px', borderRadius: 999,
-                background: isOverdue ? 'rgba(255,59,48,0.12)' : 'rgba(255,149,0,0.12)',
-                color: isOverdue ? '#ff3b30' : '#ff9500',
+                background: isOverdue ? 'var(--chip-danger-bg)' : 'var(--chip-warning-bg)',
+                color: isOverdue ? 'var(--chip-danger-fg)' : 'var(--chip-warning-fg)',
                 fontSize: 11, fontWeight: 700,
               }}>
                 <Calendar className="size-3 shrink-0" aria-hidden />
@@ -716,16 +716,18 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
           <>
             <button
               type="button"
+              className="contact-quick-btn contact-quick-btn--call"
               onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${c.phone_mobile || c.phone_work}` }}
-              style={quickBtnStyle('#e1f0ff')}
+              style={quickBtnStyle('call')}
               title="Call"
-            ><Phone size={16} strokeWidth={2} /></button>
+            ><Phone size={16} strokeWidth={2.25} aria-hidden /></button>
             <button
               type="button"
+              className="contact-quick-btn contact-quick-btn--message"
               onClick={(e) => { e.stopPropagation(); window.location.href = `sms:${c.phone_mobile || c.phone_work}` }}
-              style={quickBtnStyle('#e8f5e9')}
+              style={quickBtnStyle('message')}
               title="Message"
-            ><MessageSquare size={16} strokeWidth={2} /></button>
+            ><MessageSquare size={16} strokeWidth={2.25} aria-hidden /></button>
           </>
         )}
         <div onClick={(e) => { e.stopPropagation(); onMenu() }}
@@ -753,13 +755,15 @@ function contactColdMessageText(contact: Contact): string {
   return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.\nHappy to assist with any requirements.`
 }
 
-function quickBtnStyle(bg: string): CSSProperties {
+function quickBtnStyle(kind: 'call' | 'message'): CSSProperties {
+  const isCall = kind === 'call'
   return {
     width: 34, height: 34, borderRadius: '50%',
-    background: bg, border: 'none', cursor: 'pointer',
-    fontSize: 15, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', flexShrink: 0,
-    WebkitTapHighlightColor: 'transparent',
+    background: isCall ? 'var(--action-call-bg)' : 'var(--action-message-bg)',
+    color: isCall ? 'var(--action-call-fg)' : 'var(--action-message-fg)',
+    border: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0, WebkitTapHighlightColor: 'transparent',
   }
 }
 
@@ -777,20 +781,20 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
       label: 'Overdue',
       labelIcon: <CircleAlert className="size-3 shrink-0" aria-hidden />,
       items: overdue,
-      color: '#ff3b30',
-      bg: 'rgba(255,59,48,0.08)',
+      color: 'var(--chip-danger-fg)',
+      bg: 'var(--chip-danger-bg)',
     },
     {
       label: 'Due this week',
       labelIcon: <Clock className="size-3 shrink-0" aria-hidden />,
       items: dueSoon,
-      color: '#ff9500',
-      bg: 'rgba(255,149,0,0.08)',
+      color: 'var(--chip-warning-fg)',
+      bg: 'var(--chip-warning-bg)',
     },
   ].filter((g) => g.items.length > 0)
 
-  const headerColor = overdue.length > 0 ? '#ff3b30' : '#ff9500'
-  const headerBg = overdue.length > 0 ? 'rgba(255,59,48,0.08)' : 'rgba(255,149,0,0.08)'
+  const headerColor = overdue.length > 0 ? 'var(--chip-danger-fg)' : 'var(--chip-warning-fg)'
+  const headerBg = overdue.length > 0 ? 'var(--chip-danger-bg)' : 'var(--chip-warning-bg)'
 
   return (
     <div style={{ borderBottom: '1px solid var(--border2)' }}>

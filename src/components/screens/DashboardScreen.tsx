@@ -1,17 +1,15 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  Banknote,
   Check,
   ClipboardList,
   FileText,
   Globe,
-  Landmark,
-  Loader,
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { SavedInvoice } from '../../types/invoice'
-import { updateInvoiceInDB, deleteInvoiceFromDB } from '../../lib/supabase'
+import { SavedInvoice, SavedInvoiceItem } from '../../types/invoice'
+import { updateInvoiceInDB, deleteInvoiceFromDB, saveInvoiceToDB } from '../../lib/supabase'
+import { uid } from '../../lib/utils'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -37,6 +35,15 @@ function invStatusColor(inv: SavedInvoice): string {
   if (inv.docKind === 'memo') return '#8b5cf6'
   if (inv.paidBy === 'pending') return '#ff9500'
   return '#34c759'
+}
+
+function sumItems(items: SavedInvoiceItem[]): number {
+  return items.reduce((s, it) => s + it.amount, 0)
+}
+
+function itemLabel(it: SavedInvoiceItem): string {
+  const parts = [it.size, it.pcs ? `${it.pcs} pcs` : '', it.ct ? `${it.ct} ct` : ''].filter(Boolean)
+  return parts.join(' · ') || 'Line item'
 }
 
 // ─── Stats tab (original) ────────────────────────────────────────────────────
@@ -120,6 +127,7 @@ type LedgerRow = {
 
 function RevenueTab() {
   const invoices = useStore((s) => s.invoices)
+  const addInvoice = useStore((s) => s.addInvoice)
   const updateInvoice = useStore((s) => s.updateInvoice)
   const deleteInvoice = useStore((s) => s.deleteInvoice)
   const showToast = useStore((s) => s.showToast)
@@ -148,10 +156,40 @@ function RevenueTab() {
     showToast(`Marked as paid (${paidBy})`)
   }
 
-  const handleDelete = (id: string) => {
+  const handleClearMemo = (id: string) => {
     deleteInvoice(id)
     deleteInvoiceFromDB(id).catch(() => {})
-    showToast('Memo deleted')
+    showToast('Memo cleared')
+  }
+
+  const handleConvertMemo = (inv: SavedInvoice, selectedIndices: number[]) => {
+    if (!selectedIndices.length) {
+      showToast('Select at least one item')
+      return
+    }
+    const selected = selectedIndices.map((i) => inv.items[i])
+    const newTotal = sumItems(selected)
+    const today = new Date().toISOString().slice(0, 10)
+    const newInv: SavedInvoice = {
+      ...inv,
+      id: uid(),
+      docKind: 'invoice',
+      paidBy: 'pending',
+      items: selected,
+      total: newTotal,
+      date: today,
+      saved_at: new Date().toISOString(),
+    }
+    addInvoice(newInv)
+    saveInvoiceToDB(newInv).catch(() => {})
+    deleteInvoice(inv.id)
+    deleteInvoiceFromDB(inv.id).catch(() => {})
+    const discarded = inv.items.length - selected.length
+    if (discarded > 0) {
+      showToast(`Invoice created · ${discarded} unsold item(s) discarded`)
+    } else {
+      showToast('Memo converted to invoice')
+    }
   }
 
   const summary = useMemo(() => {
@@ -159,6 +197,7 @@ function RevenueTab() {
     let thisMonth = 0
     let pending = 0
     filteredInvoices.forEach((inv) => {
+      if (inv.docKind === 'memo') return
       totalRevenue += inv.total
       if (inv.paidBy === 'pending') pending += inv.total
       const dt = new Date(inv.saved_at)
@@ -170,6 +209,7 @@ function RevenueTab() {
   const ledger = useMemo<LedgerRow[]>(() => {
     const map = new Map<string, LedgerRow>()
     filteredInvoices.forEach((inv) => {
+      if (inv.docKind === 'memo') return
       const key = inv.contactId || inv.company
       const row = map.get(key) ?? {
         key,
@@ -209,22 +249,13 @@ function RevenueTab() {
       .sort((a, b) => b.sold - a.sold)
   }, [filteredInvoices])
 
-  const byPayment = useMemo(() => {
-    const cash      = filteredInvoices.filter((i) => i.paidBy === 'cash'    && i.docKind !== 'memo')
-    const check     = filteredInvoices.filter((i) => i.paidBy === 'check'   && i.docKind !== 'memo')
-    const pending   = filteredInvoices.filter((i) => i.paidBy === 'pending')
-    const memos     = filteredInvoices.filter((i) => i.docKind === 'memo')
-    const sum = (arr: SavedInvoice[]) => arr.reduce((s, i) => s + i.total, 0)
-    return {
-      cash: sum(cash), cashCount: cash.length,
-      check: sum(check), checkCount: check.length,
-      pending: sum(pending), pendingCount: pending.length,
-      memo: sum(memos), memoCount: memos.length,
-    }
-  }, [filteredInvoices])
+  const memoInvoices = useMemo(
+    () => filteredInvoices.filter((i) => i.docKind === 'memo').sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredInvoices]
+  )
 
   const pendingInvoices = useMemo(
-    () => filteredInvoices.filter((i) => i.paidBy === 'pending').sort((a, b) => b.total - a.total),
+    () => filteredInvoices.filter((i) => i.paidBy === 'pending' && i.docKind !== 'memo').sort((a, b) => b.total - a.total),
     [filteredInvoices]
   )
 
@@ -295,6 +326,26 @@ function RevenueTab() {
         <StatCard label="Invoices" value={String(summary.count)} />
       </div>
 
+      {/* Memos — consignment at shops */}
+      {memoInvoices.length > 0 && (
+        <>
+          <Section title={`Memos · ${memoInvoices.length}`} color="#8b5cf6" />
+          <div style={{ background: 'var(--bg2)', border: '1.5px solid rgba(139,92,246,0.35)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
+            {memoInvoices.map((inv, i) => (
+              <MemoRow
+                key={inv.id}
+                inv={inv}
+                isFirst={i === 0}
+                onClear={() => {
+                  if (window.confirm('Clear this memo? Items are marked as collected back.')) handleClearMemo(inv.id)
+                }}
+                onConvert={(indices) => handleConvertMemo(inv, indices)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Pending payments */}
       {pendingInvoices.length > 0 && (
         <>
@@ -306,17 +357,6 @@ function RevenueTab() {
           </div>
         </>
       )}
-
-      {/* Payment breakdown */}
-      <Section title="Payment Breakdown" />
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-        <PaymentBreakdownRow label="Cash" amount={byPayment.cash} count={byPayment.cashCount} color="#34c759" icon={<Banknote className="size-3.5 shrink-0" aria-hidden />} />
-        <PaymentBreakdownRow label="Check" amount={byPayment.check} count={byPayment.checkCount} color="#007aff" divider icon={<Landmark className="size-3.5 shrink-0" aria-hidden />} />
-        <PaymentBreakdownRow label="Pending" amount={byPayment.pending} count={byPayment.pendingCount} color="#ff9500" divider icon={<Loader className="size-3.5 shrink-0" aria-hidden />} />
-        {byPayment.memoCount > 0 && (
-          <PaymentBreakdownRow label="Memo" amount={byPayment.memo} count={byPayment.memoCount} color="#8b5cf6" divider icon={<ClipboardList className="size-3.5 shrink-0" aria-hidden />} />
-        )}
-      </div>
 
       {/* Monthly revenue chart */}
       {byMonth.length > 0 && (
@@ -345,7 +385,7 @@ function RevenueTab() {
       <Section title="Ledger by Shop" />
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
         {ledger.map((row) => (
-          <LedgerRowItem key={row.key} row={row} onMarkPaid={handleMarkPaid} onDelete={handleDelete} />
+          <LedgerRowItem key={row.key} row={row} onMarkPaid={handleMarkPaid} />
         ))}
       </div>
 
@@ -364,6 +404,125 @@ function RevenueTab() {
             ))}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ─── MemoRow — clear or convert sold lines to invoice ────────────────────────
+
+function MemoRow({ inv, isFirst, onClear, onConvert }: {
+  inv: SavedInvoice
+  isFirst: boolean
+  onClear: () => void
+  onConvert: (selectedIndices: number[]) => void
+}) {
+  const [converting, setConverting] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(inv.items.map((_, i) => i)))
+
+  const toggleItem = (index: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
+  const startConvert = () => {
+    setSelected(new Set(inv.items.map((_, i) => i)))
+    setConverting(true)
+  }
+
+  const submitConvert = () => {
+    const indices = [...selected].sort((a, b) => a - b)
+    if (!indices.length) return
+    const unselected = inv.items.length - indices.length
+    const msg = unselected > 0
+      ? `Create invoice for ${indices.length} sold item(s)? ${unselected} unsold item(s) will be discarded.`
+      : 'Convert entire memo to a pending invoice?'
+    if (!window.confirm(msg)) return
+    onConvert(indices)
+    setConverting(false)
+  }
+
+  const itemCount = inv.items.length
+
+  return (
+    <div style={{ borderTop: isFirst ? 'none' : '1px solid var(--border2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', gap: 8 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {inv.company || inv.contactName || 'Unknown'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+            {[inv.city, inv.state].filter(Boolean).join(', ')} · {inv.date}
+            {itemCount > 0 ? ` · ${itemCount} item${itemCount === 1 ? '' : 's'}` : ''}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#8b5cf6' }}>{money(inv.total)}</div>
+          {!converting ? (
+            <>
+              <button
+                type="button"
+                onClick={onClear}
+                style={{ fontSize: 11, fontWeight: 700, padding: '5px 9px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={startConvert}
+                style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, border: '1.5px solid #8b5cf6', background: 'transparent', color: '#8b5cf6', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <ClipboardList size={12} strokeWidth={2.5} aria-hidden />
+                Sold
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+      {converting && (
+        <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border2)', background: 'rgba(139,92,246,0.04)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, margin: '10px 0 8px' }}>
+            Select sold items to invoice. Unselected items are discarded.
+          </div>
+          {inv.items.map((it, i) => (
+            <label
+              key={i}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: i ? '1px solid var(--border2)' : 'none', cursor: 'pointer' }}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(i)}
+                onChange={() => toggleItem(i)}
+                style={{ width: 18, height: 18, accentColor: '#8b5cf6', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{itemLabel(it)}</div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#8b5cf6', flexShrink: 0 }}>{money(it.amount)}</div>
+            </label>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={submitConvert}
+              disabled={selected.size === 0}
+              style={{ flex: 1, fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: 'none', background: selected.size === 0 ? 'var(--bg4)' : '#8b5cf6', color: selected.size === 0 ? 'var(--text3)' : '#fff', cursor: selected.size === 0 ? 'default' : 'pointer' }}
+            >
+              Create invoice ({selected.size})
+            </button>
+            <button
+              type="button"
+              onClick={() => setConverting(false)}
+              style={{ fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -423,10 +582,9 @@ function PendingRow({ inv, isFirst, onMarkPaid }: {
 
 // ─── Individual invoice row in ledger ────────────────────────────────────────
 
-function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
+function InvoiceLineItem({ inv, onMarkPaid }: {
   inv: SavedInvoice
   onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
-  onDelete: (id: string) => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
   const isMemo = inv.docKind === 'memo'
@@ -476,12 +634,6 @@ function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
               </button>
             </div>
           )}
-          {isMemo && (
-            <button onClick={() => onDelete(inv.id)}
-              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #ff3b30', background: 'transparent', color: '#ff3b30', cursor: 'pointer' }}>
-              Delete
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -490,14 +642,13 @@ function InvoiceLineItem({ inv, onMarkPaid, onDelete }: {
 
 // ─── Ledger row — expandable ─────────────────────────────────────────────────
 
-function LedgerRowItem({ row, onMarkPaid, onDelete }: {
+function LedgerRowItem({ row, onMarkPaid }: {
   row: LedgerRow
   onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
-  onDelete: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const sortedInvoices = useMemo(
-    () => [...row.invoices].sort((a, b) => b.date.localeCompare(a.date)),
+    () => [...row.invoices].filter((i) => i.docKind !== 'memo').sort((a, b) => b.date.localeCompare(a.date)),
     [row.invoices]
   )
 
@@ -510,7 +661,7 @@ function LedgerRowItem({ row, onMarkPaid, onDelete }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3, marginBottom: 2 }}>{row.company}</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)' }}>
               {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv · Last: {row.lastDate}
             </div>
           </div>
@@ -518,50 +669,14 @@ function LedgerRowItem({ row, onMarkPaid, onDelete }: {
             {expanded ? '▲' : '▼'}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-          {[
-            { label: 'Sold',    value: money(row.totalSold),    color: 'var(--accent)' },
-            { label: 'Paid',    value: money(row.totalPaid),    color: '#34c759' },
-            { label: 'Pending', value: row.totalPending > 0 ? money(row.totalPending) : '—', color: row.totalPending > 0 ? '#ff9500' : 'var(--text3)' },
-          ].map(({ label, value, color }) => (
-            <div key={label}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}</div>
-            </div>
-          ))}
-        </div>
       </div>
-      {expanded && (
+      {expanded && sortedInvoices.length > 0 && (
         <div style={{ borderTop: '1px solid var(--border2)', background: 'var(--bg3)' }}>
           {sortedInvoices.map((inv) => (
-            <InvoiceLineItem key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} />
+            <InvoiceLineItem key={inv.id} inv={inv} onMarkPaid={onMarkPaid} />
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function PaymentBreakdownRow({ label, amount, count, color, divider, icon }: {
-  label: string
-  amount: number
-  count: number
-  color: string
-  divider?: boolean
-  icon?: ReactNode
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderTop: divider ? '1px solid var(--border2)' : 'none' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {icon ? (
-          <span style={{ color, display: 'flex', alignItems: 'center' }}>{icon}</span>
-        ) : (
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-        )}
-        <div style={{ fontSize: 14, fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{count} inv</div>
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color }}>{money(amount)}</div>
     </div>
   )
 }

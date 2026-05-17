@@ -437,6 +437,7 @@ export async function updateInvoiceInDB(id: string, patch: Partial<SavedInvoice>
   if (patch.paidBy  !== undefined) dbPatch.paid_by  = patch.paidBy
   if (patch.notes   !== undefined) dbPatch.notes    = patch.notes
   if (patch.total   !== undefined) dbPatch.total    = patch.total
+  if (patch.items   !== undefined) dbPatch.items    = patch.items
   if (patch.docKind !== undefined) dbPatch.doc_kind = patch.docKind
   if (patch.date    !== undefined) dbPatch.date     = patch.date
 

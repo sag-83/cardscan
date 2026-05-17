@@ -1221,7 +1221,7 @@ export function RevenueDashboard() {
 
             <section id="accounts" className="scroll-mt-20">
               <SectionDivider label="Charge Accounts" />
-              <AccountsReceivable onOutstandingCount={setAccountsOutstanding} />
+              <AccountsReceivable salesInvoices={allInvoices} onOutstandingCount={setAccountsOutstanding} />
             </section>
 
             {loading && !allInvoices.length ? (

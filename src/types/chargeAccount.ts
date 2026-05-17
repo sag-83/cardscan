@@ -36,4 +36,27 @@ export type ContactBalanceRow = {
   balance: number
   invoiceTotal: number
   paymentTotal: number
+  chargeInvoiceTotal: number
+  chargePaymentTotal: number
+  salesInvoiceTotal: number
+  salesPaymentTotal: number
+  salesPendingCount: number
+}
+
+export type LedgerInvoiceEntry = {
+  id: string
+  source: 'charge' | 'sales'
+  date: string
+  total: number
+  note: string
+  status?: 'pending' | 'cash' | 'check' | 'memo'
+  items?: { label: string; quantity: number; unit_price: number; lineTotal: number }[]
+}
+
+export type LedgerPaymentEntry = {
+  id: string
+  source: 'charge' | 'sales'
+  date: string
+  amount: number
+  note: string
 }

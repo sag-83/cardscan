@@ -121,8 +121,10 @@ export default function App() {
 
   useEffect(() => {
     if (!isUnlocked) return
-    void registerReminderServiceWorker()
-    void syncFollowupReminders(contacts)
+    void (async () => {
+      await registerReminderServiceWorker()
+      await syncFollowupReminders(contacts)
+    })()
     return startFollowupReminderPolling(() => useStore.getState().contacts)
   }, [isUnlocked, contacts])
 

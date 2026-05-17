@@ -3,6 +3,8 @@ import type { Contact } from '../types/contact'
 const ENABLED_KEY = 'cardscan_reminders_push_enabled'
 const NOTIFIED_KEY = 'cardscan_followup_notified'
 const SW_URL = '/sw.js'
+const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000
+const POLL_MS = 30_000
 
 export type FollowupReminder = {
   id: string
@@ -11,20 +13,34 @@ export type FollowupReminder = {
   body: string
 }
 
+export type ReminderPushStatus = {
+  supported: boolean
+  enabled: boolean
+  permission: NotificationPermission | 'unsupported'
+  scheduledCount: number
+  isStandalone: boolean
+}
+
+function reminderKey(contactId: string, at: string): string {
+  return `${contactId}:${at}`
+}
+
 export function isReminderPushEnabled(): boolean {
-  return localStorage.getItem(ENABLED_KEY) !== 'false'
+  return localStorage.getItem(ENABLED_KEY) === 'true'
 }
 
 export function setReminderPushEnabled(enabled: boolean): void {
   localStorage.setItem(ENABLED_KEY, enabled ? 'true' : 'false')
+  if (!enabled) clearAllSchedules()
 }
 
 export function clearNotifiedFollowup(contactId: string): void {
-  const ids = loadNotifiedIds().filter((id) => id !== contactId)
+  const prefix = `${contactId}:`
+  const ids = loadNotifiedKeys().filter((k) => !k.startsWith(prefix))
   localStorage.setItem(NOTIFIED_KEY, JSON.stringify(ids))
 }
 
-function loadNotifiedIds(): string[] {
+function loadNotifiedKeys(): string[] {
   try {
     const raw = localStorage.getItem(NOTIFIED_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
@@ -33,10 +49,15 @@ function loadNotifiedIds(): string[] {
   }
 }
 
-function markNotified(contactId: string): void {
-  const ids = new Set(loadNotifiedIds())
-  ids.add(contactId)
+function markNotified(contactId: string, at: string): void {
+  const key = reminderKey(contactId, at)
+  const ids = new Set(loadNotifiedKeys())
+  ids.add(key)
   localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...ids]))
+}
+
+function wasNotified(contactId: string, at: string): boolean {
+  return loadNotifiedKeys().includes(reminderKey(contactId, at))
 }
 
 export function remindersFromContacts(contacts: Contact[]): FollowupReminder[] {
@@ -58,11 +79,35 @@ export function supportsReminderPush(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator
 }
 
+export function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
+export function getReminderPushStatus(contacts: Contact[]): ReminderPushStatus {
+  const supported = supportsReminderPush()
+  const permission = supported ? Notification.permission : 'unsupported'
+  const future = remindersFromContacts(contacts).filter((r) => new Date(r.at).getTime() > Date.now())
+  return {
+    supported,
+    enabled: isReminderPushEnabled(),
+    permission,
+    scheduledCount: future.length,
+    isStandalone: isStandalonePwa(),
+  }
+}
+
 export async function registerReminderServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
   try {
-    return await navigator.serviceWorker.register(SW_URL, { scope: '/' })
-  } catch {
+    const reg = await navigator.serviceWorker.register(SW_URL, { scope: '/' })
+    await navigator.serviceWorker.ready
+    return reg
+  } catch (err) {
+    console.warn('Service worker registration failed:', err)
     return null
   }
 }
@@ -74,71 +119,130 @@ export async function requestReminderPermission(): Promise<NotificationPermissio
   return Notification.requestPermission()
 }
 
+const mainTimers = new Map<string, number>()
+
+function clearAllSchedules(): void {
+  for (const handle of mainTimers.values()) clearTimeout(handle)
+  mainTimers.clear()
+}
+
 async function postRemindersToWorker(reminders: FollowupReminder[]): Promise<void> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return
   if (Notification.permission !== 'granted') return
 
   const reg = await registerReminderServiceWorker()
-  const worker = reg?.active ?? (await navigator.serviceWorker.ready).active
+  if (!reg) return
+
+  const worker = reg.active
   if (!worker) return
 
-  const future = reminders.filter((r) => new Date(r.at).getTime() > Date.now())
+  const future = reminders.filter((r) => {
+    const delay = new Date(r.at).getTime() - Date.now()
+    return delay > 0 && delay <= MAX_DELAY_MS
+  })
+
   worker.postMessage({ type: 'SYNC_REMINDERS', reminders: future })
 }
 
-function showFollowupNotification(reminder: FollowupReminder): void {
+function scheduleMainThreadReminders(reminders: FollowupReminder[]): void {
+  clearAllSchedules()
   if (!isReminderPushEnabled() || Notification.permission !== 'granted') return
-  if (loadNotifiedIds().includes(reminder.id)) return
+
+  for (const reminder of reminders) {
+    const delay = new Date(reminder.at).getTime() - Date.now()
+    if (delay <= 0 || delay > MAX_DELAY_MS) continue
+
+    mainTimers.set(
+      reminderKey(reminder.id, reminder.at),
+      window.setTimeout(() => {
+        mainTimers.delete(reminderKey(reminder.id, reminder.at))
+        void showFollowupNotification(reminder)
+      }, delay)
+    )
+  }
+}
+
+async function showFollowupNotification(reminder: FollowupReminder): Promise<boolean> {
+  if (!isReminderPushEnabled() || Notification.permission !== 'granted') return false
+  if (wasNotified(reminder.id, reminder.at)) return false
 
   const options: NotificationOptions = {
     body: reminder.body,
-    tag: `followup-${reminder.id}`,
+    tag: `followup-${reminder.id}-${reminder.at}`,
     icon: '/delta-logo.png',
     badge: '/delta-logo.png',
     requireInteraction: true,
   }
 
-  if ('serviceWorker' in navigator) {
-    void navigator.serviceWorker.ready.then((reg) => {
-      reg.showNotification(reminder.title, options)
-    })
-  } else {
-    new Notification(reminder.title, options)
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification(reminder.title, options)
+    } else {
+      new Notification(reminder.title, options)
+    }
+    markNotified(reminder.id, reminder.at)
+    return true
+  } catch (err) {
+    console.warn('Could not show reminder notification:', err)
+    return false
   }
-  markNotified(reminder.id)
 }
 
 /** Fire notifications for reminders whose time has passed (e.g. app reopened). */
-export function checkDueFollowupReminders(contacts: Contact[]): void {
-  if (!isReminderPushEnabled() || !supportsReminderPush()) return
-  if (Notification.permission !== 'granted') return
+export async function checkDueFollowupReminders(contacts: Contact[]): Promise<number> {
+  if (!isReminderPushEnabled() || !supportsReminderPush()) return 0
+  if (Notification.permission !== 'granted') return 0
 
   const now = Date.now()
+  let shown = 0
   for (const reminder of remindersFromContacts(contacts)) {
     if (new Date(reminder.at).getTime() <= now) {
-      showFollowupNotification(reminder)
+      if (await showFollowupNotification(reminder)) shown += 1
     }
   }
+  return shown
 }
 
 export async function syncFollowupReminders(contacts: Contact[]): Promise<void> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return
+  if (Notification.permission !== 'granted') return
 
-  checkDueFollowupReminders(contacts)
-  await postRemindersToWorker(remindersFromContacts(contacts))
+  const reminders = remindersFromContacts(contacts)
+  scheduleMainThreadReminders(reminders)
+  await postRemindersToWorker(reminders)
+}
+
+export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
+  if (!supportsReminderPush()) return 'unsupported'
+  if (Notification.permission !== 'granted') return 'denied'
+
+  try {
+    await registerReminderServiceWorker()
+    const reg = await navigator.serviceWorker.ready
+    await reg.showNotification('CardScan test reminder', {
+      body: 'If you see this, follow-up alerts are working.',
+      tag: 'cardscan-test',
+      icon: '/delta-logo.png',
+      requireInteraction: true,
+    })
+    return 'ok'
+  } catch {
+    return 'error'
+  }
 }
 
 let pollTimer: number | null = null
 
 export function startFollowupReminderPolling(getContacts: () => Contact[]): () => void {
   const tick = () => {
-    checkDueFollowupReminders(getContacts())
+    void checkDueFollowupReminders(getContacts())
   }
 
-  tick()
-  pollTimer = window.setInterval(tick, 60_000)
+  void tick()
+  pollTimer = window.setInterval(tick, POLL_MS)
   const onVisible = () => {
-    if (document.visibilityState === 'visible') tick()
+    if (document.visibilityState === 'visible') void tick()
   }
   document.addEventListener('visibilitychange', onVisible)
 
@@ -154,6 +258,8 @@ export async function enableReminderPush(contacts: Contact[]): Promise<'granted'
   const permission = await requestReminderPermission()
   if (permission !== 'granted') return 'denied'
   setReminderPushEnabled(true)
+  await registerReminderServiceWorker()
   await syncFollowupReminders(contacts)
+  await checkDueFollowupReminders(contacts)
   return 'granted'
 }

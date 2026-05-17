@@ -29,7 +29,7 @@ import { lockAllRevenueAccess } from './lib/revenueLock'
 import { isAppLoginRequired, isAppSessionUnlocked, lockAppSession } from './lib/appAuth'
 import { AppLoginGate } from './components/AppLoginGate'
 
-const INACTIVITY_LOCK_MS = 60_000
+const INACTIVITY_LOCK_MS = 5 * 60_000 // 5 minutes
 const BUILD_CHECK_INTERVAL_MS = 60_000
 
 export default function App() {

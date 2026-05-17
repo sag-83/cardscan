@@ -23,7 +23,7 @@ import { useStore } from '../../store/useStore'
 import { initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
-import { getLocationPermissionHelp } from '../../lib/pwa'
+import { isLocationAccessEnabled } from '../../lib/locationAccess'
 
 function useFollowups(contacts: Contact[]) {
   const now = new Date()
@@ -63,6 +63,11 @@ export function ContactsScreen() {
       setDistances(new Map())
       return
     }
+    if (!isLocationAccessEnabled()) {
+      showToast('Settings → Near Me (Location) → tap Enable, then Allow', 6000)
+      return
+    }
+
     setNearMeLoading(true)
     try {
       const pos = await getUserPosition()
@@ -72,13 +77,13 @@ export function ContactsScreen() {
       if (err instanceof LocationError && err.code === 'https') {
         showToast('Location needs HTTPS. Open the live site, not a file preview.', 5000)
       } else if (err instanceof LocationError && err.code === 'denied') {
-        showToast(getLocationPermissionHelp(), 12000)
+        showToast('Settings → Near Me (Location) → Enable → Allow', 6000)
       } else if (err instanceof LocationError && err.code === 'timeout') {
         showToast('Location timed out. Try again outdoors or with Wi‑Fi on.', 5000)
       } else {
         showToast(
           `${err instanceof Error ? err.message : 'Could not get location'}. Try again near a window or with Wi‑Fi on.`,
-          5000
+          5000,
         )
       }
     } finally {

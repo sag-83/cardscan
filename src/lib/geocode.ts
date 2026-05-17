@@ -1,4 +1,5 @@
 import type { Contact } from '../types/contact'
+import { getCachedUserPosition, isLocationAccessEnabled } from './locationAccess'
 import { isStandalonePwa } from './pwa'
 
 const CACHE_KEY = 'cs_geo_v1'
@@ -94,48 +95,38 @@ export async function getUserPosition(): Promise<{ lat: number; lng: number }> {
     throw new LocationError('Location requires HTTPS', 'https')
   }
 
-  // iOS home-screen apps use a separate permission bucket; Permissions API often
-  // reports Safari's state and blocks the prompt if we bail out early.
-  if (!isStandalonePwa()) {
-    try {
-      const permissions = navigator.permissions
-      if (permissions?.query) {
-        const status = await permissions.query({ name: 'geolocation' as PermissionName })
-        if (status.state === 'denied') {
-          throw new LocationError('Location permission is blocked', 'denied')
-        }
-      }
-    } catch (err) {
-      if (err instanceof LocationError) throw err
-    }
+  if (!isLocationAccessEnabled()) {
+    throw new LocationError('Enable location in Settings first', 'denied')
   }
 
-  const baseTimeout = isStandalonePwa() ? 35000 : 20000
+  const cached = getCachedUserPosition()
+  if (cached) return cached
+
+  const baseTimeout = isStandalonePwa() ? 45_000 : 25_000
 
   try {
     return await getPositionOnce({
       enableHighAccuracy: false,
       timeout: baseTimeout,
-      maximumAge: 5 * 60 * 1000,
+      maximumAge: 60_000,
     })
   } catch (err) {
+    if (err instanceof LocationError && err.code === 'denied') throw err
     if (err instanceof LocationError && err.code !== 'timeout' && err.code !== 'unavailable') {
       throw err
     }
-    const first = err instanceof LocationError ? err : null
-    if (first && first.code === 'denied') throw first
 
     try {
       return await getPositionOnce({
         enableHighAccuracy: true,
-        timeout: isStandalonePwa() ? 45000 : 30000,
+        timeout: isStandalonePwa() ? 60_000 : 35_000,
         maximumAge: 0,
       })
     } catch (retryErr) {
       if (retryErr instanceof LocationError) throw retryErr
       throw new LocationError(
         retryErr instanceof Error ? retryErr.message : 'Could not get location',
-        'unavailable'
+        'unavailable',
       )
     }
   }

@@ -13,17 +13,18 @@ export function isStandalonePwa(): boolean {
 export function getLocationPermissionHelp(): string {
   if (isStandalonePwa()) {
     return [
-      'Home Screen app has its own location permission (Safari settings do not apply).',
+      'Safari Websites → While Using does NOT always apply to this Home Screen icon.',
       '',
-      'Fix: open the site in Safari (not the icon) → tap aA left of the address bar → Website Settings → Location → Allow.',
+      '1. Settings → Privacy → Location Services → Safari Websites → your site → Ask Next Time',
+      '2. Delete this Home Screen icon, re-add from Safari',
+      '3. Open from the NEW icon only → tap Near Me → tap Allow on the popup',
       '',
-      `Or: Settings → Privacy & Security → Location Services → ${PWA_DISPLAY_NAME} → While Using.`,
+      'No popup? Use Near Me in Safari until iOS 16.4+ or try updating iOS.',
     ].join('\n')
   }
   return [
-    'Allow location for this site in Safari.',
+    'Settings → Location Services → Safari Websites → your site → While Using or Ask Next Time.',
     '',
-    'Tap aA (left of the address bar) → Website Settings → Location → Allow.',
-    'Or: Settings → Safari → Location → Ask.',
+    'Then Add to Home Screen, open the icon, tap Near Me, and Allow on the popup there too.',
   ].join('\n')
 }

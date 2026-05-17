@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import {
   Bell,
   Check,
+  MapPin,
   ChevronDown,
   ChevronUp,
   Cloud,
@@ -42,6 +43,13 @@ import {
   supportsReminderPush,
   syncFollowupReminders,
 } from '../../lib/reminderNotifications'
+import {
+  enableLocationAccess,
+  getLocationAccessStatus,
+  isLocationAccessEnabled,
+  setLocationAccessEnabled,
+  supportsLocationAccess,
+} from '../../lib/locationAccess'
 
 const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
 
@@ -303,6 +311,12 @@ export function SettingsScreen() {
         </div>
       </SettingsGroup>
 
+      {/* Location for Near Me */}
+      <SectionTitle>Near Me (Location)</SectionTitle>
+      <SettingsGroup>
+        <LocationAccessPanel showToast={showToast} />
+      </SettingsGroup>
+
       {/* Reminder push */}
       <SectionTitle>Reminder Notifications</SectionTitle>
       <SettingsGroup>
@@ -436,6 +450,70 @@ export function SettingsScreen() {
       )}
 
       <input ref={restoreInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+    </div>
+  )
+}
+
+function LocationAccessPanel({ showToast }: { showToast: (msg: string, durationMs?: number) => void }) {
+  const [enabled, setEnabled] = useState(() => isLocationAccessEnabled())
+  const status = getLocationAccessStatus()
+  const ready = enabled && status.supported
+
+  const statusLine = !status.supported
+    ? 'Not supported in this browser'
+    : ready
+      ? 'Location allowed — Near Me is ready'
+      : 'Tap Enable, then tap Allow on the popup'
+
+  return (
+    <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+        <MapPin size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} aria-hidden />
+        <div style={{ flex: 1, fontSize: 15 }}>Location access</div>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!supportsLocationAccess()) {
+              showToast('Location not supported on this device')
+              return
+            }
+            if (ready) {
+              setLocationAccessEnabled(false)
+              setEnabled(false)
+              showToast('Location access off')
+              return
+            }
+            const result = await enableLocationAccess()
+            if (result === 'granted') {
+              setEnabled(true)
+              showToast('Location on — use Near Me on Contacts')
+            }
+            else if (result === 'denied') showToast('Tap Allow on the popup, or reset in iPhone Settings')
+            else if (result === 'timeout') showToast('Timed out — try again near a window')
+            else showToast('Location not supported')
+          }}
+          style={{
+            padding: '5px 13px',
+            borderRadius: 99,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+            border: `1.5px solid ${ready ? 'var(--accent)' : 'var(--border)'}`,
+            background: ready ? 'rgba(0,122,255,0.1)' : 'var(--bg3)',
+            color: ready ? 'var(--accent)' : 'var(--text3)',
+          }}
+        >
+          {ready ? 'On' : 'Enable'}
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, color: ready ? 'var(--accent)' : 'var(--text3)', fontWeight: 600 }}>
+        {statusLine}
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+        iPhone: open from your Home Screen icon, then tap Enable here. When iOS asks, tap Allow. Works for Near Me on the Contacts tab.
+      </div>
     </div>
   )
 }

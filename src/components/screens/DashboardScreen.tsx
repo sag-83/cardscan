@@ -10,14 +10,11 @@ import {
   X,
 } from 'lucide-react'
 import { useSensitiveFigures } from '../../hooks/useSensitiveFigures'
-import {
-  isRevenueSessionUnlocked,
-  lockRevenueSession,
-  unlockRevenueTab,
-} from '../../lib/revenueLock'
+import { isRevenueSessionUnlocked, lockRevenueSession } from '../../lib/revenueLock'
+import { RevenueUnlockGate } from '../RevenueUnlockGate'
 import { useStore } from '../../store/useStore'
 import { SavedInvoice, SavedInvoiceItem } from '../../types/invoice'
-import { updateInvoiceInDB, deleteInvoiceFromDB, saveInvoiceToDB } from '../../lib/supabase'
+import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
 import { isInvoiceInCalendarMonth } from '../../lib/invoiceStats'
 import { uid } from '../../lib/utils'
 
@@ -139,19 +136,23 @@ function RevenueTab({
     return invoices.filter((inv) => (inv.company || inv.contactName) === selectedCompany)
   }, [invoices, selectedCompany])
 
-  const handleMarkPaid = (id: string, paidBy: 'cash' | 'check') => {
-    updateInvoice(id, { paidBy })
-    updateInvoiceInDB(id, { paidBy }).catch(() => {})
-    showToast(`Marked as paid (${paidBy})`)
+  const handleMarkPaid = async (id: string, paidBy: 'cash' | 'check') => {
+    const inv = invoices.find((i) => i.id === id)
+    if (!inv) return
+    const updated: SavedInvoice = { ...inv, paidBy, saved_at: new Date().toISOString() }
+    updateInvoice(id, { paidBy, saved_at: updated.saved_at })
+    const ok = await saveInvoiceSynced(updated)
+    if (ok) showToast(`Marked as paid (${paidBy})`)
+    else showToast('Saved locally — Supabase update failed')
   }
 
-  const handleClearMemo = (id: string) => {
-    deleteInvoice(id)
-    deleteInvoiceFromDB(id).catch(() => {})
-    showToast('Memo cleared')
+  const handleClearMemo = async (id: string) => {
+    const ok = await deleteInvoiceSynced(id, deleteInvoice)
+    if (ok) showToast('Memo cleared')
+    else showToast('Could not delete from cloud — try again in Settings')
   }
 
-  const handleConvertMemo = (inv: SavedInvoice, selectedIndices: number[], soldDate: string) => {
+  const handleConvertMemo = async (inv: SavedInvoice, selectedIndices: number[], soldDate: string) => {
     if (!selectedIndices.length) {
       showToast('Select at least one item')
       return
@@ -169,10 +170,13 @@ function RevenueTab({
       date: saleDate,
       saved_at: new Date().toISOString(),
     }
+    const saved = await saveInvoiceSynced(newInv)
+    if (!saved) {
+      showToast('Could not save new invoice to cloud')
+      return
+    }
     addInvoice(newInv)
-    saveInvoiceToDB(newInv).catch(() => {})
-    deleteInvoice(inv.id)
-    deleteInvoiceFromDB(inv.id).catch(() => {})
+    await deleteInvoiceSynced(inv.id, deleteInvoice)
     const discarded = inv.items.length - selected.length
     if (discarded > 0) {
       showToast(`Invoice created · ${discarded} unsold item(s) discarded`)
@@ -256,43 +260,72 @@ function RevenueTab({
   return (
     <div style={{ padding: '16px 16px 24px' }}>
 
-      {/* Company filter + web dashboard link */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
+      {/* Company filter + actions — stacked so Web is not clipped on narrow screens */}
+      <div style={{ marginBottom: 14 }}>
         <select
           value={selectedCompany}
           onChange={(e) => setSelectedCompany(e.target.value)}
-          style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg3)', color: 'var(--text)', fontSize: 14 }}
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '9px 12px',
+            borderRadius: 10,
+            border: '1.5px solid var(--border)',
+            background: 'var(--bg3)',
+            color: 'var(--text)',
+            fontSize: 14,
+            marginBottom: 8,
+          }}
         >
           <option value="all">All Shops ({invoices.length})</option>
           {companies.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={onToggleFigures}
-          aria-label={figuresVisible ? 'Hide revenue figures' : 'Show revenue figures'}
-          style={{
-            padding: '9px 11px',
-            borderRadius: 10,
-            border: '1.5px solid var(--border)',
-            background: 'var(--bg3)',
-            color: 'var(--text2)',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-          }}
-        >
-          {figuresVisible ? <EyeOff size={18} strokeWidth={2} aria-hidden /> : <Eye size={18} strokeWidth={2} aria-hidden />}
-        </button>
-        <button
-          type="button"
-          onClick={() => window.open('/dashboard', '_blank')}
-          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-        >
-          <Globe size={16} strokeWidth={2} aria-hidden />
-          Web
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={onToggleFigures}
+            aria-label={figuresVisible ? 'Hide revenue figures' : 'Show revenue figures'}
+            style={{
+              padding: '9px 11px',
+              borderRadius: 10,
+              border: '1.5px solid var(--border)',
+              background: 'var(--bg3)',
+              color: 'var(--text2)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {figuresVisible ? <EyeOff size={18} strokeWidth={2} aria-hidden /> : <Eye size={18} strokeWidth={2} aria-hidden />}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.open('/dashboard', '_blank')}
+            aria-label="Open web dashboard"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: '9px 12px',
+              borderRadius: 10,
+              border: '1.5px solid var(--accent)',
+              background: 'transparent',
+              color: 'var(--accent)',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Globe size={16} strokeWidth={2} aria-hidden />
+            Web dashboard
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -612,21 +645,16 @@ function StatsTable({ rows, emptyLabel }: { rows: GroupStats[]; emptyLabel: stri
 
 export function DashboardScreen() {
   const [tab, setTab] = useState<'stats' | 'revenue'>('stats')
-  const [unlocking, setUnlocking] = useState(false)
+  const [showRevenueGate, setShowRevenueGate] = useState(false)
   const invoiceCount = useStore((s) => s.invoices.length)
-  const showToast = useStore((s) => s.showToast)
   const { visible: figuresVisible, toggle: toggleFigures, mask: maskFigure } = useSensitiveFigures()
 
-  const openRevenueTab = async () => {
+  const openRevenueTab = () => {
     if (isRevenueSessionUnlocked()) {
       setTab('revenue')
       return
     }
-    setUnlocking(true)
-    const result = await unlockRevenueTab()
-    setUnlocking(false)
-    if (result.ok) setTab('revenue')
-    else showToast(result.message || 'Face ID required to open Revenue')
+    setShowRevenueGate(true)
   }
 
   const handleTab = (id: 'stats' | 'revenue') => {
@@ -636,7 +664,7 @@ export function DashboardScreen() {
       return
     }
     if (tab === 'revenue') return
-    void openRevenueTab()
+    openRevenueTab()
   }
 
   return (
@@ -647,15 +675,13 @@ export function DashboardScreen() {
           <button
             key={id}
             onClick={() => void handleTab(id)}
-            disabled={unlocking && id === 'revenue'}
             style={{
               flex: 1, padding: '9px 0', border: 'none', background: 'none',
-              cursor: unlocking && id === 'revenue' ? 'wait' : 'pointer',
+              cursor: 'pointer',
               fontSize: 14, fontWeight: 700,
               color: tab === id ? 'var(--accent)' : 'var(--text3)',
               borderBottom: `2.5px solid ${tab === id ? 'var(--accent)' : 'transparent'}`,
               transition: 'color 0.15s',
-              opacity: unlocking && id === 'revenue' ? 0.6 : 1,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -664,8 +690,7 @@ export function DashboardScreen() {
           >
             {id === 'revenue' && <ScanFace size={15} strokeWidth={2} aria-hidden />}
             {label}
-            {unlocking && id === 'revenue' ? '…' : null}
-            {id === 'revenue' && invoiceCount > 0 && !unlocking && (
+            {id === 'revenue' && invoiceCount > 0 && (
               <span style={{ marginLeft: 4, fontSize: 11, background: 'var(--accent)', color: '#fff', borderRadius: 99, padding: '1px 6px', fontWeight: 800 }}>
                 {invoiceCount}
               </span>
@@ -681,6 +706,16 @@ export function DashboardScreen() {
           figuresVisible={figuresVisible}
           maskFigure={maskFigure}
           onToggleFigures={toggleFigures}
+        />
+      )}
+
+      {showRevenueGate && (
+        <RevenueUnlockGate
+          onUnlocked={() => {
+            setShowRevenueGate(false)
+            setTab('revenue')
+          }}
+          onCancel={() => setShowRevenueGate(false)}
         />
       )}
     </div>

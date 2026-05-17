@@ -6,7 +6,15 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { formatInvoiceMonthLabel } from '../lib/invoiceStats'
+import {
+  buildRevenueTrendSeries,
+  formatInvoiceMonthLabel,
+  getPeriodStart,
+  isWithinPeriod,
+  pickRevenueTrendBucket,
+  revenueTrendBucketDescription,
+  type DashboardPeriod,
+} from '../lib/invoiceStats'
 import { SavedInvoice } from '../types/invoice'
 import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
 import { printSavedInvoice } from '../lib/invoicePrint'
@@ -36,7 +44,7 @@ async function fetchInvoices(): Promise<SavedInvoice[]> {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Period = '7d' | '30d' | '90d' | '6m' | '1y' | 'all'
+type Period = DashboardPeriod
 type IconName = 'home' | 'trending' | 'pie' | 'map' | 'users' | 'bar' | 'alert' | 'list' |
                 'refresh' | 'download' | 'dollar' | 'check' | 'clock' | 'file' | 'x' |
                 'print' | 'lock' | 'sun' | 'moon' | 'search' | 'chevron'
@@ -149,8 +157,8 @@ function periodBounds(p: Period): { currStart: Date | null; prevStart: Date; pre
   return { currStart, prevStart: new Date(prevEnd.getTime() - ms), prevEnd }
 }
 function filterByPeriod(invs: SavedInvoice[], p: Period) {
-  const { currStart } = periodBounds(p)
-  return currStart ? invs.filter((i) => new Date(i.date) >= currStart) : invs
+  const start = getPeriodStart(p)
+  return start ? invs.filter((i) => isWithinPeriod(i.date, start)) : invs
 }
 function groupByMonth(invs: SavedInvoice[]) {
   const map = new Map<string, SavedInvoice[]>()
@@ -393,33 +401,31 @@ function LegendDots({ items }: { items: { color: string; label: string }[] }) {
 
 // ─── Revenue trend chart ──────────────────────────────────────────────────────
 
-function RevenueTrendChart({ invoices }: { invoices: SavedInvoice[] }) {
+function RevenueTrendChart({ invoices, period }: { invoices: SavedInvoice[]; period: Period }) {
   const dark = useContext(ThemeCtx)
+  const bucket = useMemo(() => pickRevenueTrendBucket(invoices, period), [invoices, period])
   const data = useMemo(() => {
-    const map = new Map<string, { t: number; c: number }>()
-    invoices.forEach((inv) => {
-      const k = inv.date.slice(0, 7)
-      const r = map.get(k) ?? { t: 0, c: 0 }
-      r.t += inv.total
-      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.c += inv.total
-      map.set(k, r)
-    })
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ month: fmtMonthShort(k), 'Total Billed': Math.round(v.t), Collected: Math.round(v.c) }))
-  }, [invoices])
+    return buildRevenueTrendSeries(invoices, bucket).map((p) => ({
+      label: p.label,
+      'Total Billed': p.totalBilled,
+      Collected: p.collected,
+    }))
+  }, [invoices, bucket])
 
   const grid = dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
   const tick = dark ? '#475569' : '#94a3b8'
 
   return (
     <Card>
-      <CardHead title="Revenue Trend" sub="By invoice date, grouped by month (not individual days)"
+      <CardHead
+        title="Revenue Trend"
+        sub={revenueTrendBucketDescription(bucket)}
         right={<LegendDots items={[{ color: C.indigo, label: 'Billed' }, { color: C.emerald, label: 'Collected' }]} />}
       />
       <div className="px-2 pb-5">
         {data.length ? (
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 6 }}>
+          <ResponsiveContainer width="100%" height={data.length > 14 ? 280 : 260}>
+            <AreaChart data={data} margin={{ top: 8, right: 12, bottom: data.length > 14 ? 20 : 4, left: 6 }}>
               <defs>
                 <linearGradient id="gI" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={C.indigo} stopOpacity={0.2} />
@@ -431,11 +437,36 @@ function RevenueTrendChart({ invoices }: { invoices: SavedInvoice[] }) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="4 4" stroke={grid} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: tick }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: data.length > 14 ? 9 : 11, fill: tick }}
+                axisLine={false}
+                tickLine={false}
+                interval={data.length > 14 ? Math.max(0, Math.ceil(data.length / 10) - 1) : 0}
+                angle={data.length > 14 ? -35 : 0}
+                textAnchor={data.length > 14 ? 'end' : 'middle'}
+                height={data.length > 14 ? 52 : 30}
+              />
               <YAxis tickFormatter={moneyShort} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} width={52} />
               <Tooltip content={<ChartTip />} />
-              <Area type="monotone" dataKey="Total Billed" stroke={C.indigo}  strokeWidth={2.5} fill="url(#gI)" dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
-              <Area type="monotone" dataKey="Collected"    stroke={C.emerald} strokeWidth={2.5} fill="url(#gE)" dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+              <Area
+                type="linear"
+                dataKey="Total Billed"
+                stroke={C.indigo}
+                strokeWidth={2.5}
+                fill="url(#gI)"
+                dot={data.length <= 20 ? { r: 3, strokeWidth: 0, fill: C.indigo } : false}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+              />
+              <Area
+                type="linear"
+                dataKey="Collected"
+                stroke={C.emerald}
+                strokeWidth={2.5}
+                fill="url(#gE)"
+                dot={data.length <= 20 ? { r: 3, strokeWidth: 0, fill: C.emerald } : false}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+              />
             </AreaChart>
           </ResponsiveContainer>
         ) : <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data for this period</div>}
@@ -1230,6 +1261,7 @@ export function RevenueDashboard() {
             <section id="accounts" className="scroll-mt-20">
               <SectionDivider label="Charge Accounts" />
               <AccountsReceivable
+                period={period}
                 salesInvoices={allInvoices}
                 onOutstandingCount={setAccountsOutstanding}
                 onSalesInvoiceSaved={(inv) => setAll((prev) => [inv, ...prev])}
@@ -1305,7 +1337,7 @@ export function RevenueDashboard() {
                 {/* Revenue trend */}
                 <section id="revenue" className="scroll-mt-20">
                   <SectionDivider label="Revenue Trend" />
-                  <RevenueTrendChart invoices={invoices} />
+                  <RevenueTrendChart invoices={invoices} period={period} />
                 </section>
 
                 {/* Payments + Collection */}

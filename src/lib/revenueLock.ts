@@ -1,26 +1,55 @@
-/** Face ID / Touch ID gate for the mobile Revenue tab (WebAuthn platform authenticator). */
+/** Revenue tab: authenticator code + Face ID (app password alone is not enough). */
 
-const CREDENTIAL_KEY = 'revenue_webauthn_cred_v1'
+import {
+  ensurePlatformAuth,
+  hasPlatformCredential,
+  isPlatformAuthenticatorAvailable,
+} from './webAuthnPlatform'
+import { isTotpRequired, verifyTotp } from './totp'
+
 const SESSION_KEY = 'revenue_tab_unlocked_v1'
+const TOTP_VERIFIED_KEY = 'revenue_totp_verified_v1'
+const PIN_VERIFIED_KEY = 'revenue_pin_verified_v1'
 
-function bufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-  return btoa(binary)
+const REVENUE_PIN = (import.meta.env.VITE_REVENUE_PIN as string)?.trim() ?? ''
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let out = 0
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return out === 0
 }
 
-function base64ToBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes.buffer
+export function isRevenuePinRequired(): boolean {
+  return REVENUE_PIN.length > 0 && !isTotpRequired('revenue')
 }
 
-function randomChallenge(): Uint8Array {
-  const challenge = new Uint8Array(32)
-  crypto.getRandomValues(challenge)
-  return challenge
+export function verifyRevenuePin(pin: string): boolean {
+  if (!isRevenuePinRequired()) return true
+  return safeEqual(pin.trim(), REVENUE_PIN)
+}
+
+export function isRevenueSecondFactorRequired(): boolean {
+  return isTotpRequired('revenue') || isRevenuePinRequired()
+}
+
+export function isRevenueSecondFactorVerifiedThisSession(): boolean {
+  if (!isRevenueSecondFactorRequired()) return true
+  try {
+    if (isTotpRequired('revenue')) return sessionStorage.getItem(TOTP_VERIFIED_KEY) === '1'
+    return sessionStorage.getItem(PIN_VERIFIED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markRevenueSecondFactorVerified(): void {
+  try {
+    if (isTotpRequired('revenue')) sessionStorage.setItem(TOTP_VERIFIED_KEY, '1')
+    else sessionStorage.setItem(PIN_VERIFIED_KEY, '1')
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isRevenueSessionUnlocked(): boolean {
@@ -39,84 +68,53 @@ export function lockRevenueSession(): void {
   }
 }
 
+export function lockAllRevenueAccess(): void {
+  lockRevenueSession()
+  try {
+    sessionStorage.removeItem(TOTP_VERIFIED_KEY)
+    sessionStorage.removeItem(PIN_VERIFIED_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function hasRevenueLockConfigured(): boolean {
-  try {
-    return !!localStorage.getItem(CREDENTIAL_KEY)
-  } catch {
-    return false
+  return hasPlatformCredential('revenue')
+}
+
+export { isPlatformAuthenticatorAvailable }
+
+/**
+ * Unlock Revenue: Microsoft Authenticator code (or legacy PIN) + Face ID.
+ */
+export async function unlockRevenueTab(secondFactor: string): Promise<{ ok: boolean; message?: string }> {
+  if (isTotpRequired('revenue')) {
+    if (!verifyTotp('revenue', secondFactor)) {
+      return { ok: false, message: 'Invalid authenticator code.' }
+    }
+    markRevenueSecondFactorVerified()
+  } else if (isRevenuePinRequired()) {
+    if (!verifyRevenuePin(secondFactor)) {
+      return { ok: false, message: 'Incorrect revenue access code.' }
+    }
+    markRevenueSecondFactorVerified()
   }
-}
 
-export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.PublicKeyCredential) return false
-  try {
-    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-  } catch {
-    return false
-  }
-}
-
-async function registerPlatformCredential(): Promise<void> {
-  const challenge = randomChallenge()
-  const userId = new Uint8Array(16)
-  crypto.getRandomValues(userId)
-
-  const cred = (await navigator.credentials.create({
-    publicKey: {
-      challenge: challenge as BufferSource,
-      rp: { name: 'Delta Diamonds', id: window.location.hostname || 'localhost' },
-      user: {
-        id: userId,
-        name: 'revenue',
-        displayName: 'Revenue access',
-      },
-      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-      authenticatorSelection: {
-        authenticatorAttachment: 'platform',
-        userVerification: 'required',
-        residentKey: 'preferred',
-      },
-      timeout: 60_000,
-    },
-  })) as PublicKeyCredential | null
-
-  if (!cred) throw new Error('Face ID setup was cancelled.')
-  localStorage.setItem(CREDENTIAL_KEY, bufferToBase64(cred.rawId))
-}
-
-async function verifyPlatformCredential(): Promise<void> {
-  const stored = localStorage.getItem(CREDENTIAL_KEY)
-  if (!stored) throw new Error('Face ID is not set up yet.')
-
-  const challenge = randomChallenge()
-  const assertion = (await navigator.credentials.get({
-    publicKey: {
-      challenge: challenge as BufferSource,
-      allowCredentials: [{ id: base64ToBuffer(stored), type: 'public-key' }],
-      userVerification: 'required',
-      timeout: 60_000,
-    },
-  })) as PublicKeyCredential | null
-
-  if (!assertion) throw new Error('Face ID verification was cancelled.')
-  sessionStorage.setItem(SESSION_KEY, '1')
-}
-
-/** Unlock Revenue tab — registers on first use, then verifies Face ID / Touch ID. */
-export async function unlockRevenueTab(): Promise<{ ok: boolean; message?: string }> {
-  const available = await isPlatformAuthenticatorAvailable()
-  if (!available) {
+  const faceAvailable = await isPlatformAuthenticatorAvailable()
+  if (!faceAvailable) {
+    if (isTotpRequired('revenue') || isRevenuePinRequired()) {
+      sessionStorage.setItem(SESSION_KEY, '1')
+      return { ok: true }
+    }
     return {
       ok: false,
-      message: 'Face ID is not available in this browser. Open the app from your iPhone home screen in Safari.',
+      message: 'Face ID is not available. Open the app from your iPhone home screen.',
     }
   }
 
   try {
-    if (!hasRevenueLockConfigured()) {
-      await registerPlatformCredential()
-    }
-    await verifyPlatformCredential()
+    await ensurePlatformAuth('revenue', 'Revenue access')
+    sessionStorage.setItem(SESSION_KEY, '1')
     return { ok: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not verify Face ID.'

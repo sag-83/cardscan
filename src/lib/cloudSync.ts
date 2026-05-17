@@ -6,6 +6,11 @@ import {
   syncContactsFromDB,
   syncInvoicesFromDB,
 } from './supabase'
+import {
+  clearInvoiceDeletion,
+  getDeletedInvoiceIds,
+  reconcileInvoiceDeletions,
+} from './invoiceSync'
 import { dedupeContacts, mergeContact, normalizeContact } from './utils'
 
 const POLL_MS = 30_000
@@ -50,11 +55,19 @@ function invoiceTime(inv: SavedInvoice): number {
 }
 
 export function mergeCloudAndLocalInvoices(local: SavedInvoice[], cloud: SavedInvoice[]): SavedInvoice[] {
+  const deleted = getDeletedInvoiceIds()
+  const cloudFiltered = cloud.filter((inv) => !deleted.has(inv.id))
+
   const byId = new Map<string, SavedInvoice>()
-  for (const inv of [...local, ...cloud]) {
+  for (const inv of [...local, ...cloudFiltered]) {
     const prev = byId.get(inv.id)
     if (!prev || invoiceTime(inv) >= invoiceTime(prev)) byId.set(inv.id, inv)
   }
+
+  for (const id of deleted) {
+    if (!cloud.some((c) => c.id === id)) clearInvoiceDeletion(id)
+  }
+
   return Array.from(byId.values()).sort((a, b) => b.saved_at.localeCompare(a.saved_at))
 }
 
@@ -75,6 +88,8 @@ export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
     syncContactsFromDB(),
     syncInvoicesFromDB(),
   ])
+
+  await reconcileInvoiceDeletions(cloudInvoices.map((i) => i.id))
 
   const mergedContacts = mergeCloudAndLocalContacts(store.getContacts(), cloudContacts)
   const mergedInvoices = mergeCloudAndLocalInvoices(store.getInvoices(), cloudInvoices)

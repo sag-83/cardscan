@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 import { useStore } from '../../store/useStore'
-import { deleteInvoiceFromDB, saveInvoiceToDB, syncContactsFromDB } from '../../lib/supabase'
+import { syncContactsFromDB } from '../../lib/supabase'
+import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
 import {
   balanceTone,
   buildContactBalanceRows,
@@ -29,6 +30,7 @@ import {
 import type { ContactBalanceRow, LedgerInvoiceEntry } from '../../types/chargeAccount'
 import type { Contact } from '../../types/contact'
 import type { SavedInvoice } from '../../types/invoice'
+import { getPeriodLabel, getPeriodStart, isWithinPeriod, type DashboardPeriod } from '../../lib/invoiceStats'
 import { dashboardInputClass, dashboardLabelClass } from '../../lib/dashboardStyles'
 import { cn } from '../../lib/utils'
 
@@ -54,11 +56,13 @@ const FILTER_TABS: { id: AccountListFilter; label: string }[] = [
 ]
 
 export function AccountsReceivable({
+  period = 'all',
   salesInvoices,
   onOutstandingCount,
   onSalesInvoiceSaved,
   onSalesInvoiceDeleted,
 }: {
+  period?: DashboardPeriod
   salesInvoices: SavedInvoice[]
   onOutstandingCount?: (count: number) => void
   onSalesInvoiceSaved?: (invoice: SavedInvoice) => void
@@ -86,9 +90,28 @@ export function AccountsReceivable({
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const periodStart = useMemo(() => getPeriodStart(period), [period])
+  const periodLabel = getPeriodLabel(period)
+  const isAllTime = period === 'all'
+
+  const periodSales = useMemo(
+    () => salesInvoices.filter((inv) => isWithinPeriod(inv.date, periodStart)),
+    [salesInvoices, periodStart],
+  )
+
+  const periodChargeInvoices = useMemo(
+    () => chargeInvoices.filter((inv) => isWithinPeriod(inv.date, periodStart)),
+    [chargeInvoices, periodStart],
+  )
+
+  const periodChargePayments = useMemo(
+    () => chargePayments.filter((p) => isWithinPeriod(p.date, periodStart)),
+    [chargePayments, periodStart],
+  )
+
   const salesCount = useMemo(
-    () => salesInvoices.filter((i) => i.docKind !== 'memo').length,
-    [salesInvoices],
+    () => periodSales.filter((i) => i.docKind !== 'memo').length,
+    [periodSales],
   )
 
   const reload = useCallback(async () => {
@@ -120,8 +143,8 @@ export function AccountsReceivable({
   }, [contacts])
 
   const allRows = useMemo(
-    () => buildContactBalanceRows(contacts, chargeInvoices, chargePayments, salesInvoices),
-    [contacts, chargeInvoices, chargePayments, salesInvoices],
+    () => buildContactBalanceRows(contacts, periodChargeInvoices, periodChargePayments, periodSales),
+    [contacts, periodChargeInvoices, periodChargePayments, periodSales],
   )
 
   const filteredRows = useMemo(() => {
@@ -152,23 +175,23 @@ export function AccountsReceivable({
 
   const selectedContact = selectedId ? contactById.get(selectedId) : undefined
   const selectedBalance = selectedId
-    ? computeContactBalance(selectedId, chargeInvoices, chargePayments, salesInvoices, contacts)
+    ? computeContactBalance(selectedId, periodChargeInvoices, periodChargePayments, periodSales, contacts)
     : 0
 
   const contactInvoices = useMemo(
     () =>
       selectedId
-        ? getMergedInvoicesForContact(selectedId, chargeInvoices, salesInvoices, contacts)
+        ? getMergedInvoicesForContact(selectedId, periodChargeInvoices, periodSales, contacts)
         : [],
-    [selectedId, chargeInvoices, salesInvoices, contacts],
+    [selectedId, periodChargeInvoices, periodSales, contacts],
   )
 
   const contactPayments = useMemo(
     () =>
       selectedId
-        ? getMergedPaymentsForContact(selectedId, chargePayments, salesInvoices, contacts)
+        ? getMergedPaymentsForContact(selectedId, periodChargePayments, periodSales, contacts)
         : [],
-    [selectedId, chargePayments, salesInvoices, contacts],
+    [selectedId, periodChargePayments, periodSales, contacts],
   )
 
   const handleCreateInvoice = async (invoice: SavedInvoice) => {
@@ -176,7 +199,7 @@ export function AccountsReceivable({
     setSaving(true)
     setError('')
     try {
-      const ok = await saveInvoiceToDB(invoice)
+      const ok = await saveInvoiceSynced(invoice)
       if (!ok) throw new Error('Could not save invoice to database.')
       onSalesInvoiceSaved?.(invoice)
       setInvoiceOpen(false)
@@ -194,9 +217,8 @@ export function AccountsReceivable({
     setError('')
     try {
       if (inv.source === 'sales') {
-        const ok = await deleteInvoiceFromDB(inv.id)
-        if (!ok) throw new Error('Could not delete invoice.')
-        onSalesInvoiceDeleted?.(inv.id)
+        const ok = await deleteInvoiceSynced(inv.id, (id) => onSalesInvoiceDeleted?.(id))
+        if (!ok) throw new Error('Could not delete invoice from cloud.')
       } else {
         await deleteChargeInvoice(inv.id)
         removeChargeInvoice(inv.id)
@@ -268,8 +290,12 @@ export function AccountsReceivable({
       {salesCount > 0 && (
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm dark:border-indigo-500/25 dark:bg-indigo-500/10">
           <p className="text-indigo-900 dark:text-indigo-200">
-            <strong>{salesCount} sales invoices</strong> from the app are included in balances automatically.
-            New invoices use the same form as the mobile app. Pending = owed; cash/check = paid.
+            <strong>{salesCount} sales invoices</strong> in the selected period are included in balances.
+            {isAllTime ? (
+              <> New invoices use the same form as the mobile app. Pending = owed; cash/check = paid.</>
+            ) : (
+              <> Showing <strong>{periodLabel}</strong> only — use <strong>All</strong> for full balances owed today.</>
+            )}
           </p>
         </div>
       )}
@@ -287,6 +313,7 @@ export function AccountsReceivable({
           loading={loading}
           outstandingCount={outstandingCount}
           totalOwed={totalOwed}
+          period={period}
         />
       ) : selectedContact ? (
         <ContactLedger
@@ -356,6 +383,7 @@ function AccountsList({
   loading,
   outstandingCount,
   totalOwed,
+  period,
 }: {
   rows: ContactBalanceRow[]
   allRowCount: number
@@ -368,13 +396,15 @@ function AccountsList({
   loading: boolean
   outstandingCount: number
   totalOwed: number
+  period: DashboardPeriod
 }) {
   const topOwing = rows.filter((r) => r.balance > 0).slice(0, 6)
+  const owedLabel = period === 'all' ? 'Total outstanding' : `Net owed (${getPeriodLabel(period)})`
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Total outstanding" value={money(totalOwed)} accent="amber" />
+        <SummaryCard label={owedLabel} value={money(totalOwed)} accent="amber" />
         <SummaryCard label="Accounts owing" value={String(outstandingCount)} accent="indigo" />
         <SummaryCard label="Shown" value={String(rows.length)} sub={`of ${allRowCount} contacts`} />
         <SummaryCard label="Red flag" value={money(LARGE_BALANCE_THRESHOLD)} sub="balance threshold" />

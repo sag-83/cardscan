@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
-import { saveInvoiceToDB } from '../../lib/supabase'
+import { saveInvoiceSynced } from '../../lib/invoiceSync'
 import { money } from '../../lib/invoiceFormUtils'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
@@ -64,8 +64,8 @@ export function InvoiceModal() {
     if (!draft) return
     const record = draft
     addInvoice(record)
-    saveInvoiceToDB(record).catch(() => {
-      // silent — invoice is already saved locally
+    void saveInvoiceSynced(record).then((ok) => {
+      if (!ok) showToast('Invoice saved locally — cloud sync failed')
     })
     sendInvoiceToSheets(record).catch(() => {
       // silent — invoice is already saved locally

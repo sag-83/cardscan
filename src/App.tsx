@@ -25,9 +25,11 @@ import { ContactsScreen } from './components/screens/ContactsScreen'
 import { DashboardScreen } from './components/screens/DashboardScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
+import { lockAllRevenueAccess } from './lib/revenueLock'
+import { isAppSessionUnlocked, lockAppSession } from './lib/appAuth'
+import { AppLoginGate } from './components/AppLoginGate'
 
 const APP_PASSWORD = IS_DEMO_MODE ? '' : ((import.meta.env.VITE_APP_PASSWORD as string) ?? '')
-const APP_UNLOCK_KEY = 'cardscan_app_unlocked'
 const INACTIVITY_LOCK_MS = 60_000
 const BUILD_CHECK_INTERVAL_MS = 60_000
 
@@ -44,7 +46,7 @@ export default function App() {
   const sheetsWebhook = useStore((s) => s.sheetsWebhook)
   const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
   const [isUnlocked, setIsUnlocked] = useState(() => {
-    return !APP_PASSWORD || localStorage.getItem(APP_UNLOCK_KEY) === APP_PASSWORD
+    return !APP_PASSWORD || isAppSessionUnlocked()
   })
   const notifiedBuildRef = useRef('')
 
@@ -96,7 +98,8 @@ export default function App() {
     let lockTimer: ReturnType<typeof setTimeout>
 
     const lock = () => {
-      localStorage.removeItem(APP_UNLOCK_KEY)
+      lockAppSession()
+      lockAllRevenueAccess()
       setIsUnlocked(false)
     }
 
@@ -203,7 +206,7 @@ export default function App() {
   }, [isUnlocked, sbUrl, sbKey, setContacts, setInvoices, deleteContact, deleteInvoice])
 
   if (!isUnlocked) {
-    return <PasswordGate onUnlock={() => setIsUnlocked(true)} />
+    return <AppLoginGate onUnlock={() => setIsUnlocked(true)} />
   }
 
   return (
@@ -240,96 +243,5 @@ export default function App() {
       <FollowupModal />
       <InvoiceModal />
     </>
-  )
-}
-
-function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault()
-
-    if (password === APP_PASSWORD) {
-      localStorage.setItem(APP_UNLOCK_KEY, APP_PASSWORD)
-      onUnlock()
-      return
-    }
-
-    setError('Incorrect password')
-  }
-
-  return (
-    <div
-      style={{
-        minHeight: '100dvh',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 20,
-        background:
-          'radial-gradient(circle at top, rgba(0,122,255,0.18), transparent 34%), var(--bg)',
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: '100%',
-          maxWidth: 390,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border2)',
-          borderRadius: 22,
-          padding: 24,
-          boxShadow: '0 18px 50px rgba(0,0,0,0.12)',
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>
-          Private Access
-        </div>
-        <h1 style={{ fontSize: 28, lineHeight: 1.1, marginBottom: 10 }}>CardHolder</h1>
-        <p style={{ color: 'var(--text3)', fontSize: 14, lineHeight: 1.5, marginBottom: 18 }}>
-          Enter the access password to open the scanner.
-        </p>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => {
-            setPassword(event.target.value)
-            setError('')
-          }}
-          placeholder="Access password"
-          autoFocus
-          style={{
-            width: '100%',
-            padding: '14px 15px',
-            borderRadius: 12,
-            border: '1.5px solid var(--border)',
-            background: 'var(--bg3)',
-            fontSize: 16,
-            marginBottom: 10,
-          }}
-        />
-        {error && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-            {error}
-          </div>
-        )}
-        <button
-          type="submit"
-          style={{
-            width: '100%',
-            border: 'none',
-            borderRadius: 12,
-            padding: '14px 18px',
-            background: 'var(--accent)',
-            color: '#fff',
-            fontSize: 16,
-            fontWeight: 800,
-            cursor: 'pointer',
-          }}
-        >
-          Unlock
-        </button>
-      </form>
-    </div>
   )
 }

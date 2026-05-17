@@ -19,9 +19,14 @@ import {
   initSupabase,
   testSupabaseConnection,
   saveContactsToDB,
-  saveInvoiceToDB,
   SUPABASE_SCHEMA_SQL,
+  syncInvoicesFromDB,
 } from '../../lib/supabase'
+import {
+  pruneOrphanInvoicesFromDB,
+  reconcileInvoiceDeletions,
+  saveInvoiceSynced,
+} from '../../lib/invoiceSync'
 import { pullAndMergeFromCloud } from '../../lib/cloudSync'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts, normalizeContact } from '../../lib/utils'
@@ -123,17 +128,23 @@ export function SettingsScreen() {
         contacts.length
           ? saveContactsToDB(contacts, { skipDedupe: force })
           : Promise.resolve({ ok: 0, merged: 0, failed: 0 }),
-        Promise.allSettled(invoices.map((inv) => saveInvoiceToDB(inv))),
+        Promise.allSettled(invoices.map((inv) => saveInvoiceSynced(inv))),
       ])
 
       const invOk = invoiceResults.filter((r) => r.status === 'fulfilled' && r.value).length
       const invFailed = invoices.length - invOk
+
+      const pruned = await pruneOrphanInvoicesFromDB(invoices.map((i) => i.id))
+      const cloudAfter = await syncInvoicesFromDB()
+      const reconciled = await reconcileInvoiceDeletions(cloudAfter.map((i) => i.id))
 
       const parts = [`${contactResult.ok} contacts`]
       if (!force && contactResult.merged > 0) parts.push(`${contactResult.merged} merged`)
       if (contactResult.failed > 0) parts.push(`${contactResult.failed} contacts failed`)
       parts.push(`${invOk} invoices`)
       if (invFailed > 0) parts.push(`${invFailed} invoices failed`)
+      if (reconciled > 0) parts.push(`${reconciled} pending deletes cleared`)
+      if (pruned > 0) parts.push(`${pruned} removed from cloud`)
       showToast(parts.join(', ') + (force ? ' (force)' : ''))
     } catch (err) {
       showToast('Backup failed: ' + (err as Error).message)

@@ -521,12 +521,18 @@ export async function updateInvoiceInDB(id: string, patch: Partial<SavedInvoice>
   if (!sb) return false
 
   const dbPatch: Record<string, unknown> = {}
-  if (patch.paidBy  !== undefined) dbPatch.paid_by  = patch.paidBy
-  if (patch.notes   !== undefined) dbPatch.notes    = patch.notes
-  if (patch.total   !== undefined) dbPatch.total    = patch.total
-  if (patch.items   !== undefined) dbPatch.items    = patch.items
-  if (patch.docKind !== undefined) dbPatch.doc_kind = patch.docKind
-  if (patch.date    !== undefined) dbPatch.date     = patch.date
+  if (patch.paidBy      !== undefined) dbPatch.paid_by      = patch.paidBy
+  if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
+  if (patch.total       !== undefined) dbPatch.total       = patch.total
+  if (patch.items       !== undefined) dbPatch.items       = patch.items
+  if (patch.docKind     !== undefined) dbPatch.doc_kind    = patch.docKind
+  if (patch.date        !== undefined) dbPatch.date        = patch.date
+  if (patch.company     !== undefined) dbPatch.company     = patch.company
+  if (patch.contactName !== undefined) dbPatch.contact_name = patch.contactName
+  if (patch.state       !== undefined) dbPatch.state       = patch.state
+  if (patch.city        !== undefined) dbPatch.city        = patch.city
+  if (patch.contactId   !== undefined) dbPatch.contact_id  = patch.contactId
+  if (patch.saved_at    !== undefined) dbPatch.saved_at    = patch.saved_at
 
   const { error } = await sb.from('invoices').update(dbPatch).eq('id', id)
   if (error) {

@@ -29,6 +29,7 @@ interface AppState {
   // ─── Invoices ────────────────────────────────────────────────────
   invoices: SavedInvoice[]
   addInvoice: (invoice: SavedInvoice) => void
+  setInvoices: (invoices: SavedInvoice[]) => void
   updateInvoice: (id: string, patch: Partial<SavedInvoice>) => void
   deleteInvoice: (id: string) => void
 
@@ -119,7 +120,9 @@ export const useStore = create<AppState>()(
       updateContact: (id, updates) =>
         set((s) => ({
           contacts: s.contacts.map((c) =>
-            c.id === id ? normalizeContact({ ...c, ...updates }) : c
+            c.id === id
+              ? normalizeContact({ ...c, ...updates, updated_at: new Date().toISOString() })
+              : c
           ),
         })),
 
@@ -135,6 +138,7 @@ export const useStore = create<AppState>()(
       invoices: [],
       addInvoice: (invoice) =>
         set((s) => ({ invoices: [invoice, ...s.invoices] })),
+      setInvoices: (invoices) => set({ invoices }),
       updateInvoice: (id, patch) =>
         set((s) => ({ invoices: s.invoices.map((inv) => inv.id === id ? { ...inv, ...patch } : inv) })),
       deleteInvoice: (id) =>

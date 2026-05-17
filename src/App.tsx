@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
-import { initSupabase, syncContactsFromDB, syncInvoicesFromDB } from './lib/supabase'
+import { initSupabase } from './lib/supabase'
+import { startCloudRealtimeSync } from './lib/cloudSync'
 import { loadImages } from './lib/imageStore'
-import { dedupeContacts } from './lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
 import {
   registerReminderServiceWorker,
@@ -37,8 +37,9 @@ export default function App() {
   const sbKey = useStore((s) => s.sbKey)
   const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
-  const invoices = useStore((s) => s.invoices)
-  const addInvoice = useStore((s) => s.addInvoice)
+  const setInvoices = useStore((s) => s.setInvoices)
+  const deleteContact = useStore((s) => s.deleteContact)
+  const deleteInvoice = useStore((s) => s.deleteInvoice)
   const showToast = useStore((s) => s.showToast)
   const sheetsWebhook = useStore((s) => s.sheetsWebhook)
   const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
@@ -148,27 +149,6 @@ export default function App() {
       const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
       if (effectiveUrl && effectiveKey) {
         initSupabase(effectiveUrl, effectiveKey)
-        try {
-          const dbContacts = await syncContactsFromDB()
-          if (dbContacts.length && contacts.length === 0) {
-            const merged = dedupeContacts([...dbContacts, ...contacts])
-            finalContacts = merged
-            setContacts(merged)
-          }
-        } catch (err) {
-          console.error('Supabase sync failed:', err)
-          showToast('Cloud sync failed — using local data')
-        }
-
-        try {
-          const dbInvoices = await syncInvoicesFromDB()
-          const localIds = new Set(invoices.map((i) => i.id))
-          dbInvoices
-            .filter((i) => !localIds.has(i.id))
-            .forEach((i) => addInvoice(i))
-        } catch (err) {
-          console.error('Invoice sync failed:', err)
-        }
       }
 
       // Restore card images from IndexedDB for contacts that lost their base64 on refresh
@@ -198,6 +178,29 @@ export default function App() {
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUnlocked])
+
+  useEffect(() => {
+    if (!isUnlocked || IS_DEMO_MODE) return
+
+    const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
+    const effectiveKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || sbKey
+    if (!effectiveUrl || !effectiveKey) return
+
+    initSupabase(effectiveUrl, effectiveKey)
+
+    const storeApi = {
+      getContacts: () => useStore.getState().contacts,
+      setContacts,
+      getInvoices: () => useStore.getState().invoices,
+      setInvoices,
+      deleteContact,
+      deleteInvoice,
+    }
+
+    return startCloudRealtimeSync(storeApi, (live) => {
+      if (live) console.info('CardScan: live cloud sync connected')
+    })
+  }, [isUnlocked, sbUrl, sbKey, setContacts, setInvoices, deleteContact, deleteInvoice])
 
   if (!isUnlocked) {
     return <PasswordGate onUnlock={() => setIsUnlocked(true)} />

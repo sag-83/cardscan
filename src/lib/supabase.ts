@@ -33,6 +33,8 @@ create table if not exists contacts (
   is_customer boolean default false,
   followup_at timestamptz,
   followup_note text default '',
+  is_old_customer boolean default false,
+  updated_at timestamptz default now(),
   scanned_at text default '',
   created_at timestamptz default now()
 );
@@ -45,6 +47,8 @@ alter table contacts add column if not exists visited boolean default false;
 alter table contacts add column if not exists is_customer boolean default false;
 alter table contacts add column if not exists followup_at timestamptz;
 alter table contacts add column if not exists followup_note text default '';
+alter table contacts add column if not exists is_old_customer boolean default false;
+alter table contacts add column if not exists updated_at timestamptz default now();
 
 -- 3. Backfill and enforce duplicate protection
 update contacts
@@ -96,13 +100,27 @@ create table if not exists invoices (
   notes text default '',
   saved_at timestamptz default now()
 );
-alter table invoices disable row level security;`
+alter table invoices disable row level security;
+
+-- 6. Realtime sync (run once in Supabase SQL editor if live sync does not work)
+alter table contacts replica identity full;
+alter table invoices replica identity full;
+do $$ begin
+  alter publication supabase_realtime add table contacts;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table invoices;
+exception when duplicate_object then null;
+end $$;`
 
 let client: SupabaseClient | null = null
 let lastError = ''
 
 export function initSupabase(url: string, key: string): void {
-  client = url && key ? createClient(url, key) : null
+  client = url && key
+    ? createClient(url, key, { realtime: { params: { eventsPerSecond: 20 } } })
+    : null
   lastError = client ? '' : 'Supabase URL or anon key is missing'
 }
 
@@ -123,7 +141,7 @@ function rememberSupabaseError(prefix: string, err: unknown): void {
   lastError = `${prefix}: ${message}`
 }
 
-function ensureSupabaseClient(): SupabaseClient | null {
+export function ensureSupabaseClient(): SupabaseClient | null {
   if (client) return client
 
   const url = import.meta.env.VITE_SUPABASE_URL as string
@@ -139,7 +157,46 @@ function ensureSupabaseClient(): SupabaseClient | null {
   return null
 }
 
+export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
+  const r = row as Record<string, unknown>
+  return {
+    id: String(r.id ?? ''),
+    name: String(r.name ?? ''),
+    title: String(r.title ?? ''),
+    company: String(r.company ?? ''),
+    email: String(r.email ?? ''),
+    phone_mobile: String(r.phone_mobile ?? ''),
+    phone_work: String(r.phone_work ?? ''),
+    phone_fax: String(r.phone_fax ?? ''),
+    website: String(r.website ?? ''),
+    address: String(r.address ?? ''),
+    city: String(r.city ?? ''),
+    state: String(r.state ?? ''),
+    zip: String(r.zip ?? ''),
+    country: String(r.country ?? ''),
+    area: String(r.area ?? ''),
+    notes: String(r.notes ?? ''),
+    back_notes: String(r.back_notes ?? ''),
+    user_notes: String(r.user_notes ?? ''),
+    front_image: String(r.front_image ?? ''),
+    back_image: String(r.back_image ?? ''),
+    front_image_url: String(r.front_image_url ?? ''),
+    back_image_url: String(r.back_image_url ?? ''),
+    stars: Number(r.stars ?? 0),
+    scanned_at: String(r.scanned_at ?? ''),
+    sent_to_sheets: Boolean(r.sent_to_sheets ?? false),
+    visited: Boolean(r.visited ?? false),
+    is_customer: Boolean(r.is_customer ?? false),
+    is_old_customer: Boolean(r.is_old_customer ?? false),
+    followup_at: r.followup_at ? String(r.followup_at) : undefined,
+    followup_note: String(r.followup_note ?? ''),
+    created_at: String(r.created_at ?? new Date().toISOString()),
+    updated_at: r.updated_at ? String(r.updated_at) : undefined,
+  }
+}
+
 function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
+  const now = new Date().toISOString()
   return {
     id:              contact.id,
     name:            contact.name,
@@ -167,10 +224,12 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     stars:           contact.stars,
     visited:         contact.visited ?? false,
     is_customer:     contact.is_customer ?? false,
+    is_old_customer: contact.is_old_customer ?? false,
     followup_at:     contact.followup_at || null,
     followup_note:   contact.followup_note || '',
+    updated_at:      contact.updated_at || now,
     scanned_at:      contact.scanned_at,
-    created_at:      contact.created_at,
+    created_at:      contact.created_at || now,
   }
 }
 
@@ -235,7 +294,7 @@ export async function syncContactsFromDB(): Promise<Contact[]> {
     rememberSupabaseError('Supabase sync failed', error)
     throw error
   }
-  return (data ?? []) as Contact[]
+  return (data ?? []).map((row) => mapContactRow(row as Record<string, unknown>))
 }
 
 export async function findDuplicateContactInDB(contact: Contact): Promise<Contact | null> {
@@ -255,7 +314,7 @@ export async function findDuplicateContactInDB(contact: Contact): Promise<Contac
     error?.message?.toLowerCase().includes('dedupe_key')
   )
 
-  if (data) return data as Contact
+  if (data) return mapContactRow(data as Record<string, unknown>)
 
   if (error && error.code !== 'PGRST116' && !dedupeColumnMissing) {
     rememberSupabaseError('Supabase duplicate check failed', error)
@@ -299,8 +358,8 @@ export async function saveContactToDB(contact: Contact): Promise<'new' | 'merged
 
   const wasMerged = existing && existing.id !== contact.id
   if (wasMerged) {
-    const merged = mergeContact(existing as Contact, contact)
-    row = sanitizeContactForDB({ ...merged, id: existing.id })
+    const merged = mergeContact(mapContactRow(existing as Record<string, unknown>), contact)
+    row = sanitizeContactForDB({ ...merged, id: String(existing.id) })
   }
 
   const ok = await upsertContactRow(sb, row, dedupeColumnMissing)

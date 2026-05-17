@@ -30,6 +30,8 @@ export interface Contact {
   followup_at?: string
   followup_note?: string
   created_at: string
+  /** Set on every cloud save — used for multi-device sync. */
+  updated_at?: string
 }
 
 export type Screen = 'scan' | 'contacts' | 'dashboard' | 'bulk' | 'settings'

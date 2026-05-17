@@ -17,13 +17,12 @@ import { useStore } from '../../store/useStore'
 import { useTheme } from '../../hooks/useTheme'
 import {
   initSupabase,
-  syncContactsFromDB,
-  syncInvoicesFromDB,
   testSupabaseConnection,
   saveContactsToDB,
   saveInvoiceToDB,
   SUPABASE_SCHEMA_SQL,
 } from '../../lib/supabase'
+import { pullAndMergeFromCloud } from '../../lib/cloudSync'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts, normalizeContact } from '../../lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
@@ -63,7 +62,8 @@ export function SettingsScreen() {
     sheetsWebhook, setSheetsWebhook,
     invoiceSheetsWebhook, setInvoiceSheetsWebhook,
     contacts, setContacts,
-    invoices, addInvoice,
+    invoices, setInvoices,
+    deleteContact, deleteInvoice,
     showToast,
   } = useStore((s) => ({
     apiKey: s.apiKey,
@@ -83,7 +83,9 @@ export function SettingsScreen() {
     contacts: s.contacts,
     setContacts: s.setContacts,
     invoices: s.invoices,
-    addInvoice: s.addInvoice,
+    setInvoices: s.setInvoices,
+    deleteContact: s.deleteContact,
+    deleteInvoice: s.deleteInvoice,
     showToast: s.showToast,
   }))
 
@@ -140,7 +142,7 @@ export function SettingsScreen() {
 
   const handleClearAll = () => {
     if (!confirm('Clear contacts from this phone/browser only? Supabase backup will stay saved.')) return
-    setContacts([]); showToast('Local contacts cleared. Use Restore from Supabase to bring them back.')
+    setContacts([]); showToast('Local contacts cleared. Use Sync now from Supabase to bring them back.')
   }
 
   const handleRestoreFromSupabase = async () => {
@@ -152,28 +154,23 @@ export function SettingsScreen() {
 
     try {
       initSupabase(ENV_SUPABASE_URL || sbUrl, ENV_SUPABASE_ANON_KEY || sbKey)
-      const [cloudContacts, cloudInvoices] = await Promise.all([
-        syncContactsFromDB(),
-        syncInvoicesFromDB(),
-      ])
+      const { contacts: n, invoices: inv } = await pullAndMergeFromCloud({
+        getContacts: () => contacts,
+        setContacts,
+        getInvoices: () => invoices,
+        setInvoices,
+        deleteContact,
+        deleteInvoice,
+      })
 
-      if (!cloudContacts.length && !cloudInvoices.length) {
+      if (!n && !inv) {
         showToast('No cloud data found')
         return
       }
 
-      if (cloudContacts.length) {
-        setContacts(dedupeContacts([...cloudContacts, ...contacts]))
-      }
-
-      if (cloudInvoices.length) {
-        const localIds = new Set(invoices.map((i) => i.id))
-        cloudInvoices.filter((i) => !localIds.has(i.id)).forEach((i) => addInvoice(i))
-      }
-
-      showToast(`Restored ${cloudContacts.length} contact(s) + ${cloudInvoices.length} invoice(s)`)
+      showToast(`Synced ${n} contact(s) + ${inv} invoice(s) from cloud`)
     } catch (err) {
-      showToast('Cloud restore failed: ' + (err as Error).message)
+      showToast('Cloud sync failed: ' + (err as Error).message)
     }
   }
 
@@ -242,15 +239,18 @@ export function SettingsScreen() {
       <div style={{ padding: '16px 16px 0', fontSize: 22, fontWeight: 800 }}>Settings</div>
 
       {/* Supabase */}
-      <SectionTitle>Cloud Backup</SectionTitle>
+      <SectionTitle>Cloud Sync</SectionTitle>
+      <div style={{ padding: '0 16px 8px', fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+        Syncs automatically across devices (~30s). Use buttons below only if data looks missing.
+      </div>
       <SettingsGroup>
         <div onClick={() => handleBackupToSupabase()} style={{ ...rowStyle, cursor: 'pointer' }}>
-          <div style={{ flex: 1, fontSize: 15 }}>Backup All to Supabase</div>
+          <div style={{ flex: 1, fontSize: 15 }}>Force backup to Supabase</div>
           <div style={{ color: 'var(--accent)', display: 'flex' }}><Cloud size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={handleRestoreFromSupabase} style={{ ...rowStyle, cursor: 'pointer' }}>
-          <div style={{ flex: 1, fontSize: 15 }}>Restore from Supabase</div>
+          <div style={{ flex: 1, fontSize: 15 }}>Sync now from Supabase</div>
           <div style={{ color: 'var(--accent)', display: 'flex' }}><Cloud size={18} strokeWidth={2} aria-hidden /></div>
         </div>
       </SettingsGroup>

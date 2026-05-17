@@ -9,6 +9,8 @@ const NOTIFIED_KEY = 'cardscan_followup_notified'
 const SW_URL = '/sw.js'
 const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000
 const POLL_MS = 30_000
+/** Only alert for follow-ups that became due within this window (avoids blasting old overdue). */
+const DUE_WINDOW_MS = 20 * 60 * 1000
 
 const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string)?.trim() ?? ''
 
@@ -74,6 +76,25 @@ function markNotified(contactId: string, at: string): void {
 
 function wasNotified(contactId: string, at: string): boolean {
   return loadNotifiedKeys().includes(reminderKey(contactId, at))
+}
+
+function isFollowupDueNow(at: string, now = Date.now()): boolean {
+  const dueAt = new Date(at).getTime()
+  if (Number.isNaN(dueAt) || dueAt > now) return false
+  return now - dueAt <= DUE_WINDOW_MS
+}
+
+/** Skip old overdue items so enabling reminders does not notify every past follow-up. */
+function skipStaleFollowupNotifications(contacts: Contact[]): void {
+  const now = Date.now()
+  for (const c of contacts) {
+    if (!c.followup_at) continue
+    const dueAt = new Date(c.followup_at).getTime()
+    if (Number.isNaN(dueAt) || dueAt > now) continue
+    if (now - dueAt > DUE_WINDOW_MS && !wasNotified(c.id, c.followup_at)) {
+      markNotified(c.id, c.followup_at)
+    }
+  }
 }
 
 export function remindersFromContacts(contacts: Contact[]): FollowupReminder[] {
@@ -229,7 +250,7 @@ async function showFollowupNotification(reminder: FollowupReminder): Promise<boo
   }
 }
 
-/** Fire notifications for reminders whose time has passed (backup when app is open). */
+/** Notify only if a follow-up just became due (while app is open). */
 export async function checkDueFollowupReminders(contacts: Contact[]): Promise<number> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return 0
   if (Notification.permission !== 'granted') return 0
@@ -237,9 +258,8 @@ export async function checkDueFollowupReminders(contacts: Contact[]): Promise<nu
   const now = Date.now()
   let shown = 0
   for (const reminder of remindersFromContacts(contacts)) {
-    if (new Date(reminder.at).getTime() <= now) {
-      if (await showFollowupNotification(reminder)) shown += 1
-    }
+    if (!isFollowupDueNow(reminder.at, now)) continue
+    if (await showFollowupNotification(reminder)) shown += 1
   }
   return shown
 }
@@ -306,9 +326,9 @@ export async function enableReminderPush(contacts: Contact[]): Promise<'granted'
   const permission = await requestReminderPermission()
   if (permission !== 'granted') return 'denied'
   setReminderPushEnabled(true)
+  skipStaleFollowupNotifications(contacts)
   await registerReminderServiceWorker()
   await registerPushSubscription()
   await syncFollowupReminders(contacts)
-  await checkDueFollowupReminders(contacts)
   return 'granted'
 }

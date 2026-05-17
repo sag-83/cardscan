@@ -553,7 +553,7 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
               return
             }
             const result = await enableReminderPush(contacts)
-            if (result === 'granted') showToast('Notifications on — try Send test below')
+            if (result === 'granted') showToast('On — you’ll get one alert per follow-up at its due time')
             else if (result === 'denied') showToast('Allow notifications in iPhone Settings')
             else showToast('Notifications not supported')
           }}
@@ -581,9 +581,9 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
 
       <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
         {status.serverPushConfigured
-          ? 'Server sends push every few minutes even when the app is closed. Each phone with notifications enabled gets the alert.'
+          ? 'One push per follow-up at its scheduled date and time (not all at once). Server checks every few minutes when the app is closed.'
           : 'Add VAPID keys in Vercel for reminders when the app is closed (see .env.example).'}
-        {' '}Overdue reminders also alert when you open the app.
+        {' '}Alerts fire when each follow-up is due — old overdue items are not blasted on enable.
       </div>
 
       {ready && (

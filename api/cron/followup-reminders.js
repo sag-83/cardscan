@@ -19,12 +19,29 @@ function configureWebPush() {
   return true
 }
 
-function isDue(contact) {
+/** Match client: only notify when due time is recent, not entire overdue backlog. */
+const DUE_WINDOW_MS = 20 * 60 * 1000
+
+function isDue(contact, now = Date.now()) {
   if (!contact.followup_at) return false
   const at = new Date(contact.followup_at).getTime()
-  if (Number.isNaN(at) || at > Date.now()) return false
+  if (Number.isNaN(at) || at > now) return false
+  if (now - at > DUE_WINDOW_MS) return false
   if (!contact.followup_notified_at) return true
   return new Date(contact.followup_notified_at).getTime() < at
+}
+
+async function markStaleFollowupsSkipped(sb, contacts, nowIso) {
+  const now = Date.now()
+  const stale = (contacts || []).filter((c) => {
+    if (!c.followup_at || c.followup_notified_at) return false
+    const at = new Date(c.followup_at).getTime()
+    return !Number.isNaN(at) && at < now - DUE_WINDOW_MS
+  })
+  for (const c of stale) {
+    await sb.from('contacts').update({ followup_notified_at: nowIso }).eq('id', c.id)
+  }
+  return stale.length
 }
 
 export default async function handler(req, res) {
@@ -54,7 +71,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: contactsError.message })
   }
 
-  const due = (contacts || []).filter(isDue)
+  const skippedStale = await markStaleFollowupsSkipped(sb, contacts, nowIso)
+  const due = (contacts || []).filter((c) => isDue(c))
   if (!due.length) {
     return res.status(200).json({ ok: true, due: 0, sent: 0 })
   }
@@ -110,6 +128,7 @@ export default async function handler(req, res) {
     ok: true,
     due: due.length,
     sent,
+    skippedStale,
     devices: subs.length,
     errors: errors.slice(0, 5),
   })

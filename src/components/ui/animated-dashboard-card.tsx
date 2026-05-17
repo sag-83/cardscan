@@ -14,6 +14,8 @@ export interface BonusesIncentivesCardProps {
   enableAnimations?: boolean
   onMoreDetails?: () => void
   className?: string
+  /** When false, dollar amounts show as •••••• */
+  figuresVisible?: boolean
 }
 
 const defaultProps: Partial<BonusesIncentivesCardProps> = {
@@ -41,6 +43,7 @@ export function BonusesIncentivesCard(props: BonusesIncentivesCardProps) {
     enableAnimations,
     onMoreDetails,
     className,
+    figuresVisible = true,
   } = { ...defaultProps, ...props }
 
   const shouldReduceMotion = useReducedMotion()
@@ -86,6 +89,7 @@ export function BonusesIncentivesCard(props: BonusesIncentivesCardProps) {
   }
 
   const total = (bonusesValue ?? 0) + (incentivesValue ?? 0)
+  const maskMoney = (n: number) => (figuresVisible ? moneyUsd(n) : '••••••')
 
   return (
     <motion.div
@@ -175,7 +179,7 @@ export function BonusesIncentivesCard(props: BonusesIncentivesCardProps) {
                     mass: 0.8,
                   }}
                 >
-                  {moneyUsd(total)}
+                  {maskMoney(total)}
                 </motion.div>
               </div>
             </div>
@@ -212,7 +216,7 @@ export function BonusesIncentivesCard(props: BonusesIncentivesCardProps) {
                     animate={shouldAnimate ? { opacity: 1, y: 0 } : undefined}
                     transition={{ delay: 0.6 }}
                   >
-                    {moneyUsd(bonusesValue ?? 0)}
+                    {maskMoney(bonusesValue ?? 0)}
                   </motion.div>
                   <motion.div
                     className="text-left text-xs font-medium text-[#5A8CEF]"
@@ -249,7 +253,7 @@ export function BonusesIncentivesCard(props: BonusesIncentivesCardProps) {
                     animate={shouldAnimate ? { opacity: 1, y: 0 } : undefined}
                     transition={{ delay: 1.0 }}
                   >
-                    {moneyUsd(incentivesValue ?? 0)}
+                    {maskMoney(incentivesValue ?? 0)}
                   </motion.div>
                   <motion.div
                     className="text-left text-xs font-medium text-[#5A8CEF]"

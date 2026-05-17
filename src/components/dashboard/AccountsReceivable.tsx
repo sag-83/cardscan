@@ -3,34 +3,33 @@ import {
   ChevronDown,
   ChevronLeft,
   Loader2,
-  Plus,
   Receipt,
+  Trash2,
   Wallet,
   X,
 } from 'lucide-react'
+import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 import { useStore } from '../../store/useStore'
-import { syncContactsFromDB } from '../../lib/supabase'
+import { deleteInvoiceFromDB, saveInvoiceToDB, syncContactsFromDB } from '../../lib/supabase'
 import {
   balanceTone,
   buildContactBalanceRows,
   computeContactBalance,
   contactLabel,
-  createChargeInvoice,
   createChargePayment,
+  deleteChargeInvoice,
+  deleteChargePayment,
   fetchChargeAccountData,
   filterBalanceRows,
   getMergedInvoicesForContact,
   getMergedPaymentsForContact,
-  importSalesInvoicesToChargeLedger,
   LARGE_BALANCE_THRESHOLD,
-  lineItemTotal,
-  sumLineItems,
   type AccountListFilter,
-  type NewChargeLineItem,
 } from '../../lib/chargeAccount'
-import type { ChargeInvoice, ChargePayment, ContactBalanceRow, LedgerInvoiceEntry } from '../../types/chargeAccount'
+import type { ContactBalanceRow, LedgerInvoiceEntry } from '../../types/chargeAccount'
 import type { Contact } from '../../types/contact'
 import type { SavedInvoice } from '../../types/invoice'
+import { dashboardInputClass, dashboardLabelClass } from '../../lib/dashboardStyles'
 import { cn } from '../../lib/utils'
 
 function money(v: number) {
@@ -48,10 +47,6 @@ function balanceClasses(tone: ReturnType<typeof balanceTone>) {
   return 'text-slate-400 dark:text-slate-500 font-semibold'
 }
 
-type DraftLine = { item_name: string; quantity: string; unit_price: string }
-
-const emptyLine = (): DraftLine => ({ item_name: '', quantity: '1', unit_price: '' })
-
 const FILTER_TABS: { id: AccountListFilter; label: string }[] = [
   { id: 'owing', label: 'Owing' },
   { id: 'activity', label: 'With activity' },
@@ -61,9 +56,13 @@ const FILTER_TABS: { id: AccountListFilter; label: string }[] = [
 export function AccountsReceivable({
   salesInvoices,
   onOutstandingCount,
+  onSalesInvoiceSaved,
+  onSalesInvoiceDeleted,
 }: {
   salesInvoices: SavedInvoice[]
   onOutstandingCount?: (count: number) => void
+  onSalesInvoiceSaved?: (invoice: SavedInvoice) => void
+  onSalesInvoiceDeleted?: (id: string) => void
 }) {
   const contacts = useStore((s) => s.contacts)
   const setContacts = useStore((s) => s.setContacts)
@@ -71,11 +70,12 @@ export function AccountsReceivable({
   const chargePayments = useStore((s) => s.chargePayments)
   const setChargeInvoices = useStore((s) => s.setChargeInvoices)
   const setChargePayments = useStore((s) => s.setChargePayments)
-  const addChargeInvoice = useStore((s) => s.addChargeInvoice)
   const addChargePayment = useStore((s) => s.addChargePayment)
+  const removeChargeInvoice = useStore((s) => s.removeChargeInvoice)
+  const removeChargePayment = useStore((s) => s.removeChargePayment)
 
   const [loading, setLoading] = useState(true)
-  const [importing, setImporting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [listFilter, setListFilter] = useState<AccountListFilter>('owing')
@@ -171,43 +171,58 @@ export function AccountsReceivable({
     [selectedId, chargePayments, salesInvoices, contacts],
   )
 
-  const handleImportSales = async () => {
-    setImporting(true)
-    setError('')
-    try {
-      const result = await importSalesInvoicesToChargeLedger(salesInvoices, contacts)
-      await reload()
-      setError('')
-      alert(
-        `Imported ${result.imported} invoice(s) and ${result.payments} payment(s). Skipped ${result.skipped}. Balances now use your sales history.`,
-      )
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  const handleCreateInvoice = async (payload: {
-    date: string
-    note: string
-    items: NewChargeLineItem[]
-  }) => {
+  const handleCreateInvoice = async (invoice: SavedInvoice) => {
     if (!selectedId) return
     setSaving(true)
+    setError('')
     try {
-      const inv = await createChargeInvoice({
-        contact_id: selectedId,
-        date: payload.date,
-        note: payload.note,
-        items: payload.items,
-      })
-      addChargeInvoice(inv)
+      const ok = await saveInvoiceToDB(invoice)
+      if (!ok) throw new Error('Could not save invoice to database.')
+      onSalesInvoiceSaved?.(invoice)
       setInvoiceOpen(false)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteInvoice = async (inv: LedgerInvoiceEntry) => {
+    const label = inv.source === 'sales' ? 'sales invoice' : 'charge invoice'
+    if (!window.confirm(`Delete this ${label} (${money(inv.total)})? This cannot be undone.`)) return
+    setDeletingId(inv.id)
+    setError('')
+    try {
+      if (inv.source === 'sales') {
+        const ok = await deleteInvoiceFromDB(inv.id)
+        if (!ok) throw new Error('Could not delete invoice.')
+        onSalesInvoiceDeleted?.(inv.id)
+      } else {
+        await deleteChargeInvoice(inv.id)
+        removeChargeInvoice(inv.id)
+      }
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDeletePayment = async (paymentId: string, source: 'charge' | 'sales') => {
+    if (source === 'sales') {
+      setError('This payment is tied to a paid sales invoice — delete the invoice instead.')
+      return
+    }
+    if (!window.confirm('Delete this payment? This cannot be undone.')) return
+    setDeletingId(paymentId)
+    setError('')
+    try {
+      await deleteChargePayment(paymentId)
+      removeChargePayment(paymentId)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -251,21 +266,11 @@ export function AccountsReceivable({
       )}
 
       {salesCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm dark:border-indigo-500/25 dark:bg-indigo-500/10">
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm dark:border-indigo-500/25 dark:bg-indigo-500/10">
           <p className="text-indigo-900 dark:text-indigo-200">
             <strong>{salesCount} sales invoices</strong> from the app are included in balances automatically.
-            Pending = amount still owed; cash/check = already paid.
+            New invoices use the same form as the mobile app. Pending = owed; cash/check = paid.
           </p>
-          {chargeInvoices.length === 0 && (
-            <button
-              type="button"
-              disabled={importing}
-              onClick={() => void handleImportSales()}
-              className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {importing ? 'Importing…' : 'Copy to charge ledger'}
-            </button>
-          )}
         </div>
       )}
 
@@ -290,6 +295,7 @@ export function AccountsReceivable({
           invoices={contactInvoices}
           payments={contactPayments}
           expandedInv={expandedInv}
+          deletingId={deletingId}
           onToggleInv={(id) =>
             setExpandedInv((prev) => {
               const next = new Set(prev)
@@ -301,6 +307,8 @@ export function AccountsReceivable({
           onBack={() => setSelectedId(null)}
           onAddInvoice={() => setInvoiceOpen(true)}
           onLogPayment={() => setPaymentOpen(true)}
+          onDeleteInvoice={(inv) => void handleDeleteInvoice(inv)}
+          onDeletePayment={(id, source) => void handleDeletePayment(id, source)}
         />
       ) : (
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
@@ -312,12 +320,15 @@ export function AccountsReceivable({
       )}
 
       {invoiceOpen && selectedContact && (
-        <AddInvoiceModal
-          contact={selectedContact}
-          saving={saving}
-          onClose={() => setInvoiceOpen(false)}
-          onSubmit={handleCreateInvoice}
-        />
+        <ModalShell title={`Create invoice · ${contactLabel(selectedContact)}`} onClose={() => setInvoiceOpen(false)}>
+          <CreateInvoiceForm
+            contact={selectedContact}
+            saving={saving}
+            submitLabel="Save invoice"
+            onCancel={() => setInvoiceOpen(false)}
+            onSubmit={(inv) => void handleCreateInvoice(inv)}
+          />
+        </ModalShell>
       )}
 
       {paymentOpen && selectedContact && (
@@ -533,20 +544,26 @@ function ContactLedger({
   invoices,
   payments,
   expandedInv,
+  deletingId,
   onToggleInv,
   onBack,
   onAddInvoice,
   onLogPayment,
+  onDeleteInvoice,
+  onDeletePayment,
 }: {
   contact: Contact
   balance: number
   invoices: LedgerInvoiceEntry[]
   payments: ReturnType<typeof getMergedPaymentsForContact>
   expandedInv: Set<string>
+  deletingId: string | null
   onToggleInv: (id: string) => void
   onBack: () => void
   onAddInvoice: () => void
   onLogPayment: () => void
+  onDeleteInvoice: (inv: LedgerInvoiceEntry) => void
+  onDeletePayment: (id: string, source: 'charge' | 'sales') => void
 }) {
   const tone = balanceTone(balance)
 
@@ -613,10 +630,11 @@ function ContactLedger({
                         : null
               return (
                 <li key={`${inv.source}-${inv.id}`}>
+                  <div className="flex items-center gap-1 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <button
                     type="button"
                     onClick={() => onToggleInv(inv.id)}
-                    className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
                     <ChevronDown
                       className={cn('size-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')}
@@ -654,6 +672,16 @@ function ContactLedger({
                       {money(inv.total)}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    disabled={deletingId === inv.id}
+                    onClick={() => onDeleteInvoice(inv)}
+                    className="shrink-0 rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                    aria-label="Delete invoice"
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                  </div>
                   {open && (inv.items?.length ?? 0) > 0 && (
                     <ul className="border-t border-slate-100 bg-slate-50/80 px-5 py-2 dark:border-slate-800 dark:bg-slate-950/40">
                       {inv.items!.map((it, idx) => (
@@ -683,7 +711,7 @@ function ContactLedger({
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {payments.map((p) => (
               <li key={`${p.source}-${p.id}`} className="flex items-center justify-between gap-4 px-5 py-3">
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{p.date}</span>
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800">
@@ -695,6 +723,17 @@ function ContactLedger({
                 <span className="text-sm font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">
                   −{money(p.amount)}
                 </span>
+                {p.source === 'charge' && (
+                  <button
+                    type="button"
+                    disabled={deletingId === p.id}
+                    onClick={() => onDeletePayment(p.id, p.source)}
+                    className="shrink-0 rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                    aria-label="Delete payment"
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -727,7 +766,7 @@ function ModalShell({
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <div
-        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         role="dialog"
         aria-modal="true"
       >
@@ -740,127 +779,6 @@ function ModalShell({
         <div className="p-5">{children}</div>
       </div>
     </div>
-  )
-}
-
-function AddInvoiceModal({
-  contact,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  contact: Contact
-  saving: boolean
-  onClose: () => void
-  onSubmit: (p: { date: string; note: string; items: NewChargeLineItem[] }) => void
-}) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [date, setDate] = useState(today)
-  const [note, setNote] = useState('')
-  const [lines, setLines] = useState<DraftLine[]>([emptyLine(), emptyLine()])
-
-  const parsed: NewChargeLineItem[] = lines
-    .filter((l) => l.item_name.trim())
-    .map((l) => ({
-      item_name: l.item_name.trim(),
-      quantity: Number(l.quantity) || 0,
-      unit_price: Number(l.unit_price) || 0,
-    }))
-
-  const total = sumLineItems(parsed)
-
-  return (
-    <ModalShell title={`Add invoice · ${contactLabel(contact)}`} onClose={onClose}>
-      <div className="space-y-4">
-        <label className="block text-xs font-semibold text-slate-500">
-          Date
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-          />
-        </label>
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Line items</span>
-            <button
-              type="button"
-              onClick={() => setLines((prev) => [...prev, emptyLine()])}
-              className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600"
-            >
-              <Plus className="size-3.5" aria-hidden />
-              Add line
-            </button>
-          </div>
-          <div className="space-y-2">
-            {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2">
-                <input
-                  placeholder="Item"
-                  value={line.item_name}
-                  onChange={(e) =>
-                    setLines((prev) => prev.map((l, j) => (j === i ? { ...l, item_name: e.target.value } : l)))
-                  }
-                  className="col-span-6 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  placeholder="Qty"
-                  value={line.quantity}
-                  onChange={(e) =>
-                    setLines((prev) => prev.map((l, j) => (j === i ? { ...l, quantity: e.target.value } : l)))
-                  }
-                  className="col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  placeholder="Price"
-                  value={line.unit_price}
-                  onChange={(e) =>
-                    setLines((prev) => prev.map((l, j) => (j === i ? { ...l, unit_price: e.target.value } : l)))
-                  }
-                  className="col-span-3 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
-                />
-                <button
-                  type="button"
-                  onClick={() => setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, j) => j !== i)))}
-                  className="col-span-1 flex items-center justify-center text-slate-300 hover:text-red-500"
-                  aria-label="Remove line"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-        <label className="block text-xs font-semibold text-slate-500">
-          Note (optional)
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-          />
-        </label>
-        <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800">
-          <span className="text-sm font-semibold text-slate-500">Total</span>
-          <span className="text-xl font-extrabold tabular-nums text-indigo-600 dark:text-indigo-400">{money(total)}</span>
-        </div>
-        <button
-          type="button"
-          disabled={saving || !parsed.length || total <= 0}
-          onClick={() => onSubmit({ date, note, items: parsed })}
-          className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save invoice'}
-        </button>
-      </div>
-    </ModalShell>
   )
 }
 
@@ -889,7 +807,7 @@ function LogPaymentModal({
         <p className="text-xs text-slate-400">
           Current balance: <strong className={balanceClasses(balanceTone(balance))}>{money(balance)}</strong>
         </p>
-        <label className="block text-xs font-semibold text-slate-500">
+        <label className={dashboardLabelClass}>
           Amount
           <input
             type="number"
@@ -898,25 +816,25 @@ function LogPaymentModal({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className={dashboardInputClass}
           />
         </label>
-        <label className="block text-xs font-semibold text-slate-500">
+        <label className={dashboardLabelClass}>
           Date
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className={dashboardInputClass}
           />
         </label>
-        <label className="block text-xs font-semibold text-slate-500">
+        <label className={dashboardLabelClass}>
           Note (optional)
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className={cn(dashboardInputClass, 'resize-y')}
           />
         </label>
         <button

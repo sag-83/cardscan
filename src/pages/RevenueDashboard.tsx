@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { FileText, TrendingDown, TrendingUp, X, Building2 } from 'lucide-react'
+import { Eye, EyeOff, FileText, TrendingDown, TrendingUp, X, Building2 } from 'lucide-react'
+import { useSensitiveFigures } from '../hooks/useSensitiveFigures'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import { formatInvoiceMonthLabel } from '../lib/invoiceStats'
 import { SavedInvoice } from '../types/invoice'
 import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
 import { printSavedInvoice } from '../lib/invoicePrint'
@@ -128,8 +130,7 @@ function moneyShort(v: number): string {
 }
 
 function fmtMonthShort(ym: string) {
-  const [y, m] = ym.split('-')
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' })
+  return formatInvoiceMonthLabel(ym)
 }
 function fmtMonthLong(ym: string) {
   const [y, m] = ym.split('-')
@@ -294,12 +295,18 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accent, icon, delay }: {
+function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accent, icon, delay, sensitive, figuresVisible }: {
   label: string; rawValue: number; format: 'money' | 'count'; sub?: string
   trend?: number | null; trendInverse?: boolean; accent: string; icon: IconName; delay: number
+  sensitive?: boolean; figuresVisible?: boolean
 }) {
   const animated  = useCountUp(rawValue)
-  const formatted = format === 'money' ? money(animated) : String(Math.round(animated))
+  const formatted =
+    sensitive && !figuresVisible
+      ? '••••••'
+      : format === 'money'
+        ? money(animated)
+        : String(Math.round(animated))
   const isUp      = (trend ?? 0) >= 0
   const isGood    = trendInverse ? !isUp : isUp
 
@@ -332,7 +339,7 @@ function KpiCard({ label, rawValue, format, sub, trend, trendInverse, accent, ic
         {formatted}
       </div>
       <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-600 mb-1">{label}</div>
-      {sub && <div className="text-xs text-slate-500 dark:text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500 dark:text-slate-400">{sub}</div>}
     </div>
   )
 }
@@ -406,7 +413,7 @@ function RevenueTrendChart({ invoices }: { invoices: SavedInvoice[] }) {
 
   return (
     <Card>
-      <CardHead title="Revenue Trend" sub="Monthly invoiced vs collected"
+      <CardHead title="Revenue Trend" sub="By invoice date, grouped by month (not individual days)"
         right={<LegendDots items={[{ color: C.indigo, label: 'Billed' }, { color: C.emerald, label: 'Collected' }]} />}
       />
       <div className="px-2 pb-5">
@@ -1051,6 +1058,7 @@ export function RevenueDashboard() {
   const [state,   setState]   = useState('all')
   const [search,  setSearch]  = useState('')
   const [accountsOutstanding, setAccountsOutstanding] = useState(0)
+  const { visible: figuresVisible, toggle: toggleFigures } = useSensitiveFigures()
 
   const active = useScrollSpy([...SECTIONS])
 
@@ -1221,7 +1229,12 @@ export function RevenueDashboard() {
 
             <section id="accounts" className="scroll-mt-20">
               <SectionDivider label="Charge Accounts" />
-              <AccountsReceivable salesInvoices={allInvoices} onOutstandingCount={setAccountsOutstanding} />
+              <AccountsReceivable
+                salesInvoices={allInvoices}
+                onOutstandingCount={setAccountsOutstanding}
+                onSalesInvoiceSaved={(inv) => setAll((prev) => [inv, ...prev])}
+                onSalesInvoiceDeleted={(id) => setAll((prev) => prev.filter((i) => i.id !== id))}
+              />
             </section>
 
             {loading && !allInvoices.length ? (
@@ -1255,7 +1268,18 @@ export function RevenueDashboard() {
               <>
                 {/* KPIs */}
                 <section id="overview" className="scroll-mt-20">
-                  <SectionDivider label="Overview" />
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <SectionDivider label="Overview" />
+                    <button
+                      type="button"
+                      onClick={toggleFigures}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                      aria-label={figuresVisible ? 'Hide revenue figures' : 'Show revenue figures'}
+                    >
+                      {figuresVisible ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+                      {figuresVisible ? 'Hide figures' : 'Show figures'}
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
                     <BonusesIncentivesCard
                       className="mx-auto w-full max-w-md shrink-0 xl:mx-0"
@@ -1263,14 +1287,15 @@ export function RevenueDashboard() {
                       incentivesText="Outstanding"
                       bonusesValue={kpi.coll}
                       incentivesValue={kpi.pending}
+                      figuresVisible={figuresVisible}
                       backgroundColor="bg-slate-50/80 dark:bg-slate-950/60"
                       borderColor="border-slate-200/80 dark:border-slate-800"
                       onMoreDetails={() => navTo('receivables')}
                     />
                     <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   />
-                      <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  />
-                      <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} />
+                      <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   sensitive figuresVisible={figuresVisible} />
+                      <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  sensitive figuresVisible={figuresVisible} />
+                      <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} sensitive figuresVisible={figuresVisible} />
                       <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub="Invoices + memos"                              trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={180} />
                       <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
                     </div>

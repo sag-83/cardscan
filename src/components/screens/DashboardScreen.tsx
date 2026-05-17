@@ -2,13 +2,23 @@ import { useMemo, useState } from 'react'
 import {
   Check,
   ClipboardList,
+  Eye,
+  EyeOff,
   FileText,
   Globe,
+  ScanFace,
   X,
 } from 'lucide-react'
+import { useSensitiveFigures } from '../../hooks/useSensitiveFigures'
+import {
+  isRevenueSessionUnlocked,
+  lockRevenueSession,
+  unlockRevenueTab,
+} from '../../lib/revenueLock'
 import { useStore } from '../../store/useStore'
 import { SavedInvoice, SavedInvoiceItem } from '../../types/invoice'
 import { updateInvoiceInDB, deleteInvoiceFromDB, saveInvoiceToDB } from '../../lib/supabase'
+import { isInvoiceInCalendarMonth } from '../../lib/invoiceStats'
 import { uid } from '../../lib/utils'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -99,15 +109,20 @@ function StatsTab() {
 
 // ─── Revenue tab ─────────────────────────────────────────────────────────────
 
-function RevenueTab() {
+function RevenueTab({
+  figuresVisible,
+  maskFigure,
+  onToggleFigures,
+}: {
+  figuresVisible: boolean
+  maskFigure: (value: string) => string
+  onToggleFigures: () => void
+}) {
   const invoices = useStore((s) => s.invoices)
   const addInvoice = useStore((s) => s.addInvoice)
   const updateInvoice = useStore((s) => s.updateInvoice)
   const deleteInvoice = useStore((s) => s.deleteInvoice)
   const showToast = useStore((s) => s.showToast)
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-
   const [selectedCompany, setSelectedCompany] = useState('all')
 
   const companies = useMemo(() => {
@@ -136,14 +151,14 @@ function RevenueTab() {
     showToast('Memo cleared')
   }
 
-  const handleConvertMemo = (inv: SavedInvoice, selectedIndices: number[]) => {
+  const handleConvertMemo = (inv: SavedInvoice, selectedIndices: number[], soldDate: string) => {
     if (!selectedIndices.length) {
       showToast('Select at least one item')
       return
     }
     const selected = selectedIndices.map((i) => inv.items[i])
     const newTotal = sumItems(selected)
-    const today = new Date().toISOString().slice(0, 10)
+    const saleDate = soldDate || new Date().toISOString().slice(0, 10)
     const newInv: SavedInvoice = {
       ...inv,
       id: uid(),
@@ -151,7 +166,7 @@ function RevenueTab() {
       paidBy: 'pending',
       items: selected,
       total: newTotal,
-      date: today,
+      date: saleDate,
       saved_at: new Date().toISOString(),
     }
     addInvoice(newInv)
@@ -174,11 +189,10 @@ function RevenueTab() {
       if (inv.docKind === 'memo') return
       totalRevenue += inv.total
       if (inv.paidBy === 'pending') pending += inv.total
-      const dt = new Date(inv.saved_at)
-      if (dt >= monthStart) thisMonth += inv.total
+      if (isInvoiceInCalendarMonth(inv.date)) thisMonth += inv.total
     })
     return { totalRevenue, thisMonth, pending, count: filteredInvoices.length }
-  }, [filteredInvoices, monthStart])
+  }, [filteredInvoices])
 
   const byState = useMemo(() => {
     const map = new Map<string, { sold: number; pending: number; count: number }>()
@@ -256,6 +270,23 @@ function RevenueTab() {
         </select>
         <button
           type="button"
+          onClick={onToggleFigures}
+          aria-label={figuresVisible ? 'Hide revenue figures' : 'Show revenue figures'}
+          style={{
+            padding: '9px 11px',
+            borderRadius: 10,
+            border: '1.5px solid var(--border)',
+            background: 'var(--bg3)',
+            color: 'var(--text2)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+        >
+          {figuresVisible ? <EyeOff size={18} strokeWidth={2} aria-hidden /> : <Eye size={18} strokeWidth={2} aria-hidden />}
+        </button>
+        <button
+          type="button"
           onClick={() => window.open('/dashboard', '_blank')}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
@@ -266,9 +297,9 @@ function RevenueTab() {
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-        <StatCard label="Total Revenue" value={money(summary.totalRevenue)} accent />
-        <StatCard label="This Month" value={money(summary.thisMonth)} />
-        <StatCard label="Pending" value={money(summary.pending)} danger={summary.pending > 0} />
+        <StatCard label="Total Revenue" value={maskFigure(money(summary.totalRevenue))} accent />
+        <StatCard label="This Month" value={maskFigure(money(summary.thisMonth))} />
+        <StatCard label="Pending" value={maskFigure(money(summary.pending))} danger={summary.pending > 0} />
         <StatCard label="Invoices" value={String(summary.count)} />
       </div>
 
@@ -285,7 +316,7 @@ function RevenueTab() {
                 onClear={() => {
                   if (window.confirm('Clear this memo? Items are marked as collected back.')) handleClearMemo(inv.id)
                 }}
-                onConvert={(indices) => handleConvertMemo(inv, indices)}
+                onConvert={(indices, soldDate) => handleConvertMemo(inv, indices, soldDate)}
               />
             ))}
           </div>
@@ -353,9 +384,10 @@ function MemoRow({ inv, isFirst, onClear, onConvert }: {
   inv: SavedInvoice
   isFirst: boolean
   onClear: () => void
-  onConvert: (selectedIndices: number[]) => void
+  onConvert: (selectedIndices: number[], soldDate: string) => void
 }) {
   const [converting, setConverting] = useState(false)
+  const [soldDate, setSoldDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [selected, setSelected] = useState<Set<number>>(() => new Set(inv.items.map((_, i) => i)))
 
   const toggleItem = (index: number) => {
@@ -369,6 +401,7 @@ function MemoRow({ inv, isFirst, onClear, onConvert }: {
 
   const startConvert = () => {
     setSelected(new Set(inv.items.map((_, i) => i)))
+    setSoldDate(new Date().toISOString().slice(0, 10))
     setConverting(true)
   }
 
@@ -380,7 +413,7 @@ function MemoRow({ inv, isFirst, onClear, onConvert }: {
       ? `Create invoice for ${indices.length} sold item(s)? ${unselected} unsold item(s) will be discarded.`
       : 'Convert entire memo to a pending invoice?'
     if (!window.confirm(msg)) return
-    onConvert(indices)
+    onConvert(indices, soldDate)
     setConverting(false)
   }
 
@@ -426,6 +459,25 @@ function MemoRow({ inv, isFirst, onClear, onConvert }: {
           <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, margin: '10px 0 8px' }}>
             Select sold items to invoice. Unselected items are discarded.
           </div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 8 }}>
+            Date sold
+            <input
+              type="date"
+              value={soldDate}
+              onChange={(e) => setSoldDate(e.target.value)}
+              style={{
+                display: 'block',
+                width: '100%',
+                marginTop: 4,
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg3)',
+                color: 'var(--text)',
+                fontSize: 14,
+              }}
+            />
+          </label>
           {inv.items.map((it, i) => (
             <label
               key={i}
@@ -560,7 +612,32 @@ function StatsTable({ rows, emptyLabel }: { rows: GroupStats[]; emptyLabel: stri
 
 export function DashboardScreen() {
   const [tab, setTab] = useState<'stats' | 'revenue'>('stats')
+  const [unlocking, setUnlocking] = useState(false)
   const invoiceCount = useStore((s) => s.invoices.length)
+  const showToast = useStore((s) => s.showToast)
+  const { visible: figuresVisible, toggle: toggleFigures, mask: maskFigure } = useSensitiveFigures()
+
+  const openRevenueTab = async () => {
+    if (isRevenueSessionUnlocked()) {
+      setTab('revenue')
+      return
+    }
+    setUnlocking(true)
+    const result = await unlockRevenueTab()
+    setUnlocking(false)
+    if (result.ok) setTab('revenue')
+    else showToast(result.message || 'Face ID required to open Revenue')
+  }
+
+  const handleTab = (id: 'stats' | 'revenue') => {
+    if (id === 'stats') {
+      lockRevenueSession()
+      setTab('stats')
+      return
+    }
+    if (tab === 'revenue') return
+    void openRevenueTab()
+  }
 
   return (
     <div>
@@ -569,18 +646,27 @@ export function DashboardScreen() {
         {([['stats', 'Stats'], ['revenue', 'Revenue']] as const).map(([id, label]) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => void handleTab(id)}
+            disabled={unlocking && id === 'revenue'}
             style={{
-              flex: 1, padding: '9px 0', border: 'none', background: 'none', cursor: 'pointer',
+              flex: 1, padding: '9px 0', border: 'none', background: 'none',
+              cursor: unlocking && id === 'revenue' ? 'wait' : 'pointer',
               fontSize: 14, fontWeight: 700,
               color: tab === id ? 'var(--accent)' : 'var(--text3)',
               borderBottom: `2.5px solid ${tab === id ? 'var(--accent)' : 'transparent'}`,
               transition: 'color 0.15s',
+              opacity: unlocking && id === 'revenue' ? 0.6 : 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
             }}
           >
+            {id === 'revenue' && <ScanFace size={15} strokeWidth={2} aria-hidden />}
             {label}
-            {id === 'revenue' && invoiceCount > 0 && (
-              <span style={{ marginLeft: 6, fontSize: 11, background: 'var(--accent)', color: '#fff', borderRadius: 99, padding: '1px 6px', fontWeight: 800 }}>
+            {unlocking && id === 'revenue' ? '…' : null}
+            {id === 'revenue' && invoiceCount > 0 && !unlocking && (
+              <span style={{ marginLeft: 4, fontSize: 11, background: 'var(--accent)', color: '#fff', borderRadius: 99, padding: '1px 6px', fontWeight: 800 }}>
                 {invoiceCount}
               </span>
             )}
@@ -588,7 +674,15 @@ export function DashboardScreen() {
         ))}
       </div>
 
-      {tab === 'stats' ? <StatsTab /> : <RevenueTab />}
+      {tab === 'stats' ? (
+        <StatsTab />
+      ) : (
+        <RevenueTab
+          figuresVisible={figuresVisible}
+          maskFigure={maskFigure}
+          onToggleFigures={toggleFigures}
+        />
+      )}
     </div>
   )
 }

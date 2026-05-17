@@ -41,6 +41,8 @@ interface AppState {
   setChargePayments: (payments: ChargePayment[]) => void
   addChargeInvoice: (invoice: ChargeInvoice) => void
   addChargePayment: (payment: ChargePayment) => void
+  removeChargeInvoice: (id: string) => void
+  removeChargePayment: (id: string) => void
 
   // ─── Settings ────────────────────────────────────────────────────
   apiKey: string
@@ -162,6 +164,10 @@ export const useStore = create<AppState>()(
         set((s) => ({ chargeInvoices: [invoice, ...s.chargeInvoices] })),
       addChargePayment: (payment) =>
         set((s) => ({ chargePayments: [payment, ...s.chargePayments] })),
+      removeChargeInvoice: (id) =>
+        set((s) => ({ chargeInvoices: s.chargeInvoices.filter((inv) => inv.id !== id) })),
+      removeChargePayment: (id) =>
+        set((s) => ({ chargePayments: s.chargePayments.filter((p) => p.id !== id) })),
 
       // ─── Settings ──────────────────────────────────────────────
       apiKey: ((import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string)) ?? '',

@@ -1,51 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceToDB } from '../../lib/supabase'
+import { money } from '../../lib/invoiceFormUtils'
 import { SavedInvoice } from '../../types/invoice'
-
-type DocKind = 'invoice' | 'memo'
-type PaidBy = 'cash' | 'check' | 'pending'
-type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL' | 'NTRL'
-
-type InvoiceItem = {
-  id: string
-  prefix: SizePrefix
-  size: string
-  pcs: string
-  ct: string
-  pct: string
-  amount: string
-}
+import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
 const COMPANY_ADDRESS = '30 West 47th Street #MEZZ 26 New York-10036.'
 const COMPANY_PHONE = '+1(212)380-3190'
 const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
 const COMPANY_LOGO = '/delta-logo.png'
-
-function money(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-function num(value: string): number {
-  const parsed = parseFloat(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function rowTotal(item: InvoiceItem): number {
-  if (item.amount.trim()) return num(item.amount)
-  return num(item.ct) * num(item.pct)
-}
-
-function uid(): string {
-  return Math.random().toString(36).slice(2, 9)
-}
 
 function escapeHtml(value: string): string {
   return value
@@ -60,20 +25,11 @@ function upper(value: string): string {
   return value.toUpperCase()
 }
 
-function displaySize(item: InvoiceItem): string {
-  const combined = [item.prefix, item.size].filter(Boolean).join(' ')
-  return upper(combined || '-')
-}
-
 function formatUsDate(isoDate: string): string {
   if (!isoDate) return ''
   const parsed = new Date(`${isoDate}T00:00:00`)
   if (Number.isNaN(parsed.getTime())) return isoDate
   return parsed.toLocaleDateString('en-US')
-}
-
-function blankInvoiceItem(): InvoiceItem {
-  return { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }
 }
 
 export function InvoiceModal() {
@@ -84,74 +40,29 @@ export function InvoiceModal() {
   const showToast = useStore((s) => s.showToast)
 
   const contact = contacts.find((c) => c.id === invoiceContactId) || null
-  const [docKind, setDocKind] = useState<DocKind>('invoice')
-  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [paidBy, setPaidBy] = useState<PaidBy>('cash')
-  const [notes, setNotes] = useState('')
   const [isPreview, setIsPreview] = useState(false)
-  const [grandTotalOverride, setGrandTotalOverride] = useState('')
-  const [items, setItems] = useState<InvoiceItem[]>([
-    blankInvoiceItem(),
-  ])
-
-  const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
-  const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal
+  const [draft, setDraft] = useState<SavedInvoice | null>(null)
 
   useEffect(() => {
     if (!invoiceContactId) return
-    setDocKind('invoice')
-    setInvoiceDate(new Date().toISOString().slice(0, 10))
-    setPaidBy('cash')
-    setNotes('')
     setIsPreview(false)
-    setGrandTotalOverride('')
-    setItems([blankInvoiceItem()])
+    setDraft(null)
   }, [invoiceContactId])
 
   if (!contact) return null
 
   const close = () => {
     setIsPreview(false)
+    setDraft(null)
     setInvoiceContactId(null)
-  }
-
-  const updateItem = (id: string, patch: Partial<InvoiceItem>) => {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
-  }
-
-  const removeItem = (id: string) => {
-    setItems((current) => (current.length === 1 ? current : current.filter((item) => item.id !== id)))
-  }
-
-  const addItem = () => {
-    setItems((current) => [...current, blankInvoiceItem()])
   }
 
   const customer = contact.company || contact.name || 'Customer'
   const customerAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
 
   const printInvoice = () => {
-    const record: SavedInvoice = {
-      id: uid(),
-      contactId: contact.id,
-      company: contact.company || contact.name || '',
-      contactName: contact.name || '',
-      state: contact.state || '',
-      city: contact.city || '',
-      date: invoiceDate,
-      docKind,
-      paidBy,
-      items: items.map((item) => ({
-        size: displaySize(item),
-        pcs: num(item.pcs),
-        ct: num(item.ct),
-        pct: num(item.pct),
-        amount: rowTotal(item),
-      })),
-      total: finalTotal,
-      notes,
-      saved_at: new Date().toISOString(),
-    }
+    if (!draft) return
+    const record = draft
     addInvoice(record)
     saveInvoiceToDB(record).catch(() => {
       // silent — invoice is already saved locally
@@ -160,20 +71,19 @@ export function InvoiceModal() {
       // silent — invoice is already saved locally
     })
 
-    const invoiceRows = items
+    const invoiceRows = record.items
       .map((item) => {
-        const lineTotal = rowTotal(item)
         return `<tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(displaySize(item))}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(item.pcs || '0')}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${num(item.ct).toFixed(2)}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(num(item.pct))}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(lineTotal)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(upper(item.size || '-'))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(String(item.pcs || '0'))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.ct.toFixed(2)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(item.pct)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(item.amount)}</td>
         </tr>`
       })
       .join('')
 
-    const docTitle = docKind === 'invoice' ? 'INVOICE' : 'MEMO'
+    const docTitle = record.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
     const html = `<!doctype html>
 <html>
 <head>
@@ -189,8 +99,8 @@ export function InvoiceModal() {
     <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
-  <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(invoiceDate)}</div>
-  ${docKind === 'invoice' ? `<div style="margin-bottom: 14px; color: #374151;">Paid by: ${paidBy.toUpperCase()}</div>` : ''}
+  <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
+  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 14px; color: #374151;">Paid by: ${record.paidBy.toUpperCase()}</div>` : ''}
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
     <div>${escapeHtml(upper(customer))}</div>
@@ -210,9 +120,9 @@ export function InvoiceModal() {
     <tbody>${invoiceRows}</tbody>
   </table>
   <div style="margin-top: 14px; text-align: right; font-size: 18px; font-weight: 700;">
-    Total: ${money(finalTotal)}
+    Total: ${money(record.total)}
   </div>
-  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(notes || ''))}</div>
+  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(record.notes || ''))}</div>
 </body>
 </html>`
 
@@ -295,140 +205,16 @@ export function InvoiceModal() {
             <X size={22} strokeWidth={2} />
           </button>
         </div>
-        {!isPreview ? (
-          <>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>Customer</div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{customer}</div>
-            <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>{customerAddress || 'No address'}</div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>Type</div>
-                <select value={docKind} onChange={(e) => setDocKind(e.target.value as DocKind)} style={inputStyle}>
-                  <option value="invoice">Invoice</option>
-                  <option value="memo">Memo</option>
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={labelStyle}>Date</div>
-                <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} style={inputStyle} />
-              </div>
-            </div>
-
-            {docKind === 'invoice' && (
-              <div style={{ marginTop: 10 }}>
-                <div style={labelStyle}>Paid By</div>
-                <select value={paidBy} onChange={(e) => setPaidBy(e.target.value as PaidBy)} style={inputStyle}>
-                  <option value="cash">Cash</option>
-                  <option value="check">Check</option>
-                  <option value="pending">Payment Pending</option>
-                </select>
-              </div>
-            )}
-
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Lines</div>
-            {items.map((item) => (
-              <div key={item.id} style={{ border: '1px solid var(--border2)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <select
-                    value={item.prefix}
-                    onChange={(e) => updateItem(item.id, { prefix: e.target.value as SizePrefix })}
-                    style={{ ...inputStyle, flex: 1 }}
-                  >
-                    <option value="">Prefix</option>
-                    <option value="DGC">DGC</option>
-                    <option value="STD">STD</option>
-                    <option value="TNB">TNB</option>
-                    <option value="TUB">TUB</option>
-                    <option value="TUC">TUC</option>
-                    <option value="LDW">LDW</option>
-                    <option value="PRCL">PRCL</option>
-                    <option value="NTRL">NTRL</option>
-                  </select>
-                  <input
-                    value={item.size}
-                    onChange={(e) => updateItem(item.id, { size: e.target.value })}
-                    placeholder="Size (e.g. 1.25VS)"
-                    style={{ ...inputStyle, flex: 2 }}
-                  />
-                  <input
-                    value={item.pcs}
-                    onChange={(e) => updateItem(item.id, { pcs: e.target.value.replace(/[^\d]/g, '') })}
-                    placeholder="Pcs"
-                    inputMode="numeric"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <input
-                    value={item.ct}
-                    onChange={(e) => updateItem(item.id, { ct: e.target.value })}
-                    placeholder="Ct"
-                    inputMode="decimal"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <input
-                    value={item.pct}
-                    onChange={(e) => updateItem(item.id, { pct: e.target.value })}
-                    placeholder="P/Ct"
-                    inputMode="decimal"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <input
-                    value={item.amount}
-                    onChange={(e) => updateItem(item.id, { amount: e.target.value })}
-                    placeholder="Amount"
-                    inputMode="decimal"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button type="button" onClick={() => removeItem(item.id)} style={{ ...removeBtnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={14} strokeWidth={2.5} aria-hidden />
-                  </button>
-                </div>
-                <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-                  Line total: {money(rowTotal(item))}
-                </div>
-              </div>
-            ))}
-
-            <button onClick={addItem} style={ghostBtnStyle}>+ Add line</button>
-
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', margin: '14px 0 8px' }}>Notes</div>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Payment terms or notes"
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-
-            <div style={{ marginTop: 12, fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
-              Grand Total: {money(finalTotal)}
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <div style={labelStyle}>Adjust Grand Total (optional)</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  value={grandTotalOverride}
-                  onChange={(e) => setGrandTotalOverride(e.target.value)}
-                  placeholder={subtotal.toFixed(2)}
-                  inputMode="decimal"
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button
-                  onClick={() => setGrandTotalOverride('')}
-                  style={{ ...ghostBtnStyle, flex: '0 0 auto', padding: '10px 12px' }}
-                >
-                  Auto
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button onClick={close} style={ghostBtnStyle}>Cancel</button>
-              <button onClick={() => setIsPreview(true)} style={primaryBtnStyle}>Preview</button>
-            </div>
-          </>
+        {!isPreview || !draft ? (
+          <CreateInvoiceForm
+            contact={contact}
+            submitLabel="Preview"
+            onCancel={close}
+            onSubmit={(inv) => {
+              setDraft(inv)
+              setIsPreview(true)
+            }}
+          />
         ) : (
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
@@ -439,9 +225,9 @@ export function InvoiceModal() {
                 <div>{COMPANY_ADDRESS}</div>
                 <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
               </div>
-              <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
-              <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(invoiceDate)}</div>
-              {docKind === 'invoice' && <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {paidBy.toUpperCase()}</div>}
+              <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
+              <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>
+              {draft.docKind === 'invoice' && <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {draft.paidBy.toUpperCase()}</div>}
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>Bill To</div>
                 <div>{upper(customer)}</div>
@@ -458,48 +244,30 @@ export function InvoiceModal() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <td style={tdStyle}>{displaySize(item)}</td>
-                      <td style={tdStyleRight}>{item.pcs || '0'}</td>
-                      <td style={tdStyleRight}>{num(item.ct).toFixed(2)}</td>
-                      <td style={tdStyleRight}>{money(num(item.pct))}</td>
-                      <td style={tdStyleRight}>{money(rowTotal(item))}</td>
+                  {draft.items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td style={tdStyle}>{upper(item.size || '-')}</td>
+                      <td style={tdStyleRight}>{item.pcs || 0}</td>
+                      <td style={tdStyleRight}>{item.ct.toFixed(2)}</td>
+                      <td style={tdStyleRight}>{money(item.pct)}</td>
+                      <td style={tdStyleRight}>{money(item.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(finalTotal)}</div>
-              {notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(notes)}</div>}
+              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(draft.total)}</div>
+              {draft.notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(draft.notes)}</div>}
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button onClick={() => setIsPreview(false)} style={ghostBtnStyle}>Back</button>
-              <button onClick={printInvoice} style={primaryBtnStyle}>Download PDF / Print</button>
+              <button type="button" onClick={() => setIsPreview(false)} style={ghostBtnStyle}>Back</button>
+              <button type="button" onClick={printInvoice} style={primaryBtnStyle}>Download PDF / Print</button>
             </div>
           </>
         )}
       </div>
     </div>
   )
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: 'var(--text3)',
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  marginBottom: 4,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 10,
-  border: '1.5px solid var(--border)',
-  background: 'var(--bg3)',
-  color: 'var(--text)',
-  fontSize: 14,
 }
 
 const primaryBtnStyle: React.CSSProperties = {
@@ -523,16 +291,6 @@ const ghostBtnStyle: React.CSSProperties = {
   fontWeight: 700,
   fontSize: 14,
   padding: '11px 12px',
-  cursor: 'pointer',
-}
-
-const removeBtnStyle: React.CSSProperties = {
-  width: 36,
-  borderRadius: 10,
-  border: '1.5px solid var(--border)',
-  background: 'var(--bg3)',
-  color: 'var(--text3)',
-  fontWeight: 700,
   cursor: 'pointer',
 }
 

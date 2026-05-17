@@ -517,3 +517,22 @@ export async function createChargePayment(input: {
 
   return payment
 }
+
+export async function deleteChargeInvoice(invoiceId: string): Promise<void> {
+  const sb = ensureSupabaseClient()
+  if (!sb) throw new Error('Supabase is not configured')
+
+  const { error: itemsErr } = await sb.from('charge_invoice_items').delete().eq('invoice_id', invoiceId)
+  if (itemsErr) throw new Error(itemsErr.message)
+
+  const { error: invErr } = await sb.from('charge_invoices').delete().eq('id', invoiceId)
+  if (invErr) throw new Error(invErr.message)
+}
+
+export async function deleteChargePayment(paymentId: string): Promise<void> {
+  const sb = ensureSupabaseClient()
+  if (!sb) throw new Error('Supabase is not configured')
+
+  const { error } = await sb.from('charge_payments').delete().eq('id', paymentId)
+  if (error) throw new Error(error.message)
+}

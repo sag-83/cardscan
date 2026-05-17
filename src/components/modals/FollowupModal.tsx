@@ -3,6 +3,13 @@ import { Calendar, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
+import {
+  clearNotifiedFollowup,
+  enableReminderPush,
+  isReminderPushEnabled,
+  supportsReminderPush,
+  syncFollowupReminders,
+} from '../../lib/reminderNotifications'
 
 function toDatetimeLocal(iso: string): string {
   if (!iso) return ''
@@ -17,6 +24,10 @@ export function FollowupModal() {
   const contacts = useStore((s) => s.contacts)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
+
+  const syncReminders = (nextContacts: typeof contacts) => {
+    void syncFollowupReminders(nextContacts)
+  }
 
   const [dateValue, setDateValue] = useState('')
   const [noteValue, setNoteValue] = useState('')
@@ -42,8 +53,16 @@ export function FollowupModal() {
       const saved = await saveContactToDB({ ...contact, followup_at, followup_note })
       if (!saved) { showToast('Supabase backup failed'); return }
     }
+    clearNotifiedFollowup(contact.id)
     updateContact(contact.id, { followup_at, followup_note })
-    showToast('Follow-up set!')
+    const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at, followup_note } : c))
+    syncReminders(nextContacts)
+    if (supportsReminderPush() && !isReminderPushEnabled() && Notification.permission === 'default') {
+      const result = await enableReminderPush(nextContacts)
+      showToast(result === 'granted' ? 'Follow-up set · notifications on' : 'Follow-up set!')
+    } else {
+      showToast('Follow-up set!')
+    }
     close()
   }
 
@@ -51,7 +70,9 @@ export function FollowupModal() {
     if (!IS_DEMO_MODE) {
       await saveContactToDB({ ...contact, followup_at: '', followup_note: '' })
     }
+    clearNotifiedFollowup(contact.id)
     updateContact(contact.id, { followup_at: '', followup_note: '' })
+    syncReminders(contacts.map((c) => (c.id === contact.id ? { ...c, followup_at: '', followup_note: '' } : c)))
     showToast('Follow-up cleared')
     close()
   }

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import {
+  Bell,
   Check,
   ChevronDown,
   ChevronUp,
@@ -27,6 +28,13 @@ import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts, normalizeContact } from '../../lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
 import { Contact } from '../../types/contact'
+import {
+  enableReminderPush,
+  isReminderPushEnabled,
+  setReminderPushEnabled,
+  supportsReminderPush,
+  syncFollowupReminders,
+} from '../../lib/reminderNotifications'
 
 const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
 
@@ -278,6 +286,59 @@ export function SettingsScreen() {
           <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
             Separate Google Sheet for invoice ledger. Every PDF you generate is logged here automatically.
           </div>
+        </div>
+      </SettingsGroup>
+
+      {/* Reminder push */}
+      <SectionTitle>Reminder Notifications</SectionTitle>
+      <SettingsGroup>
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+            <Bell size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} aria-hidden />
+            <div style={{ flex: 1, fontSize: 15 }}>Push reminders</div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!supportsReminderPush()) {
+                  showToast('Notifications not supported in this browser')
+                  return
+                }
+                if (isReminderPushEnabled() && Notification.permission === 'granted') {
+                  setReminderPushEnabled(false)
+                  showToast('Reminder notifications off')
+                  return
+                }
+                const result = await enableReminderPush(contacts)
+                if (result === 'granted') showToast('Reminder notifications on')
+                else if (result === 'denied') showToast('Allow notifications in iPhone Settings')
+                else showToast('Notifications not supported')
+              }}
+              style={{
+                padding: '5px 13px', borderRadius: 99, cursor: 'pointer',
+                fontSize: 12, fontWeight: 700,
+                border: `1.5px solid ${isReminderPushEnabled() && Notification.permission === 'granted' ? 'var(--accent)' : 'var(--border)'}`,
+                background: isReminderPushEnabled() && Notification.permission === 'granted' ? 'rgba(0,122,255,0.1)' : 'var(--bg3)',
+                color: isReminderPushEnabled() && Notification.permission === 'granted' ? 'var(--accent)' : 'var(--text3)',
+              }}
+            >
+              {isReminderPushEnabled() && typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'On' : 'Enable'}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+            Alerts fire at each follow-up date &amp; time. On iPhone: Share → Add to Home Screen, then allow notifications when prompted.
+          </div>
+          {supportsReminderPush() && Notification.permission === 'granted' && (
+            <button
+              type="button"
+              onClick={() => void syncFollowupReminders(contacts).then(() => showToast('Reminders rescheduled'))}
+              style={{
+                fontSize: 12, fontWeight: 700, color: 'var(--accent)',
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              }}
+            >
+              Reschedule all reminders
+            </button>
+          )}
         </div>
       </SettingsGroup>
 

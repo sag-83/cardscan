@@ -24,19 +24,6 @@ function pct(value: number): string {
   return `${value.toFixed(1)}%`
 }
 
-function invStatusLabel(inv: SavedInvoice): string {
-  if (inv.docKind === 'memo') return 'MEMO'
-  if (inv.paidBy === 'pending') return 'PENDING'
-  if (inv.paidBy === 'cash') return 'CASH'
-  return 'CHECK'
-}
-
-function invStatusColor(inv: SavedInvoice): string {
-  if (inv.docKind === 'memo') return '#8b5cf6'
-  if (inv.paidBy === 'pending') return '#ff9500'
-  return '#34c759'
-}
-
 function sumItems(items: SavedInvoiceItem[]): number {
   return items.reduce((s, it) => s + it.amount, 0)
 }
@@ -111,19 +98,6 @@ function StatsTab() {
 }
 
 // ─── Revenue tab ─────────────────────────────────────────────────────────────
-
-type LedgerRow = {
-  key: string
-  company: string
-  state: string
-  city: string
-  invoiceCount: number
-  totalSold: number
-  totalPaid: number
-  totalPending: number
-  lastDate: string
-  invoices: SavedInvoice[]
-}
 
 function RevenueTab() {
   const invoices = useStore((s) => s.invoices)
@@ -205,34 +179,6 @@ function RevenueTab() {
     })
     return { totalRevenue, thisMonth, pending, count: filteredInvoices.length }
   }, [filteredInvoices, monthStart])
-
-  const ledger = useMemo<LedgerRow[]>(() => {
-    const map = new Map<string, LedgerRow>()
-    filteredInvoices.forEach((inv) => {
-      if (inv.docKind === 'memo') return
-      const key = inv.contactId || inv.company
-      const row = map.get(key) ?? {
-        key,
-        company: inv.company || inv.contactName || 'Unknown',
-        state: inv.state,
-        city: inv.city,
-        invoiceCount: 0,
-        totalSold: 0,
-        totalPaid: 0,
-        totalPending: 0,
-        lastDate: inv.date,
-        invoices: [],
-      }
-      row.invoiceCount += 1
-      row.totalSold += inv.total
-      if (inv.paidBy === 'pending') row.totalPending += inv.total
-      else row.totalPaid += inv.total
-      if (inv.date > row.lastDate) row.lastDate = inv.date
-      row.invoices.push(inv)
-      map.set(key, row)
-    })
-    return Array.from(map.values()).sort((a, b) => b.totalSold - a.totalSold)
-  }, [filteredInvoices])
 
   const byState = useMemo(() => {
     const map = new Map<string, { sold: number; pending: number; count: number }>()
@@ -380,14 +326,6 @@ function RevenueTab() {
           </div>
         </>
       )}
-
-      {/* Ledger by company — expandable */}
-      <Section title="Ledger by Shop" />
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
-        {ledger.map((row) => (
-          <LedgerRowItem key={row.key} row={row} onMarkPaid={handleMarkPaid} />
-        ))}
-      </div>
 
       {/* Revenue by state */}
       {byState.length > 0 && (
@@ -576,107 +514,6 @@ function PendingRow({ inv, isFirst, onMarkPaid }: {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── Individual invoice row in ledger ────────────────────────────────────────
-
-function InvoiceLineItem({ inv, onMarkPaid }: {
-  inv: SavedInvoice
-  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
-}) {
-  const [showPicker, setShowPicker] = useState(false)
-  const isMemo = inv.docKind === 'memo'
-  const isPending = inv.paidBy === 'pending' && !isMemo
-  const label = invStatusLabel(inv)
-  const color = invStatusColor(inv)
-
-  return (
-    <div style={{ padding: '9px 12px', borderTop: '1px solid var(--border2)', background: isMemo ? 'rgba(139,92,246,0.05)' : isPending ? 'rgba(255,149,0,0.05)' : 'transparent' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{inv.date}</div>
-            <div style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: color + '22', color, border: `1px solid ${color}55` }}>
-              {label}
-            </div>
-          </div>
-          {inv.items.length > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-              {inv.items.slice(0, 3).map((it) => it.size).filter(Boolean).join(' · ')}
-              {inv.items.length > 3 ? ` +${inv.items.length - 3}` : ''}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color }}>{money(inv.total)}</div>
-          {isPending && !showPicker && (
-            <button type="button" onClick={() => setShowPicker(true)}
-              style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, border: '1.5px solid #34c759', background: 'transparent', color: '#34c759', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Check size={12} strokeWidth={3} aria-hidden />
-              Paid
-            </button>
-          )}
-          {isPending && showPicker && (
-            <div style={{ display: 'flex', gap: 3 }}>
-              <button onClick={() => { onMarkPaid(inv.id, 'cash'); setShowPicker(false) }}
-                style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 7, border: 'none', background: '#34c759', color: '#fff', cursor: 'pointer' }}>
-                Cash
-              </button>
-              <button onClick={() => { onMarkPaid(inv.id, 'check'); setShowPicker(false) }}
-                style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 7, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}>
-                Check
-              </button>
-              <button type="button" onClick={() => setShowPicker(false)}
-                style={{ fontSize: 10, padding: '3px 6px', borderRadius: 7, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <X size={12} strokeWidth={2.5} aria-hidden />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Ledger row — expandable ─────────────────────────────────────────────────
-
-function LedgerRowItem({ row, onMarkPaid }: {
-  row: LedgerRow
-  onMarkPaid: (id: string, paidBy: 'cash' | 'check') => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const sortedInvoices = useMemo(
-    () => [...row.invoices].filter((i) => i.docKind !== 'memo').sort((a, b) => b.date.localeCompare(a.date)),
-    [row.invoices]
-  )
-
-  return (
-    <div style={{ borderTop: '1px solid var(--border2)' }}>
-      <div
-        onClick={() => setExpanded((v) => !v)}
-        style={{ padding: '12px 14px', cursor: 'pointer', background: expanded ? 'rgba(0,122,255,0.04)' : 'transparent', transition: 'background 0.15s' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3, marginBottom: 2 }}>{row.company}</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-              {[row.city, row.state].filter(Boolean).join(', ')} · {row.invoiceCount} inv · Last: {row.lastDate}
-            </div>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, flexShrink: 0, marginLeft: 8, marginTop: 2 }}>
-            {expanded ? '▲' : '▼'}
-          </div>
-        </div>
-      </div>
-      {expanded && sortedInvoices.length > 0 && (
-        <div style={{ borderTop: '1px solid var(--border2)', background: 'var(--bg3)' }}>
-          {sortedInvoices.map((inv) => (
-            <InvoiceLineItem key={inv.id} inv={inv} onMarkPaid={onMarkPaid} />
-          ))}
-        </div>
-      )}
     </div>
   )
 }

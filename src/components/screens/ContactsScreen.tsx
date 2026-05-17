@@ -1,9 +1,11 @@
 import { useRef, useState, useMemo, type CSSProperties } from 'react'
 import {
   ArrowUpRight,
+  Bell,
   Calendar,
   Check,
   CircleAlert,
+  ChevronDown,
   Clock,
   ContactRound,
   Handshake,
@@ -767,6 +769,9 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
   onOpenContact: (id: string) => void
   onEditFollowup: (id: string) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const total = overdue.length + dueSoon.length
+
   const groups = [
     {
       label: 'Overdue',
@@ -784,10 +789,50 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
     },
   ].filter((g) => g.items.length > 0)
 
+  const headerColor = overdue.length > 0 ? '#ff3b30' : '#ff9500'
+  const headerBg = overdue.length > 0 ? 'rgba(255,59,48,0.08)' : 'rgba(255,149,0,0.08)'
+
   return (
     <div style={{ borderBottom: '1px solid var(--border2)' }}>
-      {groups.map((group) => (
-        <div key={group.label} style={{ background: group.bg, padding: '10px 16px 6px' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '11px 16px',
+          border: 'none',
+          background: headerBg,
+          cursor: 'pointer',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <Bell className="size-4 shrink-0" style={{ color: headerColor }} aria-hidden />
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: headerColor }}>
+              Reminders · {total}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+              {overdue.length > 0 ? `${overdue.length} overdue` : ''}
+              {overdue.length > 0 && dueSoon.length > 0 ? ' · ' : ''}
+              {dueSoon.length > 0 ? `${dueSoon.length} due this week` : ''}
+            </div>
+          </div>
+        </div>
+        <ChevronDown
+          className="size-5 shrink-0"
+          style={{ color: headerColor, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}
+          aria-hidden
+        />
+      </button>
+
+      {expanded && groups.map((group) => (
+        <div key={group.label} style={{ background: group.bg, padding: '8px 16px 6px' }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: group.color, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
             {group.labelIcon}
             {group.label} · {group.items.length}
@@ -807,6 +852,7 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => onOpenContact(c.id)}
                 style={{ fontSize: 11, fontWeight: 700, color: group.color, background: 'none', border: `1px solid ${group.color}`, borderRadius: 99, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >

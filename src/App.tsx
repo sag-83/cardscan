@@ -4,6 +4,11 @@ import { initSupabase, syncContactsFromDB, syncInvoicesFromDB } from './lib/supa
 import { loadImages } from './lib/imageStore'
 import { dedupeContacts } from './lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
+import {
+  registerReminderServiceWorker,
+  startFollowupReminderPolling,
+  syncFollowupReminders,
+} from './lib/reminderNotifications'
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
@@ -113,6 +118,13 @@ export default function App() {
       })
     }
   }, [isUnlocked])
+
+  useEffect(() => {
+    if (!isUnlocked) return
+    void registerReminderServiceWorker()
+    void syncFollowupReminders(contacts)
+    return startFollowupReminderPolling(() => useStore.getState().contacts)
+  }, [isUnlocked, contacts])
 
   useEffect(() => {
     if (!isUnlocked) return

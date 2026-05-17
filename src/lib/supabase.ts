@@ -112,7 +112,35 @@ end $$;
 do $$ begin
   alter publication supabase_realtime add table invoices;
 exception when duplicate_object then null;
-end $$;`
+end $$;
+
+-- 7. Charge accounts (AR) — separate from sales invoices above
+create table if not exists charge_invoices (
+  id text primary key,
+  contact_id text not null,
+  date text not null default '',
+  total numeric not null default 0,
+  note text default '',
+  created_at timestamptz default now()
+);
+create table if not exists charge_invoice_items (
+  id text primary key,
+  invoice_id text not null,
+  item_name text not null default '',
+  quantity numeric not null default 1,
+  unit_price numeric not null default 0
+);
+create table if not exists charge_payments (
+  id text primary key,
+  contact_id text not null,
+  amount numeric not null default 0,
+  date text not null default '',
+  note text default '',
+  created_at timestamptz default now()
+);
+alter table charge_invoices disable row level security;
+alter table charge_invoice_items disable row level security;
+alter table charge_payments disable row level security;`
 
 let client: SupabaseClient | null = null
 let lastError = ''

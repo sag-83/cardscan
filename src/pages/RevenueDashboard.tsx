@@ -6,6 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { SavedInvoice } from '../types/invoice'
+import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
 import { printSavedInvoice } from '../lib/invoicePrint'
 import { TracingBeam } from '@/components/ui/tracing-beam'
 import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
@@ -961,11 +962,12 @@ function ShopLedger({ invoices, onMarkPaid, onDelete }: {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const SECTIONS = ['overview', 'revenue', 'payments', 'geography', 'customers', 'products', 'reminders', 'receivables', 'ledger'] as const
+const SECTIONS = ['overview', 'accounts', 'revenue', 'payments', 'geography', 'customers', 'products', 'reminders', 'receivables', 'ledger'] as const
 type SectionId = typeof SECTIONS[number]
 
 const NAV: { id: SectionId; label: string; icon: IconName }[] = [
   { id: 'overview',    label: 'Overview',      icon: 'home'     },
+  { id: 'accounts',    label: 'Accounts',      icon: 'dollar'   },
   { id: 'revenue',     label: 'Revenue',       icon: 'trending' },
   { id: 'payments',    label: 'Payments',      icon: 'pie'      },
   { id: 'geography',   label: 'By State',      icon: 'map'      },
@@ -976,8 +978,8 @@ const NAV: { id: SectionId; label: string; icon: IconName }[] = [
   { id: 'ledger',      label: 'Shop Ledger',   icon: 'list'     },
 ]
 
-function Sidebar({ active, badge, onNav, onRefresh, onExport, loading }: {
-  active: string; badge: number
+function Sidebar({ active, badge, accountsBadge, onNav, onRefresh, onExport, loading }: {
+  active: string; badge: number; accountsBadge: number
   onNav: (id: SectionId) => void; onRefresh: () => void; onExport: () => void; loading: boolean
 }) {
   return (
@@ -1006,6 +1008,11 @@ function Sidebar({ active, badge, onNav, onRefresh, onExport, loading }: {
               {item.id === 'receivables' && badge > 0 && (
                 <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight shadow-sm shadow-red-500/30">
                   {badge}
+                </span>
+              )}
+              {item.id === 'accounts' && accountsBadge > 0 && (
+                <span className="text-[10px] font-black bg-amber-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight shadow-sm shadow-amber-500/30">
+                  {accountsBadge}
                 </span>
               )}
             </button>
@@ -1043,6 +1050,7 @@ export function RevenueDashboard() {
   const [period,  setPeriod]  = useState<Period>('all')
   const [state,   setState]   = useState('all')
   const [search,  setSearch]  = useState('')
+  const [accountsOutstanding, setAccountsOutstanding] = useState(0)
 
   const active = useScrollSpy([...SECTIONS])
 
@@ -1140,7 +1148,7 @@ export function RevenueDashboard() {
       <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
 
         {/* ── Sidebar ── */}
-        <Sidebar active={active} badge={kpi.pendingCount}
+        <Sidebar active={active} badge={kpi.pendingCount} accountsBadge={accountsOutstanding}
           onNav={navTo} onRefresh={load} onExport={() => exportCSV(invoices)} loading={loading} />
 
         {/* ── Main ── */}
@@ -1210,6 +1218,11 @@ export function RevenueDashboard() {
                 <Icon name="alert" size={16} className="flex-shrink-0" /> {error}
               </div>
             )}
+
+            <section id="accounts" className="scroll-mt-20">
+              <SectionDivider label="Charge Accounts" />
+              <AccountsReceivable onOutstandingCount={setAccountsOutstanding} />
+            </section>
 
             {loading && !allInvoices.length ? (
               /* Loading skeleton */

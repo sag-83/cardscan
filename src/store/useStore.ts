@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
 import { SavedInvoice } from '../types/invoice'
+import type { ChargeInvoice, ChargePayment } from '../types/chargeAccount'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
 
@@ -32,6 +33,14 @@ interface AppState {
   setInvoices: (invoices: SavedInvoice[]) => void
   updateInvoice: (id: string, patch: Partial<SavedInvoice>) => void
   deleteInvoice: (id: string) => void
+
+  // ─── Charge accounts (AR) ─────────────────────────────────────────
+  chargeInvoices: ChargeInvoice[]
+  chargePayments: ChargePayment[]
+  setChargeInvoices: (invoices: ChargeInvoice[]) => void
+  setChargePayments: (payments: ChargePayment[]) => void
+  addChargeInvoice: (invoice: ChargeInvoice) => void
+  addChargePayment: (payment: ChargePayment) => void
 
   // ─── Settings ────────────────────────────────────────────────────
   apiKey: string
@@ -143,6 +152,16 @@ export const useStore = create<AppState>()(
         set((s) => ({ invoices: s.invoices.map((inv) => inv.id === id ? { ...inv, ...patch } : inv) })),
       deleteInvoice: (id) =>
         set((s) => ({ invoices: s.invoices.filter((inv) => inv.id !== id) })),
+
+      // ─── Charge accounts ───────────────────────────────────────
+      chargeInvoices: [],
+      chargePayments: [],
+      setChargeInvoices: (chargeInvoices) => set({ chargeInvoices }),
+      setChargePayments: (chargePayments) => set({ chargePayments }),
+      addChargeInvoice: (invoice) =>
+        set((s) => ({ chargeInvoices: [invoice, ...s.chargeInvoices] })),
+      addChargePayment: (payment) =>
+        set((s) => ({ chargePayments: [payment, ...s.chargePayments] })),
 
       // ─── Settings ──────────────────────────────────────────────
       apiKey: ((import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string)) ?? '',

@@ -9,6 +9,21 @@ export function isStandalonePwa(): boolean {
   )
 }
 
+/** Shown when Enable fails with no popup — iOS already blocked location for this app. */
+export function getLocationBlockedHelp(): string {
+  const host = typeof window !== 'undefined' ? window.location.host : 'this site'
+  return [
+    'No popup = iPhone already blocked location for this app.',
+    '',
+    'Reset (do in order):',
+    `1. Settings → Privacy → Location Services → ON`,
+    `2. Settings → Safari → Location → find ${host} → Ask Next Time`,
+    '3. Delete the CardHolder icon from Home Screen',
+    '4. Open the site in Safari → Share → Add to Home Screen',
+    '5. Open the NEW icon → Settings → Enable → Allow',
+  ].join('\n')
+}
+
 /** iOS uses different location permission for Safari vs Add to Home Screen. */
 export function getLocationPermissionHelp(): string {
   if (isStandalonePwa()) {

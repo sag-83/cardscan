@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Bell,
   Check,
@@ -37,7 +37,6 @@ import {
   enableReminderPush,
   getReminderPushStatus,
   isReminderPushEnabled,
-  isStandalonePwa,
   sendTestReminderNotification,
   setReminderPushEnabled,
   supportsReminderPush,
@@ -45,11 +44,12 @@ import {
 } from '../../lib/reminderNotifications'
 import {
   enableLocationAccess,
-  getLocationAccessStatus,
   isLocationAccessEnabled,
+  queryGeolocationPermission,
   setLocationAccessEnabled,
   supportsLocationAccess,
 } from '../../lib/locationAccess'
+import { getLocationBlockedHelp, isStandalonePwa } from '../../lib/pwa'
 
 const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
 
@@ -456,14 +456,24 @@ export function SettingsScreen() {
 
 function LocationAccessPanel({ showToast }: { showToast: (msg: string, durationMs?: number) => void }) {
   const [enabled, setEnabled] = useState(() => isLocationAccessEnabled())
-  const status = getLocationAccessStatus()
-  const ready = enabled && status.supported
+  const [permission, setPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
+  const needsHomeScreen = !isStandalonePwa() && /iPad|iPhone|iPod/i.test(navigator.userAgent)
+  const blocked = permission === 'denied'
+  const ready = enabled && !blocked
 
-  const statusLine = !status.supported
+  useEffect(() => {
+    void queryGeolocationPermission().then(setPermission)
+  }, [enabled])
+
+  const statusLine = !supportsLocationAccess()
     ? 'Not supported in this browser'
-    : ready
-      ? 'Location allowed — Near Me is ready'
-      : 'Tap Enable, then tap Allow on the popup'
+    : needsHomeScreen
+      ? 'Add to Home Screen first — Enable will not show a popup in Safari'
+      : blocked
+        ? 'Blocked — follow reset steps below (no popup until reset)'
+        : ready
+          ? 'Location allowed — Near Me is ready'
+          : 'Tap Enable — iPhone should ask Allow (once)'
 
   return (
     <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
@@ -484,13 +494,20 @@ function LocationAccessPanel({ showToast }: { showToast: (msg: string, durationM
               return
             }
             const result = await enableLocationAccess()
+            const perm = await queryGeolocationPermission()
+            setPermission(perm)
             if (result === 'granted') {
               setEnabled(true)
               showToast('Location on — use Near Me on Contacts')
+            } else if (result === 'need-standalone') {
+              showToast('Safari → Share → Add to Home Screen, then open that icon and tap Enable', 10_000)
+            } else if (result === 'blocked' || result === 'denied') {
+              showToast(getLocationBlockedHelp(), 16_000)
+            } else if (result === 'timeout') {
+              showToast('Timed out — try outdoors or with Wi‑Fi, then Enable again', 6000)
+            } else {
+              showToast('Location not supported')
             }
-            else if (result === 'denied') showToast('Tap Allow on the popup, or reset in iPhone Settings')
-            else if (result === 'timeout') showToast('Timed out — try again near a window')
-            else showToast('Location not supported')
           }}
           style={{
             padding: '5px 13px',
@@ -507,13 +524,27 @@ function LocationAccessPanel({ showToast }: { showToast: (msg: string, durationM
         </button>
       </div>
 
-      <div style={{ fontSize: 12, color: ready ? 'var(--accent)' : 'var(--text3)', fontWeight: 600 }}>
+      <div style={{ fontSize: 12, color: blocked ? '#ff9500' : ready ? 'var(--accent)' : 'var(--text3)', fontWeight: 600 }}>
         {statusLine}
       </div>
 
-      <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
-        iPhone: open from your Home Screen icon, then tap Enable here. When iOS asks, tap Allow. Works for Near Me on the Contacts tab.
-      </div>
+      {needsHomeScreen && (
+        <div style={{ fontSize: 11, color: '#ff9500', lineHeight: 1.5, fontWeight: 600 }}>
+          Open from your Home Screen icon, not the Safari tab. Location Enable does not show a popup inside Safari.
+        </div>
+      )}
+
+      {blocked && (
+        <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+          {getLocationBlockedHelp()}
+        </div>
+      )}
+
+      {!blocked && !needsHomeScreen && (
+        <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+          Tap Enable once. If iPhone asks, tap Allow. If nothing appears, location was blocked earlier — reset steps show above.
+        </div>
+      )}
     </div>
   )
 }

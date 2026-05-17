@@ -4,8 +4,18 @@ import { isTotpRequired, verifyTotp } from './totp'
 const APP_PASSWORD = ((import.meta.env.VITE_APP_PASSWORD as string) ?? '').trim()
 export const APP_SESSION_KEY = 'cardscan_app_session_v1'
 
+/** True when legacy env password is set and TOTP is not used for app login. */
 export function isAppPasswordRequired(): boolean {
-  return APP_PASSWORD.length > 0
+  return APP_PASSWORD.length > 0 && !isTotpRequired('app')
+}
+
+/** App needs a login screen (Authenticator and/or legacy password). */
+export function isAppLoginRequired(): boolean {
+  return isTotpRequired('app') || isAppPasswordRequired()
+}
+
+export function usesAuthenticatorForAppLogin(): boolean {
+  return isTotpRequired('app')
 }
 
 export function isAppSessionUnlocked(): boolean {
@@ -34,18 +44,23 @@ export function lockAppSession(): void {
 }
 
 /**
- * Full app login: password + Microsoft Authenticator code (if configured) + Face ID.
+ * App login: Microsoft Authenticator + Face ID when TOTP is configured.
+ * Legacy password-only login only if VITE_APP_TOTP_SECRET is not set.
  */
 export async function unlockApp(
   password: string,
   totpCode: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  if (isAppPasswordRequired() && password.trim() !== APP_PASSWORD) {
-    return { ok: false, message: 'Incorrect password.' }
-  }
-
-  if (isTotpRequired('app') && !verifyTotp('app', totpCode)) {
-    return { ok: false, message: 'Invalid authenticator code. Open Microsoft Authenticator and try again.' }
+  if (isTotpRequired('app')) {
+    if (!verifyTotp('app', totpCode)) {
+      return { ok: false, message: 'Invalid authenticator code. Open Microsoft Authenticator and try again.' }
+    }
+  } else if (isAppPasswordRequired()) {
+    if (password.trim() !== APP_PASSWORD) {
+      return { ok: false, message: 'Incorrect password.' }
+    }
+  } else {
+    return { ok: false, message: 'App login is not configured. Add VITE_APP_TOTP_SECRET in Vercel.' }
   }
 
   const faceAvailable = await isPlatformAuthenticatorAvailable()

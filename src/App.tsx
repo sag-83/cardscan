@@ -26,10 +26,9 @@ import { DashboardScreen } from './components/screens/DashboardScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
 import { lockAllRevenueAccess } from './lib/revenueLock'
-import { isAppSessionUnlocked, lockAppSession } from './lib/appAuth'
+import { isAppLoginRequired, isAppSessionUnlocked, lockAppSession } from './lib/appAuth'
 import { AppLoginGate } from './components/AppLoginGate'
 
-const APP_PASSWORD = IS_DEMO_MODE ? '' : ((import.meta.env.VITE_APP_PASSWORD as string) ?? '')
 const INACTIVITY_LOCK_MS = 60_000
 const BUILD_CHECK_INTERVAL_MS = 60_000
 
@@ -46,7 +45,9 @@ export default function App() {
   const sheetsWebhook = useStore((s) => s.sheetsWebhook)
   const setSheetsWebhook = useStore((s) => s.setSheetsWebhook)
   const [isUnlocked, setIsUnlocked] = useState(() => {
-    return !APP_PASSWORD || isAppSessionUnlocked()
+    if (IS_DEMO_MODE) return true
+    if (!isAppLoginRequired()) return false
+    return isAppSessionUnlocked()
   })
   const notifiedBuildRef = useRef('')
 
@@ -93,7 +94,7 @@ export default function App() {
   }, [isUnlocked, showToast])
 
   useEffect(() => {
-    if (!APP_PASSWORD || !isUnlocked) return
+    if (!isAppLoginRequired() || !isUnlocked) return
 
     let lockTimer: ReturnType<typeof setTimeout>
 

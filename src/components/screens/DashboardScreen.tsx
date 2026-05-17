@@ -18,6 +18,11 @@ import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
 import { isInvoiceInCalendarMonth } from '../../lib/invoiceStats'
 import { uid } from '../../lib/utils'
 
+function openWebAnalyticsDashboard() {
+  const base = window.location.origin.replace(/\/$/, '')
+  window.open(`${base}/dashboard`, '_blank', 'noopener,noreferrer')
+}
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function money(value: number): string {
@@ -303,7 +308,7 @@ function RevenueTab({
           </button>
           <button
             type="button"
-            onClick={() => window.open('/dashboard', '_blank')}
+            onClick={openWebAnalyticsDashboard}
             aria-label="Open web dashboard"
             style={{
               flex: 1,
@@ -697,6 +702,37 @@ export function DashboardScreen() {
             )}
           </button>
         ))}
+      </div>
+
+      <div
+        style={{
+          padding: '10px 16px',
+          background: 'var(--bg2)',
+          borderBottom: '1px solid var(--border2)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={openWebAnalyticsDashboard}
+          style={{
+            width: '100%',
+            padding: '11px 14px',
+            borderRadius: 10,
+            border: '1.5px solid var(--accent)',
+            background: 'rgba(10, 132, 255, 0.08)',
+            color: 'var(--accent)',
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <Globe size={18} strokeWidth={2} aria-hidden />
+          Open web analytics dashboard
+        </button>
       </div>
 
       {tab === 'stats' ? (

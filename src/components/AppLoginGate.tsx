@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { ScanFace, Shield } from 'lucide-react'
-import { unlockApp } from '../lib/appAuth'
-import { isTotpRequired } from '../lib/totp'
+import {
+  isAppLoginRequired,
+  isAppPasswordRequired,
+  unlockApp,
+  usesAuthenticatorForAppLogin,
+} from '../lib/appAuth'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
 import { AuthenticatorCodeInput } from './AuthenticatorCodeInput'
 
@@ -14,18 +18,19 @@ export function AppLoginGate({ onUnlock }: Props) {
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const needsTotp = isTotpRequired('app')
+  const usesTotp = usesAuthenticatorForAppLogin()
+  const usesPassword = isAppPasswordRequired()
   const faceReady = hasPlatformCredential('app')
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
 
-    if (!password.trim()) {
+    if (usesPassword && !password.trim()) {
       setError('Enter your access password.')
       return
     }
-    if (needsTotp && totpCode.length !== 6) {
+    if (usesTotp && totpCode.length !== 6) {
       setError('Enter the 6-digit code from Microsoft Authenticator.')
       return
     }
@@ -36,6 +41,24 @@ export function AppLoginGate({ onUnlock }: Props) {
 
     if (result.ok) onUnlock()
     else setError(result.message || 'Could not unlock.')
+  }
+
+  if (!isAppLoginRequired()) {
+    return (
+      <div
+        style={{
+          minHeight: '100dvh',
+          display: 'grid',
+          placeItems: 'center',
+          padding: 20,
+          color: 'var(--text2)',
+          fontSize: 14,
+          textAlign: 'center',
+        }}
+      >
+        Login is not configured. Add <strong>VITE_APP_TOTP_SECRET</strong> in Vercel and redeploy.
+      </div>
+    )
   }
 
   return (
@@ -78,37 +101,41 @@ export function AppLoginGate({ onUnlock }: Props) {
         <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>Private Access</div>
         <h1 style={{ fontSize: 28, lineHeight: 1.1, marginBottom: 10 }}>CardHolder</h1>
         <p style={{ color: 'var(--text3)', fontSize: 14, lineHeight: 1.5, marginBottom: 18 }}>
-          Password{needsTotp ? ', authenticator code' : ''}, and Face ID on this phone.
+          {usesTotp
+            ? 'Microsoft Authenticator code and Face ID on this phone.'
+            : 'Access password and Face ID on this phone.'}
         </p>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>
-            Access password
-          </span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              setError('')
-            }}
-            placeholder="Access password"
-            autoFocus
-            disabled={loading}
-            style={{
-              display: 'block',
-              width: '100%',
-              marginTop: 6,
-              padding: '14px 15px',
-              borderRadius: 12,
-              border: '1.5px solid var(--border)',
-              background: 'var(--bg3)',
-              fontSize: 16,
-            }}
-          />
-        </label>
+        {usesPassword && (
+          <label style={{ display: 'block', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>
+              Access password
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setError('')
+              }}
+              placeholder="Access password"
+              autoFocus={!usesTotp}
+              disabled={loading}
+              style={{
+                display: 'block',
+                width: '100%',
+                marginTop: 6,
+                padding: '14px 15px',
+                borderRadius: 12,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg3)',
+                fontSize: 16,
+              }}
+            />
+          </label>
+        )}
 
-        {needsTotp && (
+        {usesTotp && (
           <AuthenticatorCodeInput
             value={totpCode}
             onChange={(v) => {
@@ -148,8 +175,7 @@ export function AppLoginGate({ onUnlock }: Props) {
         </button>
 
         <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, lineHeight: 1.45 }}>
-          Add this site to your iPhone home screen for Face ID. Use Microsoft Authenticator with the setup secrets from
-          Vercel.
+          Add this site to your iPhone home screen for Face ID.
         </p>
       </form>
     </div>

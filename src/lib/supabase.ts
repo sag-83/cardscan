@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact } from '../types/contact'
 import { SavedInvoice } from '../types/invoice'
+import { normalizePaidBy } from './invoiceNormalize'
 import { contactDedupKey, findDuplicateContact, mergeContact } from './utils'
 
 export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
@@ -531,7 +532,7 @@ export async function syncInvoicesFromDB(): Promise<SavedInvoice[]> {
     city:        row.city,
     date:        row.date,
     docKind:     row.doc_kind,
-    paidBy:      row.paid_by,
+    paidBy:      normalizePaidBy(row.paid_by),
     items:       row.items ?? [],
     total:       Number(row.total),
     notes:       row.notes,

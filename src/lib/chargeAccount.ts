@@ -17,6 +17,9 @@ const IMPORT_PAYMENT_PREFIX = 'imp-sales-pay-'
 /** Balance above this is shown in red on the dashboard. */
 export const LARGE_BALANCE_THRESHOLD = 5_000
 
+/** Sales invoices that could not be matched to a contact appear under this id. */
+export const UNASSIGNED_SALES_CONTACT_ID = '__unassigned_sales__'
+
 export const CHARGE_ACCOUNT_SCHEMA_SQL = `
 -- Charge accounts (AR) — separate from sales \`invoices\` (memos / pending payments)
 create table if not exists charge_invoices (
@@ -115,14 +118,26 @@ export function resolveSalesInvoiceContactId(inv: SavedInvoice, contacts: Contac
   return match?.id ?? ''
 }
 
+function salesInvoicesForContact(
+  contactId: string,
+  salesInvoices: SavedInvoice[],
+  contacts: Contact[],
+): SavedInvoice[] {
+  if (contactId === UNASSIGNED_SALES_CONTACT_ID) {
+    return salesInvoices.filter(
+      (inv) => inv.docKind !== 'memo' && !resolveSalesInvoiceContactId(inv, contacts),
+    )
+  }
+  return salesInvoices.filter(
+    (inv) => inv.docKind !== 'memo' && resolveSalesInvoiceContactId(inv, contacts) === contactId,
+  )
+}
+
 export function salesTotalsForContact(contactId: string, salesInvoices: SavedInvoice[], contacts: Contact[]) {
   let invoiceTotal = 0
   let paymentTotal = 0
   let pendingCount = 0
-  for (const inv of salesInvoices) {
-    const cid = resolveSalesInvoiceContactId(inv, contacts)
-    if (cid !== contactId) continue
-    if (inv.docKind === 'memo') continue
+  for (const inv of salesInvoicesForContact(contactId, salesInvoices, contacts)) {
     invoiceTotal += Number(inv.total)
     if (inv.paidBy === 'pending') pendingCount += 1
     else paymentTotal += Number(inv.total)
@@ -168,6 +183,7 @@ export function buildContactBalanceRows(
   const contactMap = new Map(contacts.map((c) => [c.id, c]))
 
   for (const inv of salesInvoices) {
+    if (inv.docKind === 'memo') continue
     const cid = resolveSalesInvoiceContactId(inv, contacts)
     if (cid && !contactMap.has(cid)) {
       contactMap.set(cid, {
@@ -178,6 +194,19 @@ export function buildContactBalanceRows(
         state: inv.state,
       } as Contact)
     }
+  }
+
+  const hasUnassigned = salesInvoices.some(
+    (inv) => inv.docKind !== 'memo' && !resolveSalesInvoiceContactId(inv, contacts),
+  )
+  if (hasUnassigned && !contactMap.has(UNASSIGNED_SALES_CONTACT_ID)) {
+    contactMap.set(UNASSIGNED_SALES_CONTACT_ID, {
+      id: UNASSIGNED_SALES_CONTACT_ID,
+      name: '',
+      company: 'Unlinked invoices',
+      city: '',
+      state: '',
+    } as Contact)
   }
 
   return Array.from(contactMap.values())
@@ -260,8 +289,7 @@ export function getMergedInvoicesForContact(
       })),
     }))
 
-  const sales: LedgerInvoiceEntry[] = salesInvoices
-    .filter((inv) => resolveSalesInvoiceContactId(inv, contacts) === contactId)
+  const sales: LedgerInvoiceEntry[] = salesInvoicesForContact(contactId, salesInvoices, contacts)
     .map((inv) => ({
       id: inv.id,
       source: 'sales' as const,
@@ -291,9 +319,8 @@ export function getMergedPaymentsForContact(
       note: p.note,
     }))
 
-  const sales: LedgerPaymentEntry[] = salesInvoices
-    .filter((inv) => resolveSalesInvoiceContactId(inv, contacts) === contactId)
-    .filter((inv) => inv.docKind !== 'memo' && inv.paidBy !== 'pending')
+  const sales: LedgerPaymentEntry[] = salesInvoicesForContact(contactId, salesInvoices, contacts)
+    .filter((inv) => inv.paidBy !== 'pending')
     .map((inv) => ({
       id: `sales-pay-${inv.id}`,
       source: 'sales' as const,

@@ -17,7 +17,10 @@ import {
 } from '../lib/invoiceStats'
 import { SavedInvoice } from '../types/invoice'
 import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
+import { CreateInvoiceForm } from '../components/invoice/CreateInvoiceForm'
 import { printSavedInvoice } from '../lib/invoicePrint'
+import { contactStubFromInvoice } from '../lib/invoiceFormUtils'
+import { saveInvoiceSynced } from '../lib/invoiceSync'
 import { TracingBeam } from '@/components/ui/tracing-beam'
 import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
 import JobListingComponent, { type Job } from '@/components/ui/joblisting-component'
@@ -849,8 +852,11 @@ function PendingTable({ invoices, onMarkPaid }: {
 
 // ─── Invoice detail row ───────────────────────────────────────────────────────
 
-function InvoiceRow({ inv, onMarkPaid, onDelete }: {
-  inv: SavedInvoice; onMarkPaid?: (id: string, b: 'cash' | 'check') => void; onDelete?: (id: string) => void
+function InvoiceRow({ inv, onMarkPaid, onDelete, onEdit }: {
+  inv: SavedInvoice
+  onMarkPaid?: (id: string, b: 'cash' | 'check') => void
+  onDelete?: (id: string) => void
+  onEdit?: (inv: SavedInvoice) => void
 }) {
   const [show, setShow] = useState(false)
   const isMemo    = inv.docKind === 'memo'
@@ -867,6 +873,15 @@ function InvoiceRow({ inv, onMarkPaid, onDelete }: {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-black tabular-nums" style={{ color: col }}>{money(inv.total, 2)}</span>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(inv)}
+              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors duration-150"
+            >
+              <Icon name="file" size={11} /> Edit
+            </button>
+          )}
           <button onClick={() => printSavedInvoice(inv)} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150">
             <Icon name="print" size={11} /> Print
           </button>
@@ -916,10 +931,11 @@ function InvoiceRow({ inv, onMarkPaid, onDelete }: {
 
 type ShopRow = { key: string; company: string; state: string; city: string; n: number; sold: number; paid: number; pending: number; last: string; invoices: SavedInvoice[] }
 
-function ShopLedger({ invoices, onMarkPaid, onDelete }: {
+function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
   invoices: SavedInvoice[]
   onMarkPaid: (id: string, b: 'cash' | 'check') => void
   onDelete: (id: string) => void
+  onEdit: (inv: SavedInvoice) => void
 }) {
   const [exp, setExp]   = useState<Set<string>>(new Set())
   const [q,   setQ]     = useState('')
@@ -986,7 +1002,9 @@ function ShopLedger({ invoices, onMarkPaid, onDelete }: {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600">{label}</span>
                     <span className="text-xs font-bold tabular-nums" style={{ color: C.indigo }}>{money(total)} · {mi.length} inv</span>
                   </div>
-                  {mi.map((inv) => <InvoiceRow key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} />)}
+                  {mi.map((inv) => (
+                    <InvoiceRow key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} onEdit={onEdit} />
+                  ))}
                 </div>
               ))}
             </div>
@@ -1089,6 +1107,8 @@ export function RevenueDashboard() {
   const [state,   setState]   = useState('all')
   const [search,  setSearch]  = useState('')
   const [accountsOutstanding, setAccountsOutstanding] = useState(0)
+  const [editingInvoice, setEditingInvoice] = useState<SavedInvoice | null>(null)
+  const [invoiceSaving, setInvoiceSaving] = useState(false)
   const { visible: figuresVisible, toggle: toggleFigures } = useSensitiveFigures()
 
   const active = useScrollSpy([...SECTIONS])
@@ -1110,6 +1130,33 @@ export function RevenueDashboard() {
   const deleteMemo = async (id: string) => {
     setAll((p) => p.filter((i) => i.id !== id))
     await createClient(SUPABASE_URL, SUPABASE_KEY).from('invoices').delete().eq('id', id)
+  }
+
+  const upsertInvoiceInState = (inv: SavedInvoice) => {
+    setAll((prev) => {
+      const idx = prev.findIndex((i) => i.id === inv.id)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = inv
+        return next
+      }
+      return [inv, ...prev]
+    })
+  }
+
+  const handleSaveEditedInvoice = async (inv: SavedInvoice) => {
+    setInvoiceSaving(true)
+    setError('')
+    try {
+      const ok = await saveInvoiceSynced(inv)
+      if (!ok) throw new Error('Could not save invoice to database.')
+      upsertInvoiceInState(inv)
+      setEditingInvoice(null)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setInvoiceSaving(false)
+    }
   }
 
   const navTo = (id: SectionId) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1264,7 +1311,7 @@ export function RevenueDashboard() {
                 period={period}
                 salesInvoices={allInvoices}
                 onOutstandingCount={setAccountsOutstanding}
-                onSalesInvoiceSaved={(inv) => setAll((prev) => [inv, ...prev])}
+                onSalesInvoiceSaved={upsertInvoiceInState}
                 onSalesInvoiceDeleted={(id) => setAll((prev) => prev.filter((i) => i.id !== id))}
               />
             </section>
@@ -1396,7 +1443,12 @@ export function RevenueDashboard() {
                 {/* Shop ledger */}
                 <section id="ledger" className="scroll-mt-20 pb-20">
                   <SectionDivider label="Shop Ledger" />
-                  <ShopLedger invoices={invoices} onMarkPaid={markPaid} onDelete={deleteMemo} />
+                  <ShopLedger
+                    invoices={invoices}
+                    onMarkPaid={markPaid}
+                    onDelete={deleteMemo}
+                    onEdit={setEditingInvoice}
+                  />
                 </section>
               </>
             )}
@@ -1404,6 +1456,34 @@ export function RevenueDashboard() {
           </main>
         </div>
       </div>
+
+      {editingInvoice && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Edit invoice</h2>
+              <button
+                type="button"
+                onClick={() => setEditingInvoice(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Close"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <CreateInvoiceForm
+                contact={contactStubFromInvoice(editingInvoice)}
+                initialInvoice={editingInvoice}
+                saving={invoiceSaving}
+                submitLabel="Save changes"
+                onCancel={() => setEditingInvoice(null)}
+                onSubmit={(inv) => void handleSaveEditedInvoice(inv)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </ThemeCtx.Provider>
   )
 }

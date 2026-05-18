@@ -5,9 +5,12 @@ import type { SavedInvoice } from '../../types/invoice'
 import {
   blankInvoiceItem,
   buildSavedInvoice,
+  buildSavedInvoiceUpdate,
+  grandTotalOverrideFromInvoice,
   money,
   num,
   rowTotal,
+  savedItemToFormItem,
   SIZE_PREFIX_OPTIONS,
   type DocKind,
   type InvoiceFormItem,
@@ -21,34 +24,68 @@ const labelClass = dashboardLabelClass.replace('block ', '') + ' !mt-0'
 
 type Props = {
   contact: Contact
+  initialInvoice?: SavedInvoice
   saving?: boolean
   submitLabel?: string
   onCancel: () => void
   onSubmit: (invoice: SavedInvoice) => void
 }
 
+function formStateFromInvoice(invoice: SavedInvoice) {
+  return {
+    docKind: invoice.docKind,
+    invoiceDate: invoice.date,
+    paidBy: invoice.paidBy,
+    notes: invoice.notes || '',
+    grandTotalOverride: grandTotalOverrideFromInvoice(invoice),
+    items:
+      invoice.items?.length > 0
+        ? invoice.items.map(savedItemToFormItem)
+        : [blankInvoiceItem()],
+  }
+}
+
 export function CreateInvoiceForm({
   contact,
+  initialInvoice,
   saving = false,
   submitLabel = 'Save invoice',
   onCancel,
   onSubmit,
 }: Props) {
-  const [docKind, setDocKind] = useState<DocKind>('invoice')
-  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [paidBy, setPaidBy] = useState<PaidBy>('pending')
-  const [notes, setNotes] = useState('')
-  const [grandTotalOverride, setGrandTotalOverride] = useState('')
-  const [items, setItems] = useState<InvoiceFormItem[]>([blankInvoiceItem()])
+  const [docKind, setDocKind] = useState<DocKind>(() => initialInvoice?.docKind ?? 'invoice')
+  const [invoiceDate, setInvoiceDate] = useState(
+    () => initialInvoice?.date ?? new Date().toISOString().slice(0, 10),
+  )
+  const [paidBy, setPaidBy] = useState<PaidBy>(() => initialInvoice?.paidBy ?? 'pending')
+  const [notes, setNotes] = useState(() => initialInvoice?.notes ?? '')
+  const [grandTotalOverride, setGrandTotalOverride] = useState(
+    () => (initialInvoice ? grandTotalOverrideFromInvoice(initialInvoice) : ''),
+  )
+  const [items, setItems] = useState<InvoiceFormItem[]>(() =>
+    initialInvoice?.items?.length
+      ? initialInvoice.items.map(savedItemToFormItem)
+      : [blankInvoiceItem()],
+  )
 
   useEffect(() => {
+    if (initialInvoice) {
+      const s = formStateFromInvoice(initialInvoice)
+      setDocKind(s.docKind)
+      setInvoiceDate(s.invoiceDate)
+      setPaidBy(s.paidBy)
+      setNotes(s.notes)
+      setGrandTotalOverride(s.grandTotalOverride)
+      setItems(s.items)
+      return
+    }
     setDocKind('invoice')
     setInvoiceDate(new Date().toISOString().slice(0, 10))
     setPaidBy('pending')
     setNotes('')
     setGrandTotalOverride('')
     setItems([blankInvoiceItem()])
-  }, [contact.id])
+  }, [contact.id, initialInvoice?.id])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
   const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal
@@ -66,14 +103,10 @@ export function CreateInvoiceForm({
 
   const handleSubmit = () => {
     if (finalTotal <= 0) return
-    const invoice = buildSavedInvoice(contact, {
-      docKind,
-      invoiceDate,
-      paidBy,
-      notes,
-      items,
-      grandTotalOverride,
-    })
+    const input = { docKind, invoiceDate, paidBy, notes, items, grandTotalOverride }
+    const invoice = initialInvoice
+      ? buildSavedInvoiceUpdate(contact, initialInvoice, input)
+      : buildSavedInvoice(contact, input)
     onSubmit(invoice)
   }
 

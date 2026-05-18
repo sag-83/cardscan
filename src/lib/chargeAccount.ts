@@ -518,6 +518,69 @@ export async function createChargePayment(input: {
   return payment
 }
 
+export async function updateChargeInvoice(
+  invoiceId: string,
+  input: {
+    contact_id: string
+    date: string
+    note: string
+    items: NewChargeLineItem[]
+  },
+): Promise<ChargeInvoice> {
+  const sb = ensureSupabaseClient()
+  if (!sb) throw new Error('Supabase is not configured')
+
+  const total = sumLineItems(input.items)
+  const date = input.date || new Date().toISOString().slice(0, 10)
+
+  const { error: invErr } = await sb
+    .from('charge_invoices')
+    .update({
+      contact_id: input.contact_id,
+      date,
+      total,
+      note: input.note ?? '',
+    })
+    .eq('id', invoiceId)
+  if (invErr) throw new Error(invErr.message)
+
+  const { error: delErr } = await sb.from('charge_invoice_items').delete().eq('invoice_id', invoiceId)
+  if (delErr) throw new Error(delErr.message)
+
+  const items: ChargeInvoiceItem[] = input.items
+    .filter((it) => it.item_name.trim())
+    .map((it) => ({
+      id: uid(),
+      invoice_id: invoiceId,
+      item_name: it.item_name.trim(),
+      quantity: Number(it.quantity) || 0,
+      unit_price: Number(it.unit_price) || 0,
+    }))
+
+  if (items.length) {
+    const { error: itemsErr } = await sb.from('charge_invoice_items').insert(
+      items.map((it) => ({
+        id: it.id,
+        invoice_id: it.invoice_id,
+        item_name: it.item_name,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+      })),
+    )
+    if (itemsErr) throw new Error(itemsErr.message)
+  }
+
+  return {
+    id: invoiceId,
+    contact_id: input.contact_id,
+    date,
+    total,
+    note: input.note ?? '',
+    created_at: new Date().toISOString(),
+    items,
+  }
+}
+
 export async function deleteChargeInvoice(invoiceId: string): Promise<void> {
   const sb = ensureSupabaseClient()
   if (!sb) throw new Error('Supabase is not configured')

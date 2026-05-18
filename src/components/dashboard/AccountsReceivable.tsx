@@ -3,12 +3,14 @@ import {
   ChevronDown,
   ChevronLeft,
   Loader2,
+  Pencil,
   Receipt,
   Trash2,
   Wallet,
   X,
 } from 'lucide-react'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
+import { EditChargeInvoiceForm } from '../invoice/EditChargeInvoiceForm'
 import { useStore } from '../../store/useStore'
 import { syncContactsFromDB } from '../../lib/supabase'
 import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
@@ -21,13 +23,14 @@ import {
   deleteChargeInvoice,
   deleteChargePayment,
   fetchChargeAccountData,
+  updateChargeInvoice,
   filterBalanceRows,
   getMergedInvoicesForContact,
   getMergedPaymentsForContact,
   LARGE_BALANCE_THRESHOLD,
   type AccountListFilter,
 } from '../../lib/chargeAccount'
-import type { ContactBalanceRow, LedgerInvoiceEntry } from '../../types/chargeAccount'
+import type { ChargeInvoice, ContactBalanceRow, LedgerInvoiceEntry } from '../../types/chargeAccount'
 import type { Contact } from '../../types/contact'
 import type { SavedInvoice } from '../../types/invoice'
 import { getPeriodLabel, getPeriodStart, isWithinPeriod, type DashboardPeriod } from '../../lib/invoiceStats'
@@ -87,6 +90,8 @@ export function AccountsReceivable({
   const [expandedInv, setExpandedInv] = useState<Set<string>>(() => new Set())
 
   const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const [editingSales, setEditingSales] = useState<SavedInvoice | null>(null)
+  const [editingCharge, setEditingCharge] = useState<ChargeInvoice | null>(null)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -193,6 +198,55 @@ export function AccountsReceivable({
         : [],
     [selectedId, periodChargePayments, periodSales, contacts],
   )
+
+  const handleUpdateSalesInvoice = async (invoice: SavedInvoice) => {
+    setSaving(true)
+    setError('')
+    try {
+      const ok = await saveInvoiceSynced(invoice)
+      if (!ok) throw new Error('Could not update invoice in database.')
+      onSalesInvoiceSaved?.(invoice)
+      setEditingSales(null)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUpdateChargeInvoice = async (payload: {
+    date: string
+    note: string
+    items: { item_name: string; quantity: number; unit_price: number }[]
+  }) => {
+    if (!editingCharge || !selectedId) return
+    setSaving(true)
+    setError('')
+    try {
+      const updated = await updateChargeInvoice(editingCharge.id, {
+        contact_id: selectedId,
+        date: payload.date,
+        note: payload.note,
+        items: payload.items,
+      })
+      setChargeInvoices(chargeInvoices.map((i) => (i.id === updated.id ? updated : i)))
+      setEditingCharge(null)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openEditInvoice = (inv: LedgerInvoiceEntry) => {
+    if (inv.source === 'sales') {
+      const full = salesInvoices.find((i) => i.id === inv.id)
+      if (full) setEditingSales(full)
+      return
+    }
+    const full = chargeInvoices.find((i) => i.id === inv.id)
+    if (full) setEditingCharge(full)
+  }
 
   const handleCreateInvoice = async (invoice: SavedInvoice) => {
     if (!selectedId) return
@@ -334,6 +388,7 @@ export function AccountsReceivable({
           onBack={() => setSelectedId(null)}
           onAddInvoice={() => setInvoiceOpen(true)}
           onLogPayment={() => setPaymentOpen(true)}
+          onEditInvoice={openEditInvoice}
           onDeleteInvoice={(inv) => void handleDeleteInvoice(inv)}
           onDeletePayment={(id, source) => void handleDeletePayment(id, source)}
         />
@@ -354,6 +409,37 @@ export function AccountsReceivable({
             submitLabel="Save invoice"
             onCancel={() => setInvoiceOpen(false)}
             onSubmit={(inv) => void handleCreateInvoice(inv)}
+          />
+        </ModalShell>
+      )}
+
+      {editingSales && selectedContact && (
+        <ModalShell
+          title={`Edit sales invoice · ${contactLabel(selectedContact)}`}
+          onClose={() => setEditingSales(null)}
+        >
+          <CreateInvoiceForm
+            contact={selectedContact}
+            initialInvoice={editingSales}
+            saving={saving}
+            submitLabel="Save changes"
+            onCancel={() => setEditingSales(null)}
+            onSubmit={(inv) => void handleUpdateSalesInvoice(inv)}
+          />
+        </ModalShell>
+      )}
+
+      {editingCharge && selectedContact && (
+        <ModalShell
+          title={`Edit charge invoice · ${contactLabel(selectedContact)}`}
+          onClose={() => setEditingCharge(null)}
+        >
+          <EditChargeInvoiceForm
+            contact={selectedContact}
+            invoice={editingCharge}
+            saving={saving}
+            onCancel={() => setEditingCharge(null)}
+            onSubmit={(payload) => void handleUpdateChargeInvoice(payload)}
           />
         </ModalShell>
       )}
@@ -579,6 +665,7 @@ function ContactLedger({
   onBack,
   onAddInvoice,
   onLogPayment,
+  onEditInvoice,
   onDeleteInvoice,
   onDeletePayment,
 }: {
@@ -592,6 +679,7 @@ function ContactLedger({
   onBack: () => void
   onAddInvoice: () => void
   onLogPayment: () => void
+  onEditInvoice: (inv: LedgerInvoiceEntry) => void
   onDeleteInvoice: (inv: LedgerInvoiceEntry) => void
   onDeletePayment: (id: string, source: 'charge' | 'sales') => void
 }) {
@@ -701,6 +789,14 @@ function ContactLedger({
                     <span className="text-sm font-extrabold tabular-nums text-indigo-600 dark:text-indigo-400">
                       {money(inv.total)}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEditInvoice(inv)}
+                    className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
+                    aria-label="Edit invoice"
+                  >
+                    <Pencil className="size-4" aria-hidden />
                   </button>
                   <button
                     type="button"

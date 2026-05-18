@@ -7,6 +7,8 @@ import { applyDocumentTheme, readPersistedTheme } from './lib/theme'
 
 applyDocumentTheme(readPersistedTheme())
 
+document.getElementById('boot-hint')?.remove()
+
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
   static getDerivedStateFromError(error: Error) { return { error } }

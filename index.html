@@ -16,7 +16,23 @@
     <title>CardHolder</title>
   </head>
   <body>
+    <p id="boot-hint" style="margin:0;padding:24px;text-align:center;font-family:system-ui,sans-serif;font-size:14px;color:#8e8e93;">
+      Loading CardHolder…
+    </p>
     <div id="root"></div>
+    <script>
+      window.setTimeout(function () {
+        var root = document.getElementById('root')
+        var hint = document.getElementById('boot-hint')
+        if (!hint || !root || root.childElementCount > 0) {
+          if (hint) hint.remove()
+          return
+        }
+        hint.innerHTML =
+          'CardHolder could not load (often a cached update). ' +
+          '<a href="/?v=' + Date.now() + '" style="color:#007aff">Tap here to refresh</a>'
+      }, 10000)
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

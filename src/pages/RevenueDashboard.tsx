@@ -1246,24 +1246,19 @@ export function RevenueDashboard() {
     }
   }, [invoices, allInvoices, period])
 
-  if (!unlocked) return (
-    <ThemeCtx.Provider value={dark}>
-      <PasswordGate onUnlock={() => setUnlocked(true)} />
-    </ThemeCtx.Provider>
+  const showRemindersNav = reminderJobs.length > 0
+  const navOptions = useMemo(
+    () => NAV.filter((n) => n.id !== 'reminders' || showRemindersNav),
+    [showRemindersNav],
   )
 
-  const PERIODS: [Period, string][] = [['7d','7D'],['30d','30D'],['90d','90D'],['6m','6M'],['1y','1Y'],['all','All']]
-  const hasFilter = search || state !== 'all'
-  const viewMeta = VIEW_META[activeView]
-  const showGlobalFilters = viewMeta.showFilters
-  const showRemindersNav = reminderJobs.length > 0
-  const navOptions = NAV.filter((n) => n.id !== 'reminders' || showRemindersNav)
-
   useEffect(() => {
+    if (!unlocked) return
     if (activeView === 'reminders' && !showRemindersNav) setActiveView('overview')
-  }, [activeView, showRemindersNav])
+  }, [unlocked, activeView, showRemindersNav])
 
   useEffect(() => {
+    if (!unlocked) return
     const canSwipe = window.matchMedia('(max-width: 1023px)').matches
     if (!canSwipe) return
 
@@ -1288,7 +1283,18 @@ export function RevenueDashboard() {
       document.removeEventListener('touchstart', onStart)
       document.removeEventListener('touchend', onEnd)
     }
-  }, [activeView, navOptions])
+  }, [unlocked, activeView, navOptions])
+
+  if (!unlocked) return (
+    <ThemeCtx.Provider value={dark}>
+      <PasswordGate onUnlock={() => setUnlocked(true)} />
+    </ThemeCtx.Provider>
+  )
+
+  const PERIODS: [Period, string][] = [['7d','7D'],['30d','30D'],['90d','90D'],['6m','6M'],['1y','1Y'],['all','All']]
+  const hasFilter = search || state !== 'all'
+  const viewMeta = VIEW_META[activeView]
+  const showGlobalFilters = viewMeta.showFilters
 
   return (
     <ThemeCtx.Provider value={dark}>

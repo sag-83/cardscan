@@ -1,4 +1,22 @@
 {
+  "headers": [
+    {
+      "source": "/",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/dashboard",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/dashboard.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }
+  ],
   "rewrites": [
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/((?!api|dashboard\\.html|assets|sw\\.js|manifest\\.webmanifest|delta-logo\\.png|amit-brochure\\.pdf|amit-brochure\\.png|my-contact-qr\\.png).*)", "destination": "/index.html" }

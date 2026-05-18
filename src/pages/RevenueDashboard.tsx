@@ -21,7 +21,6 @@ import { CreateInvoiceForm } from '../components/invoice/CreateInvoiceForm'
 import { printSavedInvoice } from '../lib/invoicePrint'
 import { contactStubFromInvoice } from '../lib/invoiceFormUtils'
 import { saveInvoiceSynced } from '../lib/invoiceSync'
-import { TracingBeam } from '@/components/ui/tracing-beam'
 import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
 import JobListingComponent, { type Job } from '@/components/ui/joblisting-component'
 
@@ -104,21 +103,6 @@ function useCountUp(target: number, duration = 900): number {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
   }, [target, duration])
   return val
-}
-
-function useScrollSpy(ids: string[], offset = 130): string {
-  const [active, setActive] = useState(ids[0] ?? '')
-  useEffect(() => {
-    const h = () => {
-      const v = ids
-        .map((id) => ({ id, top: document.getElementById(id)?.getBoundingClientRect().top ?? Infinity }))
-        .filter((x) => x.top <= offset)
-      if (v.length) setActive(v[v.length - 1].id)
-    }
-    window.addEventListener('scroll', h, { passive: true })
-    return () => window.removeEventListener('scroll', h)
-  }, [ids, offset])
-  return active
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1034,12 +1018,43 @@ const NAV: { id: SectionId; label: string; icon: IconName }[] = [
   { id: 'ledger',      label: 'Shop Ledger',   icon: 'list'     },
 ]
 
-function Sidebar({ active, badge, accountsBadge, onNav, onRefresh, onExport, loading }: {
-  active: string; badge: number; accountsBadge: number
+const VIEW_META: Record<SectionId, { title: string; description: string; showFilters: boolean }> = {
+  overview:    { title: 'Overview',        description: 'Key metrics and collection snapshot for the selected period.', showFilters: true },
+  accounts:    { title: 'Charge Accounts', description: 'Open charge balances, shop ledgers, and charge invoices.', showFilters: false },
+  revenue:     { title: 'Revenue Trend',   description: 'Monthly revenue and invoice volume over time.', showFilters: true },
+  payments:    { title: 'Payments',        description: 'Payment mix and collection performance.', showFilters: true },
+  geography:   { title: 'By State',        description: 'Revenue distribution across states.', showFilters: true },
+  customers:   { title: 'Customers',       description: 'Top shops and customer concentration.', showFilters: true },
+  products:    { title: 'Products',        description: 'Product mix and recent invoice activity.', showFilters: true },
+  reminders:   { title: 'Reminders',       description: 'Outstanding balances that need follow-up.', showFilters: true },
+  receivables: { title: 'Receivables',     description: 'Pending invoices and mark-as-paid actions.', showFilters: true },
+  ledger:      { title: 'Shop Ledger',     description: 'Full invoice history grouped by shop.', showFilters: true },
+}
+
+const NAV_GROUPS: { title: string; ids: SectionId[] }[] = [
+  { title: 'Summary',    ids: ['overview'] },
+  { title: 'Operations', ids: ['accounts', 'receivables', 'ledger'] },
+  { title: 'Analytics',  ids: ['revenue', 'payments', 'geography', 'customers', 'products'] },
+  { title: 'Follow-up',  ids: ['reminders'] },
+]
+
+function PageIntro({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-6">
+      <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">{title}</h2>
+      <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">{description}</p>
+    </div>
+  )
+}
+
+function Sidebar({ active, badge, accountsBadge, showReminders, onNav, onRefresh, onExport, loading }: {
+  active: SectionId; badge: number; accountsBadge: number; showReminders: boolean
   onNav: (id: SectionId) => void; onRefresh: () => void; onExport: () => void; loading: boolean
 }) {
+  const groups = NAV_GROUPS.filter((g) => g.title !== 'Follow-up' || showReminders)
+
   return (
-    <aside className="fixed inset-y-0 left-0 w-[240px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-50 overflow-y-auto">
+    <aside className="fixed inset-y-0 left-0 z-50 hidden w-[240px] flex-col overflow-y-auto border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 lg:flex">
       {/* Logo */}
       <div className="px-5 py-6 border-b border-slate-100 dark:border-slate-800">
         <img src="/delta-logo.png" alt="Delta Diamonds" className="h-7 object-contain dark:brightness-0 dark:invert dark:opacity-80" />
@@ -1047,33 +1062,42 @@ function Sidebar({ active, badge, accountsBadge, onNav, onRefresh, onExport, loa
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV.map((item) => {
-          const isActive = active === item.id
-          return (
-            <button key={item.id} onClick={() => onNav(item.id)}
-              className={cn(
-                'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm transition-all duration-150 group relative',
-                isActive
-                  ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'
-              )}>
-              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-indigo-500 dark:bg-indigo-400" />}
-              <Icon name={item.icon} size={16} className="flex-shrink-0 transition-colors duration-150" />
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.id === 'receivables' && badge > 0 && (
-                <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight shadow-sm shadow-red-500/30">
-                  {badge}
-                </span>
-              )}
-              {item.id === 'accounts' && accountsBadge > 0 && (
-                <span className="text-[10px] font-black bg-amber-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight shadow-sm shadow-amber-500/30">
-                  {accountsBadge}
-                </span>
-              )}
-            </button>
-          )
-        })}
+      <nav className="flex-1 space-y-5 px-3 py-4">
+        {groups.map((group) => (
+          <div key={group.title}>
+            <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-600">
+              {group.title}
+            </p>
+            <div className="space-y-0.5">
+              {NAV.filter((item) => group.ids.includes(item.id)).map((item) => {
+                const isActive = active === item.id
+                return (
+                  <button key={item.id} onClick={() => onNav(item.id)}
+                    className={cn(
+                      'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-150',
+                      isActive
+                        ? 'bg-indigo-50 font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                    )}>
+                    {isActive && <div className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-indigo-500 dark:bg-indigo-400" />}
+                    <Icon name={item.icon} size={16} className="flex-shrink-0 transition-colors duration-150" />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.id === 'receivables' && badge > 0 && (
+                      <span className="min-w-[18px] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-tight text-white shadow-sm shadow-red-500/30">
+                        {badge}
+                      </span>
+                    )}
+                    {item.id === 'accounts' && accountsBadge > 0 && (
+                      <span className="min-w-[18px] rounded-full bg-amber-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-tight text-white shadow-sm shadow-amber-500/30">
+                        {accountsBadge}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Bottom actions */}
@@ -1111,7 +1135,7 @@ export function RevenueDashboard() {
   const [invoiceSaving, setInvoiceSaving] = useState(false)
   const { visible: figuresVisible, toggle: toggleFigures } = useSensitiveFigures()
 
-  const active = useScrollSpy([...SECTIONS])
+  const [activeView, setActiveView] = useState<SectionId>('overview')
 
   const load = async () => {
     setLoading(true); setError('')
@@ -1159,7 +1183,10 @@ export function RevenueDashboard() {
     }
   }
 
-  const navTo = (id: SectionId) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const navTo = (id: SectionId) => {
+    setActiveView(id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const allStates = useMemo(() => Array.from(new Set(allInvoices.map((i) => i.state).filter(Boolean))).sort(), [allInvoices])
 
@@ -1227,27 +1254,84 @@ export function RevenueDashboard() {
 
   const PERIODS: [Period, string][] = [['7d','7D'],['30d','30D'],['90d','90D'],['6m','6M'],['1y','1Y'],['all','All']]
   const hasFilter = search || state !== 'all'
-  const activeLabel = NAV.find((n) => n.id === active)?.label ?? 'Dashboard'
+  const viewMeta = VIEW_META[activeView]
+  const showGlobalFilters = viewMeta.showFilters
+  const showRemindersNav = reminderJobs.length > 0
+  const navOptions = NAV.filter((n) => n.id !== 'reminders' || showRemindersNav)
+
+  useEffect(() => {
+    if (activeView === 'reminders' && !showRemindersNav) setActiveView('overview')
+  }, [activeView, showRemindersNav])
+
+  useEffect(() => {
+    const canSwipe = window.matchMedia('(max-width: 1023px)').matches
+    if (!canSwipe) return
+
+    let startX = 0
+    let startY = 0
+    const onStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+    }
+    const onEnd = (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - startX
+      const dy = e.changedTouches[0].clientY - startY
+      if (Math.abs(dx) < 72 || Math.abs(dx) < Math.abs(dy)) return
+      const idx = navOptions.findIndex((n) => n.id === activeView)
+      if (idx < 0) return
+      if (dx < 0 && idx < navOptions.length - 1) navTo(navOptions[idx + 1].id)
+      if (dx > 0 && idx > 0) navTo(navOptions[idx - 1].id)
+    }
+    document.addEventListener('touchstart', onStart, { passive: true })
+    document.addEventListener('touchend', onEnd, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', onStart)
+      document.removeEventListener('touchend', onEnd)
+    }
+  }, [activeView, navOptions])
 
   return (
     <ThemeCtx.Provider value={dark}>
       <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-50">
 
         {/* ── Sidebar ── */}
-        <Sidebar active={active} badge={kpi.pendingCount} accountsBadge={accountsOutstanding}
+        <Sidebar active={activeView} badge={kpi.pendingCount} accountsBadge={accountsOutstanding}
+          showReminders={showRemindersNav}
           onNav={navTo} onRefresh={load} onExport={() => exportCSV(invoices)} loading={loading} />
 
         {/* ── Main ── */}
-        <div className="ml-[240px] flex-1 min-w-0 flex flex-col">
+        <div className="flex min-w-0 flex-1 flex-col lg:ml-[240px]">
 
           {/* Sticky top bar */}
           <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 px-8">
             <div className="flex items-center h-14 gap-3">
-              <h1 className="text-sm font-bold text-slate-900 dark:text-white min-w-[120px]">{activeLabel}</h1>
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
+              <h1 className="min-w-0 truncate text-sm font-bold text-slate-900 dark:text-white lg:min-w-[120px]">{viewMeta.title}</h1>
+              <select
+                value={activeView}
+                onChange={(e) => navTo(e.target.value as SectionId)}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 lg:hidden"
+                aria-label="Dashboard section"
+              >
+                {navOptions.map((n) => (
+                  <option key={n.id} value={n.id}>{n.label}</option>
+                ))}
+              </select>
+              <div className="hidden h-4 w-px bg-slate-200 dark:bg-slate-700 lg:block" />
 
-              {/* Period tabs */}
-              <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+              {showGlobalFilters && (
+              <>
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as Period)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 sm:hidden"
+                aria-label="Time period"
+              >
+                {PERIODS.map(([p, label]) => (
+                  <option key={p} value={p}>{label}</option>
+                ))}
+              </select>
+              {/* Period tabs — desktop */}
+              <div className="hidden items-center gap-0.5 overflow-x-auto rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:flex">
                 {PERIODS.map(([p, label]) => (
                   <button key={p} onClick={() => setPeriod(p)}
                     className={cn(
@@ -1274,6 +1358,8 @@ export function RevenueDashboard() {
                 <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
                   className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all duration-150" />
               </div>
+              </>
+              )}
 
               <div className="ml-auto flex items-center gap-2">
                 {lastRefresh && <p className="text-[11px] text-slate-400 dark:text-slate-600 tabular-nums">{lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
@@ -1286,7 +1372,7 @@ export function RevenueDashboard() {
             </div>
 
             {/* Filter pills */}
-            {hasFilter && (
+            {showGlobalFilters && hasFilter && (
               <div className="flex items-center gap-2 pb-2.5 text-xs">
                 <span className="text-slate-500"><strong className="text-slate-800 dark:text-slate-200">{invoices.length}</strong> of <strong className="text-slate-800 dark:text-slate-200">{allInvoices.length}</strong></span>
                 {search && <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold ring-1 ring-indigo-200 dark:ring-indigo-500/20">{search}</span>}
@@ -1297,42 +1383,39 @@ export function RevenueDashboard() {
           </header>
 
           {/* Content */}
-          <main className="flex-1 px-8 py-8 space-y-8">
-            <TracingBeam className="space-y-8">
+          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {error && (
-              <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+              <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
                 <Icon name="alert" size={16} className="flex-shrink-0" /> {error}
               </div>
             )}
 
-            <section id="accounts" className="scroll-mt-20">
-              <SectionDivider label="Charge Accounts" />
-              <AccountsReceivable
-                period={period}
-                salesInvoices={allInvoices}
-                onOutstandingCount={setAccountsOutstanding}
-                onSalesInvoiceSaved={upsertInvoiceInState}
-                onSalesInvoiceDeleted={(id) => setAll((prev) => prev.filter((i) => i.id !== id))}
-              />
-            </section>
-
-            {loading && !allInvoices.length ? (
-              /* Loading skeleton */
-              <div className="space-y-8">
-                <div>
-                  <SectionDivider label="Overview" />
-                  <div className="grid grid-cols-5 gap-4">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
-                        <Skel className="w-9 h-9 mb-4 rounded-xl" />
-                        <Skel className="w-28 h-7 mb-2" />
-                        <Skel className="w-16 h-2.5 mb-2" />
-                        <Skel className="w-20 h-3" />
-                      </div>
-                    ))}
-                  </div>
+            <div key={activeView} className="space-y-6">
+            {activeView === 'accounts' ? (
+              <>
+                <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                <AccountsReceivable
+                  period={period}
+                  salesInvoices={allInvoices}
+                  onOutstandingCount={setAccountsOutstanding}
+                  onSalesInvoiceSaved={upsertInvoiceInState}
+                  onSalesInvoiceDeleted={(id) => setAll((prev) => prev.filter((i) => i.id !== id))}
+                />
+              </>
+            ) : loading && !allInvoices.length ? (
+              <div className="space-y-6">
+                <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="rounded-2xl border border-slate-100 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                      <Skel className="mb-4 h-9 w-9 rounded-xl" />
+                      <Skel className="mb-2 h-7 w-28" />
+                      <Skel className="mb-2 h-2.5 w-16" />
+                      <Skel className="h-3 w-20" />
+                    </div>
+                  ))}
                 </div>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 h-72">
+                <div className="h-72 rounded-2xl border border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900">
                   <div className="p-6"><Skel className="w-36 h-4 mb-2" /><Skel className="w-48 h-3" /></div>
                   <div className="px-6"><Skel className="w-full h-44" /></div>
                 </div>
@@ -1345,10 +1428,10 @@ export function RevenueDashboard() {
               </div>
             ) : (
               <>
-                {/* KPIs */}
-                <section id="overview" className="scroll-mt-20">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <SectionDivider label="Overview" />
+                {activeView === 'overview' && (
+                <>
+                  <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                  <div className="mb-4 flex justify-end">
                     <button
                       type="button"
                       onClick={toggleFigures}
@@ -1379,50 +1462,62 @@ export function RevenueDashboard() {
                       <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
                     </div>
                   </div>
-                </section>
-
-                {/* Revenue trend */}
-                <section id="revenue" className="scroll-mt-20">
-                  <SectionDivider label="Revenue Trend" />
-                  <RevenueTrendChart invoices={invoices} period={period} />
-                </section>
-
-                {/* Payments + Collection */}
-                <section id="payments" className="scroll-mt-20">
-                  <SectionDivider label="Payments" />
-                  <div className="grid grid-cols-2 gap-5">
-                    <PaymentDonut   invoices={invoices} />
-                    <CollectionCard invoices={invoices} />
-                  </div>
-                </section>
-
-                {/* Geography + Customers */}
-                <div className="grid grid-cols-2 gap-5">
-                  <section id="geography" className="scroll-mt-20"><StateRevenueChart invoices={invoices} /></section>
-                  <section id="customers" className="scroll-mt-20"><TopCustomers      invoices={invoices} /></section>
-                </div>
-
-                {/* Products + Activity */}
-                <section id="products" className="scroll-mt-20">
-                  <SectionDivider label="Products" />
-                  <div className="grid grid-cols-2 gap-5">
-                    <ProductMixChart invoices={invoices} />
-                    <ActivityChart   invoices={invoices} />
-                  </div>
-                </section>
-
-                {reminderJobs.length > 0 && (
-                  <section id="reminders" className="scroll-mt-20">
-                    <SectionDivider label="Reminders" />
-                    <div className="relative min-h-[100px] overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                      <JobListingComponent jobs={reminderJobs} className="p-4 md:p-6" />
-                    </div>
-                  </section>
+                </>
                 )}
 
-                {/* Receivables */}
-                <section id="receivables" className="scroll-mt-20">
-                  <SectionDivider label="Receivables" />
+                {activeView === 'revenue' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <RevenueTrendChart invoices={invoices} period={period} />
+                  </>
+                )}
+
+                {activeView === 'payments' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                      <PaymentDonut invoices={invoices} />
+                      <CollectionCard invoices={invoices} />
+                    </div>
+                  </>
+                )}
+
+                {activeView === 'geography' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <StateRevenueChart invoices={invoices} />
+                  </>
+                )}
+
+                {activeView === 'customers' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <TopCustomers invoices={invoices} />
+                  </>
+                )}
+
+                {activeView === 'products' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                      <ProductMixChart invoices={invoices} />
+                      <ActivityChart invoices={invoices} />
+                    </div>
+                  </>
+                )}
+
+                {activeView === 'reminders' && reminderJobs.length > 0 && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <div className="relative min-h-[100px] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+                      <JobListingComponent jobs={reminderJobs} className="p-4 md:p-6" />
+                    </div>
+                  </>
+                )}
+
+                {activeView === 'receivables' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
                   {invoices.some((i) => i.paidBy === 'pending') ? (
                     <PendingTable invoices={invoices} onMarkPaid={markPaid} />
                   ) : (
@@ -1438,21 +1533,23 @@ export function RevenueDashboard() {
                       </div>
                     </Card>
                   )}
-                </section>
+                  </>
+                )}
 
-                {/* Shop ledger */}
-                <section id="ledger" className="scroll-mt-20 pb-20">
-                  <SectionDivider label="Shop Ledger" />
-                  <ShopLedger
-                    invoices={invoices}
-                    onMarkPaid={markPaid}
-                    onDelete={deleteMemo}
-                    onEdit={setEditingInvoice}
-                  />
-                </section>
+                {activeView === 'ledger' && (
+                  <>
+                    <PageIntro title={viewMeta.title} description={viewMeta.description} />
+                    <ShopLedger
+                      invoices={invoices}
+                      onMarkPaid={markPaid}
+                      onDelete={deleteMemo}
+                      onEdit={setEditingInvoice}
+                    />
+                  </>
+                )}
               </>
             )}
-            </TracingBeam>
+            </div>
           </main>
         </div>
       </div>

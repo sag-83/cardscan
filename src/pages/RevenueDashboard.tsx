@@ -1437,8 +1437,8 @@ export function RevenueDashboard() {
               <>
                 {activeView === 'overview' && (
                 <>
-                  <PageIntro title={viewMeta.title} description={viewMeta.description} />
-                  <div className="mb-4 flex justify-end">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <SectionDivider label="Overview" />
                     <button
                       type="button"
                       onClick={toggleFigures}
@@ -1461,18 +1461,6 @@ export function RevenueDashboard() {
                       borderColor="border-slate-200/80 dark:border-slate-800"
                       onMoreDetails={() => navTo('receivables')}
                     />
-                    {kpi.pendingCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => navTo('receivables')}
-                        className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/15"
-                      >
-                        <span className="font-bold">{money(kpi.pending)} outstanding</span>
-                        <span className="text-amber-800/80 dark:text-amber-200/80">
-                          {' '}· {kpi.pendingCount} pending — view in Receivables
-                        </span>
-                      </button>
-                    )}
                     <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   sensitive figuresVisible={figuresVisible} />
                       <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  sensitive figuresVisible={figuresVisible} />

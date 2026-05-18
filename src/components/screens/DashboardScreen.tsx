@@ -704,37 +704,6 @@ export function DashboardScreen() {
         ))}
       </div>
 
-      <div
-        style={{
-          padding: '10px 16px',
-          background: 'var(--bg2)',
-          borderBottom: '1px solid var(--border2)',
-        }}
-      >
-        <button
-          type="button"
-          onClick={openWebAnalyticsDashboard}
-          style={{
-            width: '100%',
-            padding: '11px 14px',
-            borderRadius: 10,
-            border: '1.5px solid var(--accent)',
-            background: 'rgba(10, 132, 255, 0.08)',
-            color: 'var(--accent)',
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          <Globe size={18} strokeWidth={2} aria-hidden />
-          Open web analytics dashboard
-        </button>
-      </div>
-
       {tab === 'stats' ? (
         <StatsTab />
       ) : (

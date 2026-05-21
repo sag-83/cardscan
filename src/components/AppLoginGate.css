@@ -55,11 +55,12 @@
 }
 
 .login-gate__logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
-  object-fit: cover;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  object-fit: contain;
+  background: #1a1a1a;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
   margin-bottom: 16px;
 }
 

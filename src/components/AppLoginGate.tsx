@@ -8,7 +8,7 @@ import {
 } from '../lib/appAuth'
 import { applyDocumentTheme } from '../lib/theme'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
-import { NeuralBackground } from './NeuralBackground'
+import { Waves } from './Waves'
 import './AppLoginGate.css'
 
 type Props = {
@@ -65,7 +65,7 @@ export function AppLoginGate({ onUnlock }: Props) {
 
   return (
     <div className="login-gate">
-      <NeuralBackground className="login-gate__bg" color="#a5b4fc" trailOpacity={0.14} />
+      <Waves className="login-gate__bg" strokeColor="rgba(165,180,252,0.35)" backgroundColor="#08080c" />
       <div className="login-gate__veil" aria-hidden />
       <form className="login-gate__panel" onSubmit={(e) => void handleSubmit(e)}>
         <div className="login-gate__brand">

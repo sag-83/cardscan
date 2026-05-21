@@ -444,7 +444,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       const separator = isIOS ? '&' : '?'
-      const smsUrl = `sms:${recipient}${separator}body=${encodeURIComponent(`${text}\nBrochure PDF: ${window.location.origin}/amit-brochure.pdf`)}`
+      const smsUrl = `sms:${recipient}${separator}body=${encodeURIComponent(`${text}\nBrochure: https://drive.google.com/file/d/1ssgiICnmXnYdDsV5VRzgh47hr7Ab4T0u/view?usp=sharing`)}`
       window.location.href = smsUrl
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return

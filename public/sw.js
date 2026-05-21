@@ -22,8 +22,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       tag: data.contactId ? `followup-${data.contactId}` : 'cardscan-followup',
-      icon: '/delta-logo.png',
-      badge: '/delta-logo.png',
+      icon: '/app-icon-192.png',
+      badge: '/app-icon-192.png',
       data: { contactId: data.contactId || '' },
       requireInteraction: true,
     }),
@@ -58,8 +58,8 @@ self.addEventListener('message', (event) => {
         self.registration.showNotification(reminder.title, {
           body: reminder.body,
           tag: `followup-${reminder.id}`,
-          icon: '/delta-logo.png',
-          badge: '/delta-logo.png',
+          icon: '/app-icon-192.png',
+          badge: '/app-icon-192.png',
           data: { contactId: reminder.id },
           requireInteraction: true,
         })

@@ -19,6 +19,6 @@
   ],
   "rewrites": [
     { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/((?!api|dashboard\\.html|assets|sw\\.js|manifest\\.webmanifest|delta-logo\\.png|amit-brochure\\.pdf|amit-brochure\\.png|my-contact-qr\\.png).*)", "destination": "/index.html" }
+    { "source": "/((?!api|dashboard\\.html|assets|sw\\.js|manifest\\.webmanifest|delta-logo\\.png|app-icon\\.png|app-icon-192\\.png|apple-touch-icon\\.png|favicon\\.png|icons/|amit-brochure\\.pdf|amit-brochure\\.png|my-contact-qr\\.png).*)", "destination": "/index.html" }
   ]
 }

@@ -7,7 +7,26 @@
   place-items: center;
   padding: max(20px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
   overflow: hidden;
-  background-color: hsl(260deg 100% 3%);
+  background-color: #08080c;
+}
+
+.login-gate__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.login-gate__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 100% 80% at 50% 40%,
+    transparent 0%,
+    rgba(8, 8, 12, 0.45) 55%,
+    rgba(8, 8, 12, 0.75) 100%
+  );
 }
 
 .login-gate__panel {

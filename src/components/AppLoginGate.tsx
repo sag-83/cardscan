@@ -8,7 +8,7 @@ import {
 } from '../lib/appAuth'
 import { applyDocumentTheme } from '../lib/theme'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
-import { LoginGlowBackground } from './LoginGlowBackground'
+import { NeuralBackground } from './NeuralBackground'
 import './AppLoginGate.css'
 
 type Props = {
@@ -65,7 +65,8 @@ export function AppLoginGate({ onUnlock }: Props) {
 
   return (
     <div className="login-gate">
-      <LoginGlowBackground />
+      <NeuralBackground className="login-gate__bg" color="#a5b4fc" trailOpacity={0.14} />
+      <div className="login-gate__veil" aria-hidden />
       <form className="login-gate__panel" onSubmit={(e) => void handleSubmit(e)}>
         <div className="login-gate__brand">
           <img src="/apple-touch-icon.png" alt="" className="login-gate__logo" width={72} height={72} />

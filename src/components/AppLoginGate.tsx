@@ -1,13 +1,14 @@
-import { useState, type FormEvent } from 'react'
-import { ScanFace, Shield } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { ScanFace } from 'lucide-react'
 import {
   isAppLoginRequired,
   isAppPasswordRequired,
   unlockApp,
   usesAuthenticatorForAppLogin,
 } from '../lib/appAuth'
+import { applyDocumentTheme } from '../lib/theme'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
-import { AuthenticatorCodeInput } from './AuthenticatorCodeInput'
+import './AppLoginGate.css'
 
 type Props = {
   onUnlock: () => void
@@ -21,6 +22,16 @@ export function AppLoginGate({ onUnlock }: Props) {
   const usesTotp = usesAuthenticatorForAppLogin()
   const usesPassword = isAppPasswordRequired()
   const faceReady = hasPlatformCredential('app')
+
+  useEffect(() => {
+    applyDocumentTheme('dark')
+    const meta = document.getElementById('metaTheme')
+    if (meta) meta.setAttribute('content', '#08080c')
+    document.documentElement.style.backgroundColor = '#08080c'
+    return () => {
+      document.documentElement.style.backgroundColor = ''
+    }
+  }, [])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -45,137 +56,78 @@ export function AppLoginGate({ onUnlock }: Props) {
 
   if (!isAppLoginRequired()) {
     return (
-      <div
-        style={{
-          minHeight: '100dvh',
-          display: 'grid',
-          placeItems: 'center',
-          padding: 20,
-          color: 'var(--text2)',
-          fontSize: 14,
-          textAlign: 'center',
-        }}
-      >
+      <div className="login-gate__config">
         Login is not configured. Add <strong>VITE_APP_TOTP_SECRET</strong> in Vercel and redeploy.
       </div>
     )
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100dvh',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 20,
-        background:
-          'radial-gradient(circle at top, rgba(0,122,255,0.18), transparent 34%), var(--bg)',
-      }}
-    >
-      <form
-        onSubmit={(e) => void handleSubmit(e)}
-        style={{
-          width: '100%',
-          maxWidth: 390,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border2)',
-          borderRadius: 22,
-          padding: 24,
-          boxShadow: '0 18px 50px rgba(0,0,0,0.12)',
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            background: 'rgba(10, 132, 255, 0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 14,
-          }}
-        >
-          <Shield size={24} strokeWidth={2} color="var(--accent)" aria-hidden />
+    <div className="login-gate">
+      <div className="login-gate__overlay" aria-hidden />
+      <form className="login-gate__panel" onSubmit={(e) => void handleSubmit(e)}>
+        <div className="login-gate__brand">
+          <img src="/app-icon.png" alt="" className="login-gate__logo" width={72} height={72} />
+          <p className="login-gate__eyebrow">Delta Diamonds Inc.</p>
+          <h1 className="login-gate__title">Secure sign-in</h1>
+          <p className="login-gate__subtitle">
+            {usesTotp
+              ? 'Enter your Microsoft Authenticator code, then verify with Face ID on this device.'
+              : 'Enter your access credentials, then verify with Face ID on this device.'}
+          </p>
         </div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginBottom: 8 }}>Private Access</div>
-        <h1 style={{ fontSize: 28, lineHeight: 1.1, marginBottom: 10 }}>CardHolder</h1>
-        <p style={{ color: 'var(--text3)', fontSize: 14, lineHeight: 1.5, marginBottom: 18 }}>
-          {usesTotp
-            ? 'Microsoft Authenticator code and Face ID on this phone.'
-            : 'Access password and Face ID on this phone.'}
-        </p>
 
         {usesPassword && (
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>
-              Access password
-            </span>
+          <label className="login-gate__label">
+            <span className="login-gate__label-text">Access password</span>
             <input
               type="password"
+              className="login-gate__input"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value)
                 setError('')
               }}
-              placeholder="Access password"
+              placeholder="Password"
               autoFocus={!usesTotp}
               disabled={loading}
-              style={{
-                display: 'block',
-                width: '100%',
-                marginTop: 6,
-                padding: '14px 15px',
-                borderRadius: 12,
-                border: '1.5px solid var(--border)',
-                background: 'var(--bg3)',
-                fontSize: 16,
-              }}
+              autoComplete="current-password"
             />
           </label>
         )}
 
         {usesTotp && (
-          <AuthenticatorCodeInput
-            value={totpCode}
-            onChange={(v) => {
-              setTotpCode(v)
-              setError('')
-            }}
-            disabled={loading}
-          />
+          <label className="login-gate__label">
+            <span className="login-gate__label-text">Authenticator code</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              className="login-gate__input login-gate__input--code"
+              value={totpCode}
+              disabled={loading}
+              onChange={(e) => {
+                setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                setError('')
+              }}
+              placeholder="000000"
+              aria-label="Authenticator code"
+              autoFocus
+            />
+            <span className="login-gate__hint">6-digit code from Microsoft Authenticator</span>
+          </label>
         )}
 
-        {error && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{error}</div>
-        )}
+        {error && <p className="login-gate__error" role="alert">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            border: 'none',
-            borderRadius: 12,
-            padding: '14px 18px',
-            background: 'var(--accent)',
-            color: '#fff',
-            fontSize: 16,
-            fontWeight: 800,
-            cursor: loading ? 'wait' : 'pointer',
-            opacity: loading ? 0.7 : 1,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
+        <button type="submit" className="login-gate__submit" disabled={loading}>
           <ScanFace size={20} strokeWidth={2} aria-hidden />
-          {loading ? 'Verifying…' : faceReady ? 'Unlock with Face ID' : 'Set up Face ID'}
+          {loading ? 'Verifying…' : faceReady ? 'Continue with Face ID' : 'Set up Face ID'}
         </button>
 
-        <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, lineHeight: 1.45 }}>
-          Add this site to your iPhone home screen for Face ID.
+        <p className="login-gate__footer">
+          For Face ID, open from your iPhone home screen shortcut (not the Safari tab).
         </p>
       </form>
     </div>

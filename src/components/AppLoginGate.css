@@ -1,0 +1,190 @@
+/* Login only — does not affect the main app after unlock */
+
+.login-gate {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background-color: #08080c;
+  background-image: url('/login-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.login-gate__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    165deg,
+    rgba(8, 8, 12, 0.55) 0%,
+    rgba(8, 8, 12, 0.82) 45%,
+    rgba(5, 5, 8, 0.94) 100%
+  );
+  pointer-events: none;
+}
+
+.login-gate__panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 24px 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(22, 22, 28, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.login-gate__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-gate__logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  margin-bottom: 16px;
+}
+
+.login-gate__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(192, 192, 200, 0.75);
+  margin-bottom: 6px;
+}
+
+.login-gate__title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #f5f5f7;
+  margin: 0 0 8px;
+}
+
+.login-gate__subtitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(235, 235, 245, 0.55);
+  max-width: 300px;
+}
+
+.login-gate__label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.login-gate__label-text {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 245, 0.45);
+}
+
+.login-gate__input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: #f5f5f7;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login-gate__input:focus {
+  border-color: rgba(180, 180, 195, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.login-gate__input--code {
+  font-size: 22px;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.login-gate__hint {
+  display: block;
+  font-size: 11px;
+  color: rgba(235, 235, 245, 0.4);
+  margin-top: 6px;
+}
+
+.login-gate__error {
+  color: #ff6b6b;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.login-gate__submit {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 15px 18px;
+  background: linear-gradient(180deg, #3a3a42 0%, #2a2a32 100%);
+  color: #f5f5f7;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.login-gate__submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.login-gate__submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.login-gate__footer {
+  margin: 16px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(235, 235, 245, 0.38);
+}
+
+.login-gate__config {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  text-align: center;
+  background: #08080c;
+  color: rgba(235, 235, 245, 0.65);
+  font-size: 14px;
+}

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, lazy, Suspense, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  ArrowLeft,
   Check,
   ContactRound,
   CornerDownLeft,
@@ -659,6 +660,17 @@ function PreviewPanel({
     <div className="min-h-full p-[18px]">
       <Card className="mx-auto w-full max-w-[680px] border border-b2 bg-bg2 text-tx1 ring-0">
         <CardHeader className="pb-3">
+          <div className="mb-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-semibold text-tx3 transition-colors hover:text-tx1 active:opacity-70"
+              aria-label="Back"
+            >
+              <ArrowLeft className="size-4" aria-hidden />
+              Back
+            </button>
+          </div>
           <CardTitle className="flex items-center gap-2 text-[22px] font-extrabold text-tx1">
             <Sparkles className="size-6 shrink-0 text-[var(--star)]" aria-hidden />
             Found {cards.length} card{cards.length > 1 ? 's' : ''}
@@ -718,7 +730,7 @@ function PreviewPanel({
             className="h-12 rounded-[10px] border-b1 bg-bg3 text-[15px] font-bold"
             onClick={onCancel}
           >
-            Rescan
+            Rescan / Back
           </Button>
 
           <Button

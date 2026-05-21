@@ -1,0 +1,216 @@
+/* Animated login background — adapted from glowing-shadow pattern */
+
+@property --login-hue {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --login-rotate {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --login-bg-y {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --login-bg-x {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --login-bg-size {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --login-glow-translate-y {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --login-glow-opacity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.85;
+}
+
+@property --login-glow-blur {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 6;
+}
+
+@property --login-glow-scale {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1.5;
+}
+
+.login-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: hsl(260deg 100% 3%);
+  --login-hue: 0;
+  --login-hue-speed: 1;
+  --login-rotate: 0;
+  --login-animation-speed: 4s;
+  --login-glow-rotate-unit: 1deg;
+  z-index: 0;
+}
+
+.login-glow__gradient {
+  position: absolute;
+  inset: -20%;
+  background: hsl(0deg 0% 8%) radial-gradient(
+    30% 30% at calc(var(--login-bg-x) * 1%) calc(var(--login-bg-y) * 1%),
+    hsl(calc(var(--login-hue) * var(--login-hue-speed) * 1deg) 100% 90%) calc(0% * var(--login-bg-size)),
+    hsl(calc(var(--login-hue) * var(--login-hue-speed) * 1deg) 100% 75%) calc(18% * var(--login-bg-size)),
+    hsl(calc(var(--login-hue) * var(--login-hue-speed) * 1deg) 100% 50%) calc(38% * var(--login-bg-size)),
+    transparent 100%
+  );
+  animation:
+    login-hue-animation var(--login-animation-speed) linear infinite,
+    login-rotate-bg var(--login-animation-speed) linear infinite;
+}
+
+.login-glow__orb {
+  display: block;
+  position: absolute;
+  width: min(72vmax, 520px);
+  height: min(72vmax, 520px);
+  left: 50%;
+  top: 38%;
+  margin-left: calc(min(72vmax, 520px) / -2);
+  margin-top: calc(min(72vmax, 520px) / -2);
+  border-radius: 50%;
+  animation: login-rotate-orb var(--login-animation-speed) linear infinite;
+  transform: rotateZ(calc(var(--login-rotate) * var(--login-glow-rotate-unit)));
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.login-glow__orb::after {
+  content: '';
+  display: block;
+  position: absolute;
+  width: 130%;
+  height: 130%;
+  left: -15%;
+  top: -15%;
+  border-radius: 50%;
+  background: hsl(calc(var(--login-hue) * var(--login-hue-speed) * 1deg) 100% 60%);
+  filter: blur(calc(var(--login-glow-blur) * 12px));
+  opacity: var(--login-glow-opacity);
+  animation: login-hue-animation var(--login-animation-speed) linear infinite;
+  transform: scaleY(calc(var(--login-glow-scale) / 1.1))
+    scaleX(calc(var(--login-glow-scale) * 1.2))
+    translateY(calc(var(--login-glow-translate-y) * 1%));
+}
+
+.login-glow__orb--alt {
+  width: min(55vmax, 400px);
+  height: min(55vmax, 400px);
+  margin-left: calc(min(55vmax, 400px) / -2);
+  margin-top: calc(min(55vmax, 400px) / -2);
+  top: 62%;
+  left: 72%;
+  animation-duration: 5.5s;
+  animation-direction: reverse;
+  --login-glow-opacity: 0.55;
+  --login-glow-blur: 5;
+}
+
+.login-glow__veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 90% 80% at 50% 45%,
+    rgba(8, 6, 18, 0.35) 0%,
+    rgba(5, 4, 12, 0.82) 55%,
+    rgba(3, 3, 8, 0.94) 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+}
+
+@keyframes login-hue-animation {
+  0% {
+    --login-hue: 0;
+  }
+  100% {
+    --login-hue: 360;
+  }
+}
+
+@keyframes login-rotate-bg {
+  0% {
+    --login-bg-x: 0;
+    --login-bg-y: 0;
+  }
+  25% {
+    --login-bg-x: 100;
+    --login-bg-y: 0;
+  }
+  50% {
+    --login-bg-x: 100;
+    --login-bg-y: 100;
+  }
+  75% {
+    --login-bg-x: 0;
+    --login-bg-y: 100;
+  }
+  100% {
+    --login-bg-x: 0;
+    --login-bg-y: 0;
+  }
+}
+
+@keyframes login-rotate-orb {
+  from {
+    --login-rotate: -70;
+    --login-glow-translate-y: -65;
+  }
+  25% {
+    --login-glow-translate-y: -65;
+  }
+  50% {
+    --login-glow-translate-y: -65;
+  }
+  60%,
+  75% {
+    --login-glow-translate-y: -65;
+  }
+  85% {
+    --login-glow-translate-y: -65;
+  }
+  to {
+    --login-rotate: calc(360 - 70);
+    --login-glow-translate-y: -65;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-glow__gradient,
+  .login-glow__orb,
+  .login-glow__orb::after {
+    animation: none;
+  }
+
+  .login-glow__gradient {
+    background: hsl(260deg 80% 12%) radial-gradient(
+      50% 50% at 50% 40%,
+      hsl(260deg 100% 45%) 0%,
+      hsl(260deg 60% 15%) 45%,
+      transparent 100%
+    );
+  }
+}

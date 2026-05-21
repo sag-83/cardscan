@@ -8,6 +8,7 @@ import {
 } from '../lib/appAuth'
 import { applyDocumentTheme } from '../lib/theme'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
+import { LoginGlowBackground } from './LoginGlowBackground'
 import './AppLoginGate.css'
 
 type Props = {
@@ -64,7 +65,7 @@ export function AppLoginGate({ onUnlock }: Props) {
 
   return (
     <div className="login-gate">
-      <div className="login-gate__overlay" aria-hidden />
+      <LoginGlowBackground />
       <form className="login-gate__panel" onSubmit={(e) => void handleSubmit(e)}>
         <div className="login-gate__brand">
           <img src="/app-icon.png" alt="" className="login-gate__logo" width={72} height={72} />

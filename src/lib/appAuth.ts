@@ -1,21 +1,47 @@
+import { isAuthenticatorEnabled } from './authenticatorPreference'
 import { isPlatformAuthenticatorAvailable, ensurePlatformAuth } from './webAuthnPlatform'
 import { isTotpRequired, verifyTotp } from './totp'
 
 const APP_PASSWORD = ((import.meta.env.VITE_APP_PASSWORD as string) ?? '').trim()
+const APP_PIN = ((import.meta.env.VITE_APP_PIN as string) ?? '').trim()
 export const APP_SESSION_KEY = 'cardscan_app_session_v1'
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let out = 0
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return out === 0
+}
 
 /** True when legacy env password is set and TOTP is not used for app login. */
 export function isAppPasswordRequired(): boolean {
   return APP_PASSWORD.length > 0 && !isTotpRequired('app')
 }
 
-/** App needs a login screen (Authenticator and/or legacy password). */
+export function isAppPinConfigured(): boolean {
+  return APP_PIN.length > 0
+}
+
+export function isAppPinRequired(): boolean {
+  return isAppPinConfigured() && isTotpRequired('app') && !isAuthenticatorEnabled()
+}
+
+/** App needs a login screen (Authenticator, PIN, and/or legacy password). */
 export function isAppLoginRequired(): boolean {
   return isTotpRequired('app') || isAppPasswordRequired()
 }
 
 export function usesAuthenticatorForAppLogin(): boolean {
+  return isTotpRequired('app') && isAuthenticatorEnabled()
+}
+
+export function canToggleAuthenticator(): boolean {
   return isTotpRequired('app')
+}
+
+export function verifyAppPin(pin: string): boolean {
+  if (!isAppPinRequired()) return true
+  return safeEqual(pin.trim(), APP_PIN)
 }
 
 export function isAppSessionUnlocked(): boolean {
@@ -51,9 +77,13 @@ export async function unlockApp(
   password: string,
   totpCode: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  if (isTotpRequired('app')) {
+  if (usesAuthenticatorForAppLogin()) {
     if (!verifyTotp('app', totpCode)) {
       return { ok: false, message: 'Invalid authenticator code. Open Microsoft Authenticator and try again.' }
+    }
+  } else if (isAppPinRequired()) {
+    if (!verifyAppPin(password)) {
+      return { ok: false, message: 'Incorrect PIN.' }
     }
   } else if (isAppPasswordRequired()) {
     if (password.trim() !== APP_PASSWORD) {
@@ -75,7 +105,7 @@ export async function unlockApp(
     }
   }
 
-  if (isTotpRequired('app')) {
+  if (usesAuthenticatorForAppLogin() || isAppPinRequired()) {
     markAppSessionUnlocked()
     return { ok: true }
   }

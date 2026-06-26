@@ -5,8 +5,8 @@ import {
   isRevenuePinRequired,
   isRevenueSecondFactorVerifiedThisSession,
   unlockRevenueTab,
+  usesAuthenticatorForRevenue,
 } from '../lib/revenueLock'
-import { isTotpRequired as isRevenueTotpRequired } from '../lib/totp'
 import { AuthenticatorCodeInput } from './AuthenticatorCodeInput'
 
 type Props = {
@@ -18,7 +18,7 @@ export function RevenueUnlockGate({ onUnlocked, onCancel }: Props) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const needsTotp = isRevenueTotpRequired('revenue')
+  const needsTotp = usesAuthenticatorForRevenue()
   const needsPin = isRevenuePinRequired() && !isRevenueSecondFactorVerifiedThisSession()
   const faceReady = hasRevenueLockConfigured()
 

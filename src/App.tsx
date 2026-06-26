@@ -26,6 +26,7 @@ import { DashboardScreen } from './components/screens/DashboardScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
 import { lockAllRevenueAccess } from './lib/revenueLock'
+import { AUTH_PREF_CHANGED_EVENT } from './lib/authenticatorPreference'
 import { isAppLoginRequired, isAppSessionUnlocked, lockAppSession } from './lib/appAuth'
 import { AppLoginGate } from './components/AppLoginGate'
 
@@ -123,6 +124,16 @@ export default function App() {
       })
     }
   }, [isUnlocked])
+
+  useEffect(() => {
+    const onAuthPrefChanged = () => {
+      lockAppSession()
+      lockAllRevenueAccess()
+      setIsUnlocked(false)
+    }
+    window.addEventListener(AUTH_PREF_CHANGED_EVENT, onAuthPrefChanged)
+    return () => window.removeEventListener(AUTH_PREF_CHANGED_EVENT, onAuthPrefChanged)
+  }, [])
 
   useEffect(() => {
     if (!isUnlocked) return

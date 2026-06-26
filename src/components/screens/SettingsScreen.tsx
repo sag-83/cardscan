@@ -10,6 +10,7 @@ import {
   Download,
   Moon,
   RefreshCw,
+  Shield,
   Sun,
   Undo2,
   Upload,
@@ -50,6 +51,9 @@ import {
   supportsLocationAccess,
 } from '../../lib/locationAccess'
 import { getLocationBlockedHelp, isStandalonePwa } from '../../lib/pwa'
+import { canToggleAuthenticator, isAppPinConfigured } from '../../lib/appAuth'
+import { isAuthenticatorEnabled, setAuthenticatorEnabled } from '../../lib/authenticatorPreference'
+import { isTotpRequired } from '../../lib/totp'
 
 const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
 
@@ -323,6 +327,16 @@ export function SettingsScreen() {
         <ReminderNotificationsPanel contacts={contacts} showToast={showToast} />
       </SettingsGroup>
 
+      {/* Security */}
+      {canToggleAuthenticator() && (
+        <>
+          <SectionTitle>Security</SectionTitle>
+          <SettingsGroup>
+            <AuthenticatorTogglePanel showToast={showToast} />
+          </SettingsGroup>
+        </>
+      )}
+
       {/* Theme */}
       <SectionTitle>Appearance</SectionTitle>
       <SettingsGroup>
@@ -450,6 +464,65 @@ export function SettingsScreen() {
       )}
 
       <input ref={restoreInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+    </div>
+  )
+}
+
+function AuthenticatorTogglePanel({ showToast }: { showToast: (msg: string, durationMs?: number) => void }) {
+  const [enabled, setEnabled] = useState(() => isAuthenticatorEnabled())
+  const revenueAlsoUsesPin = isTotpRequired('revenue')
+
+  const statusLine = enabled
+    ? 'Sign-in uses Microsoft Authenticator + Face ID'
+    : 'Sign-in uses PIN + Face ID'
+
+  return (
+    <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+        <Shield size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} aria-hidden />
+        <div style={{ flex: 1, fontSize: 15 }}>Microsoft Authenticator</div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !enabled
+            if (!next && !isAppPinConfigured()) {
+              showToast('Add VITE_APP_PIN in Vercel to enable PIN mode', 6000)
+              return
+            }
+            setAuthenticatorEnabled(next)
+            setEnabled(next)
+            showToast(
+              next
+                ? 'Authenticator on — sign in again with your 6-digit code'
+                : 'Authenticator off — sign in again with your PIN',
+              6000,
+            )
+          }}
+          style={{
+            padding: '5px 13px',
+            borderRadius: 99,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+            border: `1.5px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
+            background: enabled ? 'rgba(0,122,255,0.1)' : 'var(--bg3)',
+            color: enabled ? 'var(--accent)' : 'var(--text3)',
+          }}
+        >
+          {enabled ? 'On' : 'Off'}
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+        {statusLine}
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+        Toggle off to use your PIN instead of the authenticator app.
+        {revenueAlsoUsesPin ? ' Revenue unlock follows the same setting.' : ''}
+        {!isAppPinConfigured() ? ' Add VITE_APP_PIN in Vercel to enable PIN mode.' : ''}
+        {' '}You will be signed out when you change this.
+      </div>
     </div>
   )
 }

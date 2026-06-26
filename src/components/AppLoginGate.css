@@ -90,6 +90,48 @@
   max-width: 300px;
 }
 
+.login-gate__mode {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.login-gate__mode-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: rgba(235, 235, 245, 0.5);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login-gate__mode-btn:hover:not(:disabled) {
+  color: rgba(235, 235, 245, 0.75);
+}
+
+.login-gate__mode-btn--active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.login-gate__mode-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .login-gate__label {
   display: block;
   margin-bottom: 12px;

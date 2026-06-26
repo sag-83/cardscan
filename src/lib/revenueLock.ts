@@ -1,5 +1,6 @@
 /** Revenue tab: authenticator code + Face ID (app password alone is not enough). */
 
+import { isAuthenticatorEnabled } from './authenticatorPreference'
 import {
   ensurePlatformAuth,
   hasPlatformCredential,
@@ -20,8 +21,14 @@ function safeEqual(a: string, b: string): boolean {
   return out === 0
 }
 
+export function usesAuthenticatorForRevenue(): boolean {
+  return isTotpRequired('revenue') && isAuthenticatorEnabled()
+}
+
 export function isRevenuePinRequired(): boolean {
-  return REVENUE_PIN.length > 0 && !isTotpRequired('revenue')
+  if (REVENUE_PIN.length === 0) return false
+  if (!isTotpRequired('revenue')) return true
+  return !isAuthenticatorEnabled()
 }
 
 export function verifyRevenuePin(pin: string): boolean {
@@ -30,13 +37,13 @@ export function verifyRevenuePin(pin: string): boolean {
 }
 
 export function isRevenueSecondFactorRequired(): boolean {
-  return isTotpRequired('revenue') || isRevenuePinRequired()
+  return usesAuthenticatorForRevenue() || isRevenuePinRequired()
 }
 
 export function isRevenueSecondFactorVerifiedThisSession(): boolean {
   if (!isRevenueSecondFactorRequired()) return true
   try {
-    if (isTotpRequired('revenue')) return sessionStorage.getItem(TOTP_VERIFIED_KEY) === '1'
+    if (usesAuthenticatorForRevenue()) return sessionStorage.getItem(TOTP_VERIFIED_KEY) === '1'
     return sessionStorage.getItem(PIN_VERIFIED_KEY) === '1'
   } catch {
     return false
@@ -45,7 +52,7 @@ export function isRevenueSecondFactorVerifiedThisSession(): boolean {
 
 function markRevenueSecondFactorVerified(): void {
   try {
-    if (isTotpRequired('revenue')) sessionStorage.setItem(TOTP_VERIFIED_KEY, '1')
+    if (usesAuthenticatorForRevenue()) sessionStorage.setItem(TOTP_VERIFIED_KEY, '1')
     else sessionStorage.setItem(PIN_VERIFIED_KEY, '1')
   } catch {
     /* ignore */
@@ -88,7 +95,7 @@ export { isPlatformAuthenticatorAvailable }
  * Unlock Revenue: Microsoft Authenticator code (or legacy PIN) + Face ID.
  */
 export async function unlockRevenueTab(secondFactor: string): Promise<{ ok: boolean; message?: string }> {
-  if (isTotpRequired('revenue')) {
+  if (usesAuthenticatorForRevenue()) {
     if (!verifyTotp('revenue', secondFactor)) {
       return { ok: false, message: 'Invalid authenticator code.' }
     }
@@ -102,7 +109,7 @@ export async function unlockRevenueTab(secondFactor: string): Promise<{ ok: bool
 
   const faceAvailable = await isPlatformAuthenticatorAvailable()
   if (!faceAvailable) {
-    if (isTotpRequired('revenue') || isRevenuePinRequired()) {
+    if (usesAuthenticatorForRevenue() || isRevenuePinRequired()) {
       sessionStorage.setItem(SESSION_KEY, '1')
       return { ok: true }
     }

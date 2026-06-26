@@ -1,11 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ScanFace } from 'lucide-react'
+import { KeyRound, ScanFace, Shield } from 'lucide-react'
 import {
   isAppLoginRequired,
   isAppPasswordRequired,
+  isAppPinConfigured,
+  isAppPinRequired,
   unlockApp,
   usesAuthenticatorForAppLogin,
 } from '../lib/appAuth'
+import { isAuthenticatorEnabled, setAuthenticatorEnabled } from '../lib/authenticatorPreference'
 import { applyDocumentTheme } from '../lib/theme'
 import { hasPlatformCredential } from '../lib/webAuthnPlatform'
 import { Waves } from './Waves'
@@ -20,9 +23,27 @@ export function AppLoginGate({ onUnlock }: Props) {
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const usesTotp = usesAuthenticatorForAppLogin()
+  const [authMode, setAuthMode] = useState<'authenticator' | 'pin'>(() =>
+    isAuthenticatorEnabled() ? 'authenticator' : 'pin',
+  )
   const usesPassword = isAppPasswordRequired()
+  const usesTotp = usesAuthenticatorForAppLogin()
+  const usesPin = isAppPinRequired()
+  const showAuthToggle = !usesPassword
   const faceReady = hasPlatformCredential('app')
+
+  const switchAuthMode = (mode: 'authenticator' | 'pin') => {
+    if (mode === authMode) return
+    if (mode === 'pin' && !isAppPinConfigured()) {
+      setError('PIN is not set up yet. Add VITE_APP_PIN in Vercel and redeploy.')
+      return
+    }
+    setAuthenticatorEnabled(mode === 'authenticator')
+    setAuthMode(mode)
+    setError('')
+    setPassword('')
+    setTotpCode('')
+  }
 
   useEffect(() => {
     applyDocumentTheme('dark')
@@ -40,6 +61,10 @@ export function AppLoginGate({ onUnlock }: Props) {
 
     if (usesPassword && !password.trim()) {
       setError('Enter your access password.')
+      return
+    }
+    if (usesPin && !password.trim()) {
+      setError('Enter your PIN.')
       return
     }
     if (usesTotp && totpCode.length !== 6) {
@@ -75,9 +100,36 @@ export function AppLoginGate({ onUnlock }: Props) {
           <p className="login-gate__subtitle">
             {usesTotp
               ? 'Enter your Microsoft Authenticator code, then verify with Face ID on this device.'
-              : 'Enter your access credentials, then verify with Face ID on this device.'}
+              : usesPin
+                ? 'Enter your PIN, then verify with Face ID on this device.'
+                : 'Enter your access credentials, then verify with Face ID on this device.'}
           </p>
         </div>
+
+        {showAuthToggle && (
+          <div className="login-gate__mode" role="group" aria-label="Sign-in method">
+            <button
+              type="button"
+              className={`login-gate__mode-btn${authMode === 'authenticator' ? ' login-gate__mode-btn--active' : ''}`}
+              onClick={() => switchAuthMode('authenticator')}
+              disabled={loading}
+              aria-pressed={authMode === 'authenticator'}
+            >
+              <Shield size={15} strokeWidth={2} aria-hidden />
+              Authenticator
+            </button>
+            <button
+              type="button"
+              className={`login-gate__mode-btn${authMode === 'pin' ? ' login-gate__mode-btn--active' : ''}`}
+              onClick={() => switchAuthMode('pin')}
+              disabled={loading}
+              aria-pressed={authMode === 'pin'}
+            >
+              <KeyRound size={15} strokeWidth={2} aria-hidden />
+              PIN
+            </button>
+          </div>
+        )}
 
         {usesPassword && (
           <label className="login-gate__label">
@@ -91,10 +143,31 @@ export function AppLoginGate({ onUnlock }: Props) {
                 setError('')
               }}
               placeholder="Password"
-              autoFocus={!usesTotp}
+              autoFocus={!usesTotp && !usesPin}
               disabled={loading}
               autoComplete="current-password"
             />
+          </label>
+        )}
+
+        {usesPin && (
+          <label className="login-gate__label">
+            <span className="login-gate__label-text">PIN</span>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              className="login-gate__input"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setError('')
+              }}
+              placeholder="Enter PIN"
+              autoFocus
+              disabled={loading}
+            />
+            <span className="login-gate__hint">Your app access PIN</span>
           </label>
         )}
 

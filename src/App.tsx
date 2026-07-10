@@ -226,13 +226,11 @@ export default function App() {
   }
 
   // On desktop the detail panel docks to the right instead of covering the
-  // screen. maxWidth is computed with calc()/min() (not a fixed px cap) so the
-  // content column always ends before the panel starts, at any window width —
-  // a fixed px budget would overlap the panel on narrower desktop windows.
+  // screen. The content column is centered *within the space between the
+  // sidebar and the (possibly panel-occupied) right edge* via flexbox, rather
+  // than left-anchored against the sidebar — anchoring left off-centers the
+  // whole app and leaves a large lopsided gap on wide monitors.
   const detailPanelOpen = isDesktop && !!detailContactId
-  const desktopMaxWidth = detailPanelOpen
-    ? `min(560px, calc(100vw - ${SIDEBAR_WIDTH + DETAIL_PANEL_WIDTH}px))`
-    : `min(1000px, calc(100vw - ${SIDEBAR_WIDTH}px))`
 
   return (
     <>
@@ -240,35 +238,43 @@ export default function App() {
 
       <div
         style={{
-          width: '100%',
-          maxWidth: isDesktop ? desktopMaxWidth : 480,
-          margin: isDesktop ? undefined : '0 auto',
           marginLeft: isDesktop ? SIDEBAR_WIDTH : undefined,
+          marginRight: detailPanelOpen ? DETAIL_PANEL_WIDTH : 0,
           minHeight: '100dvh',
-          paddingBottom: isDesktop ? 0 : 86,
-          transition: 'max-width 0.2s ease-out',
+          display: isDesktop ? 'flex' : undefined,
+          justifyContent: isDesktop ? 'center' : undefined,
+          transition: 'margin-right 0.2s ease-out',
         }}
       >
-        <Header />
+        <div
+          style={{
+            width: '100%',
+            maxWidth: isDesktop ? 900 : 480,
+            margin: isDesktop ? undefined : '0 auto',
+            paddingBottom: isDesktop ? 0 : 86,
+          }}
+        >
+          <Header />
 
-        {/* Screens — all mounted, only active one visible */}
-        <div style={{ display: activeScreen === 'scan' ? 'block' : 'none' }}>
-          <ScanScreen />
-        </div>
-        <div style={{ display: activeScreen === 'contacts' ? 'block' : 'none' }}>
-          <ContactsScreen />
-        </div>
-        <div style={{ display: activeScreen === 'dashboard' ? 'block' : 'none' }}>
-          <DashboardScreen />
-        </div>
-        <div style={{ display: activeScreen === 'bulk' ? 'block' : 'none' }}>
-          <BulkScreen />
-        </div>
-        <div style={{ display: activeScreen === 'settings' ? 'block' : 'none' }}>
-          <SettingsScreen />
-        </div>
+          {/* Screens — all mounted, only active one visible */}
+          <div style={{ display: activeScreen === 'scan' ? 'block' : 'none' }}>
+            <ScanScreen />
+          </div>
+          <div style={{ display: activeScreen === 'contacts' ? 'block' : 'none' }}>
+            <ContactsScreen />
+          </div>
+          <div style={{ display: activeScreen === 'dashboard' ? 'block' : 'none' }}>
+            <DashboardScreen />
+          </div>
+          <div style={{ display: activeScreen === 'bulk' ? 'block' : 'none' }}>
+            <BulkScreen />
+          </div>
+          <div style={{ display: activeScreen === 'settings' ? 'block' : 'none' }}>
+            <SettingsScreen />
+          </div>
 
-        {!isDesktop && <NavBar />}
+          {!isDesktop && <NavBar />}
+        </div>
       </div>
 
       {/* Global overlays — rendered outside the max-width container */}

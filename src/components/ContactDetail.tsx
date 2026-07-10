@@ -29,9 +29,13 @@ import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets, hasBeenSentToSheets, markContactsSentToSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
+import { useIsDesktop } from '../hooks/useIsDesktop'
 import type { Contact } from '../types/contact'
 
+export const DETAIL_PANEL_WIDTH = 440
+
 export function ContactDetail() {
+  const isDesktop = useIsDesktop()
   const [isSendingSheets, setIsSendingSheets] = useState(false)
   const detailContactId = useStore((s) => s.detailContactId)
   const contacts = useStore((s) => s.contacts)
@@ -136,7 +140,12 @@ export function ContactDetail() {
   const fullAddress = [c.address, c.city, c.state, c.zip, c.country].filter(Boolean).join(', ')
 
   return (
-    <div style={{
+    <div style={isDesktop ? {
+      position: 'fixed', top: 0, right: 0, bottom: 0, left: 'auto', width: DETAIL_PANEL_WIDTH,
+      zIndex: 200, background: 'var(--bg)', overflowY: 'auto',
+      borderLeft: '1px solid var(--border2)', boxShadow: '-8px 0 24px rgba(0,0,0,0.12)',
+      animation: 'slideInRight 0.22s cubic-bezier(0.16,1,0.3,1)',
+    } : {
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       zIndex: 200, background: 'var(--bg)', overflowY: 'auto',
       animation: 'slideUp 0.28s cubic-bezier(0.16,1,0.3,1)',

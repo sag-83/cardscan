@@ -184,7 +184,7 @@ body {
   color: var(--text);
   min-height: 100dvh;
   overflow-x: hidden;
-  overscroll-behavior: none;
+  overscroll-behavior-y: contain;
 }
 
 input,
@@ -247,6 +247,11 @@ button {
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(36px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes sheetUp {

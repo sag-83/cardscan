@@ -2,13 +2,13 @@ import { Camera, LineChart, Send, Settings, Users } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { Screen } from '../types/contact'
 
-interface Tab {
+export interface NavTab {
   id: Screen
   label: string
   Icon: typeof Camera
 }
 
-const TABS: Tab[] = [
+export const NAV_TABS: NavTab[] = [
   { id: 'scan', label: 'Scan', Icon: Camera },
   { id: 'contacts', label: 'Contacts', Icon: Users },
   { id: 'dashboard', label: 'Stats', Icon: LineChart },
@@ -29,7 +29,7 @@ export function NavBar() {
         zIndex: 50, padding: '8px 0 22px',
       }}
     >
-      {TABS.map(({ id, label, Icon }) => {
+      {NAV_TABS.map(({ id, label, Icon }) => {
         const active = activeScreen === id
         return (
           <button

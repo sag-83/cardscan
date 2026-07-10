@@ -26,15 +26,17 @@ import { getUserPosition, geocodeContacts, formatDistance, LocationError } from 
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 
 function useFollowups(contacts: Contact[]) {
-  const now = new Date()
-  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const overdue = contacts.filter((c) => c.followup_at && new Date(c.followup_at) < now)
-  const dueSoon = contacts.filter((c) => {
-    if (!c.followup_at) return false
-    const d = new Date(c.followup_at)
-    return d >= now && d <= weekAhead
-  })
-  return { overdue, dueSoon }
+  return useMemo(() => {
+    const now = new Date()
+    const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const overdue = contacts.filter((c) => c.followup_at && new Date(c.followup_at) < now)
+    const dueSoon = contacts.filter((c) => {
+      if (!c.followup_at) return false
+      const d = new Date(c.followup_at)
+      return d >= now && d <= weekAhead
+    })
+    return { overdue, dueSoon }
+  }, [contacts])
 }
 
 export function ContactsScreen() {
@@ -50,6 +52,7 @@ export function ContactsScreen() {
   const [distances, setDistances] = useState<Map<string, number>>(new Map())
 
   const contacts = useStore((s) => s.contacts)
+  const detailContactId = useStore((s) => s.detailContactId)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
@@ -156,7 +159,7 @@ export function ContactsScreen() {
     return newestId
   }, [contacts])
 
-  const baseFiltered = contacts.filter((c) => {
+  const baseFiltered = useMemo(() => contacts.filter((c) => {
     if (filterStars > 0 && c.stars !== filterStars) return false
     if (filterState && c.state !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
@@ -176,15 +179,17 @@ export function ContactsScreen() {
       if (!textMatch && !phoneMatch) return false
     }
     return true
-  })
+  }), [contacts, filterStars, filterState, filterCity, filterArea, filterType, query])
 
-  const filtered = nearMeActive
-    ? [...baseFiltered].sort((a, b) => {
-        const da = distances.get(a.id) ?? Infinity
-        const db = distances.get(b.id) ?? Infinity
-        return da - db
-      })
-    : sortContactsAlphabetically(baseFiltered)
+  const filtered = useMemo(() => (
+    nearMeActive
+      ? [...baseFiltered].sort((a, b) => {
+          const da = distances.get(a.id) ?? Infinity
+          const db = distances.get(b.id) ?? Infinity
+          return da - db
+        })
+      : sortContactsAlphabetically(baseFiltered)
+  ), [baseFiltered, nearMeActive, distances])
 
   const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
 
@@ -384,6 +389,7 @@ export function ContactsScreen() {
       {filtered.map((c) => (
         <ContactRow key={c.id} contact={c}
           isLastAdded={c.id === lastAddedId}
+          selected={c.id === detailContactId}
           distance={nearMeActive ? distances.get(c.id) : undefined}
           onClick={() => setDetailContactId(c.id)}
           onMenu={() => setMenuContactId(c.id)}
@@ -406,9 +412,10 @@ function dropdownStyle(active: boolean): CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShareError }: {
+function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMenu, onShareError }: {
   contact: Contact
   isLastAdded: boolean
+  selected: boolean
   distance?: number
   onClick: () => void
   onMenu: () => void
@@ -471,7 +478,7 @@ function ContactRow({ contact: c, isLastAdded, distance, onClick, onMenu, onShar
         scrollMarginTop: 170,
         position: 'relative',
         overflow: 'hidden',
-        background: 'var(--bg2)',
+        background: selected ? 'var(--chip-accent-bg)' : 'var(--bg2)',
         borderBottom: '1px solid var(--border2)',
         touchAction: 'pan-y',
       }}

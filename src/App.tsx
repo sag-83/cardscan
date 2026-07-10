@@ -12,8 +12,10 @@ import {
 
 import { Header } from './components/Header'
 import { NavBar } from './components/NavBar'
+import { Sidebar, SIDEBAR_WIDTH } from './components/Sidebar'
+import { useIsDesktop } from './hooks/useIsDesktop'
 import { Toast } from './components/Toast'
-import { ContactDetail } from './components/ContactDetail'
+import { ContactDetail, DETAIL_PANEL_WIDTH } from './components/ContactDetail'
 import { EditModal } from './components/modals/EditModal'
 import { ContactMenuModal } from './components/modals/ContactMenuModal'
 import { BulkMessageModal } from './components/modals/BulkMessageModal'
@@ -34,7 +36,9 @@ const INACTIVITY_LOCK_MS = 5 * 60_000 // 5 minutes
 const BUILD_CHECK_INTERVAL_MS = 60_000
 
 export default function App() {
+  const isDesktop = useIsDesktop()
   const activeScreen = useStore((s) => s.activeScreen)
+  const detailContactId = useStore((s) => s.detailContactId)
   const sbUrl = useStore((s) => s.sbUrl)
   const sbKey = useStore((s) => s.sbKey)
   const contacts = useStore((s) => s.contacts)
@@ -221,9 +225,30 @@ export default function App() {
     return <AppLoginGate onUnlock={() => setIsUnlocked(true)} />
   }
 
+  // On desktop the detail panel docks to the right instead of covering the
+  // screen. maxWidth is computed with calc()/min() (not a fixed px cap) so the
+  // content column always ends before the panel starts, at any window width —
+  // a fixed px budget would overlap the panel on narrower desktop windows.
+  const detailPanelOpen = isDesktop && !!detailContactId
+  const desktopMaxWidth = detailPanelOpen
+    ? `min(560px, calc(100vw - ${SIDEBAR_WIDTH + DETAIL_PANEL_WIDTH}px))`
+    : `min(1000px, calc(100vw - ${SIDEBAR_WIDTH}px))`
+
   return (
     <>
-      <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', minHeight: '100dvh', paddingBottom: 86 }}>
+      {isDesktop && <Sidebar />}
+
+      <div
+        style={{
+          width: '100%',
+          maxWidth: isDesktop ? desktopMaxWidth : 480,
+          margin: isDesktop ? undefined : '0 auto',
+          marginLeft: isDesktop ? SIDEBAR_WIDTH : undefined,
+          minHeight: '100dvh',
+          paddingBottom: isDesktop ? 0 : 86,
+          transition: 'max-width 0.2s ease-out',
+        }}
+      >
         <Header />
 
         {/* Screens — all mounted, only active one visible */}
@@ -243,7 +268,7 @@ export default function App() {
           <SettingsScreen />
         </div>
 
-        <NavBar />
+        {!isDesktop && <NavBar />}
       </div>
 
       {/* Global overlays — rendered outside the max-width container */}

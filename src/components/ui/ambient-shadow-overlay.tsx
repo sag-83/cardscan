@@ -40,26 +40,49 @@ export function AmbientShadowOverlay({
   const durationSec = animationEnabled ? mapRange(animation.speed, 1, 100, 10, 3) : 1
 
   const turbRef = useRef<SVGFETurbulenceElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = turbRef.current
-    if (!el || !animationEnabled) return
+    const container = containerRef.current
+    if (!el || !container || !animationEnabled) return
 
-    const controls = animate(0.01, 0.022, {
-      duration: durationSec,
-      repeat: Infinity,
-      repeatType: 'reverse',
-      ease: 'easeInOut',
-      onUpdate: (latest) => {
-        el.setAttribute('baseFrequency', `${latest} ${latest * 0.42}`)
-      },
+    let controls: ReturnType<typeof animate> | null = null
+    const start = () => {
+      if (controls) return
+      controls = animate(0.01, 0.022, {
+        duration: durationSec,
+        repeat: Infinity,
+        repeatType: 'reverse',
+        ease: 'easeInOut',
+        onUpdate: (latest) => {
+          el.setAttribute('baseFrequency', `${latest} ${latest * 0.42}`)
+        },
+      })
+    }
+    const stop = () => {
+      controls?.stop()
+      controls = null
+    }
+
+    // The wrapping screen is toggled via display:none rather than unmounted, so
+    // IntersectionObserver (which reports display:none ancestors as non-intersecting)
+    // is used to pause this otherwise-infinite animation while its tab isn't active.
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) start()
+      else stop()
     })
+    observer.observe(container)
 
-    return () => controls.stop()
+    return () => {
+      observer.disconnect()
+      stop()
+    }
   }, [animationEnabled, durationSec])
 
   return (
     <div
+      ref={containerRef}
       className={className}
       style={{
         overflow: 'hidden',

@@ -39,12 +39,24 @@ export function Waves({
     window.addEventListener('resize', onResize)
     window.addEventListener('mousemove', onMouseMove)
     containerRef.current.addEventListener('touchmove', onTouchMove, { passive: false })
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      } else if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(tick)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     rafRef.current = requestAnimationFrame(tick)
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       window.removeEventListener('resize', onResize)
       window.removeEventListener('mousemove', onMouseMove)
       containerRef.current?.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 
@@ -63,10 +75,12 @@ export function Waves({
     pathsRef.current.forEach((p) => p.remove())
     pathsRef.current = []
 
-    const xGap = 8
-    const yGap = 8
     const oWidth = width + 200
     const oHeight = height + 30
+    // Keep the grid density bounded regardless of viewport size so large desktop
+    // screens don't multiply the per-frame point count (was fixed 8px gaps, unbounded).
+    const xGap = Math.max(8, oWidth / 90)
+    const yGap = Math.max(8, oHeight / 90)
     const totalLines = Math.ceil(oWidth / xGap)
     const totalPoints = Math.ceil(oHeight / yGap)
     const xStart = (width - xGap * totalLines) / 2

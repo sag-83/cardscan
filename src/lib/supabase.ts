@@ -50,6 +50,7 @@ alter table contacts add column if not exists followup_at timestamptz;
 alter table contacts add column if not exists followup_note text default '';
 alter table contacts add column if not exists followup_notified_at timestamptz;
 alter table contacts add column if not exists is_old_customer boolean default false;
+alter table contacts add column if not exists sent_to_sheets boolean default false;
 
 -- Web push subscriptions (server sends reminders when app is closed)
 create table if not exists push_subscriptions (
@@ -267,6 +268,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     visited:         contact.visited ?? false,
     is_customer:     contact.is_customer ?? false,
     is_old_customer: contact.is_old_customer ?? false,
+    sent_to_sheets:  contact.sent_to_sheets ?? false,
     followup_at:     contact.followup_at || null,
     followup_note:   contact.followup_note || '',
     updated_at:      contact.updated_at || now,

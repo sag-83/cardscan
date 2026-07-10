@@ -177,14 +177,22 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* overflow-x / overscroll-behavior are set on html ONLY (document.scrollingElement
+   in standards mode) — not duplicated onto body. Setting both makes Chromium's
+   root-scroller resolution ambiguous, which on Windows (classic, space-reserving
+   scrollbars) can make wheel input silently no-op while the native scrollbar
+   thumb still drags correctly — macOS's overlay scrollbars don't hit this. */
+html {
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
 html,
 body {
   font-family: 'DM Sans', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100dvh;
-  overflow-x: hidden;
-  overscroll-behavior-y: contain;
 }
 
 input,

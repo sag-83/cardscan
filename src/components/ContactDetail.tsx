@@ -121,6 +121,9 @@ export function ContactDetail() {
       if (sent) {
         markContactsSentToSheets([c.id])
         updateContact(c.id, { sent_to_sheets: true })
+        // Persist to Supabase so other browsers/devices also see this contact
+        // as already-sent, instead of re-sending it and duplicating the row.
+        void saveContactToDB({ ...c, sent_to_sheets: true })
       }
       showToast(sent ? 'Sent to Google Sheets!' : 'Not sent')
     } catch (err) {

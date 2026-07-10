@@ -14,6 +14,7 @@ import {
   filterUnsentContactsForSheets,
   markContactsSentToSheets,
 } from '../../lib/export'
+import { saveContactsToDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
 
@@ -61,13 +62,22 @@ export function BulkScreen() {
       const sent = await sendToGoogleSheets(unsentTargetContacts)
       const sentIds = new Set(unsentTargetContacts.map((contact) => contact.id))
       markContactsSentToSheets(Array.from(sentIds))
-      setContacts(
-        contacts.map((contact) => (
-          sentIds.has(contact.id)
-            ? { ...contact, sent_to_sheets: true }
-            : contact
-        ))
-      )
+      const updatedContacts = contacts.map((contact) => (
+        sentIds.has(contact.id)
+          ? { ...contact, sent_to_sheets: true }
+          : contact
+      ))
+      setContacts(updatedContacts)
+
+      // Persist the flag to Supabase too — otherwise it only lives in this
+      // browser's localStorage/state, and opening the app in a different
+      // browser or device (no shared localStorage) sees every contact as
+      // unsent again and re-sends them, creating duplicate rows in the sheet.
+      if (!IS_DEMO_MODE) {
+        const sentContacts = updatedContacts.filter((contact) => sentIds.has(contact.id))
+        void saveContactsToDB(sentContacts, { skipDedupe: true })
+      }
+
       showToast(`${sent} new contact(s) sent to Sheets`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)

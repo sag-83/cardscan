@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { initials, sortContactsAlphabetically } from '../../lib/utils'
+import { initials, phoneKey, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
@@ -167,7 +167,13 @@ export function ContactsScreen() {
     if (query) {
       const q = query.toLowerCase()
       const hay = [c.name, c.company, c.email, c.phone_mobile, c.phone_work, c.city].join(' ').toLowerCase()
-      if (!hay.includes(q)) return false
+      const textMatch = hay.includes(q)
+
+      const qDigits = phoneKey(query)
+      const phoneMatch = qDigits.length >= 3
+        && [c.phone_mobile, c.phone_work, c.phone_fax].some((p) => phoneKey(p).includes(qDigits))
+
+      if (!textMatch && !phoneMatch) return false
     }
     return true
   })
@@ -225,7 +231,7 @@ export function ContactsScreen() {
             <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
           </svg>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search contacts..."
+            placeholder="Search by name, company, or phone..."
             style={{ width: '100%', padding: '9px 36px 9px 36px',
               background: 'var(--bg3)', border: 'none', borderRadius: 10,
               fontSize: 15, color: 'var(--text)' }} />

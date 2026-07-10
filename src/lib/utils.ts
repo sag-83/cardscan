@@ -58,7 +58,7 @@ function compact(s: string | undefined | null): string {
   return (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
-function phoneKey(s: string | undefined | null): string {
+export function phoneKey(s: string | undefined | null): string {
   return (s ?? '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '')
 }
 

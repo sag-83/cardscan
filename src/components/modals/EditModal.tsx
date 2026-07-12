@@ -16,6 +16,7 @@ const TEXT_FIELDS: { key: keyof Contact; label: string; type?: string }[] = [
   { key: 'phone_work', label: 'Work Phone', type: 'tel' },
   { key: 'phone_fax', label: 'Fax', type: 'tel' },
   { key: 'website', label: 'Website' },
+  { key: 'instagram', label: 'Instagram (handle or profile link)' },
   { key: 'address', label: 'Address' },
 ]
 

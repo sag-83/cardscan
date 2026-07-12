@@ -5,6 +5,7 @@ import {
   Building2,
   Briefcase,
   Calendar,
+  Camera,
   FileText,
   Globe,
   Handshake,
@@ -24,7 +25,7 @@ import {
   User,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { initials, mUrl } from '../lib/utils'
+import { initials, mUrl, openInstagram, instagramWebUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets, hasBeenSentToSheets, markContactsSentToSheets } from '../lib/export'
@@ -215,6 +216,10 @@ export function ContactDetail() {
               window.open(`https://maps.google.com/?q=${encodeURIComponent(q)}`, '_blank')
             }} />
         )}
+        {c.instagram && (
+          <ActionBtn icon={<Camera size={18} strokeWidth={2.25} />} token="instagram" label="Instagram"
+            onClick={() => openInstagram(c.instagram)} />
+        )}
         {c.email && (
           <ActionBtn icon={<Mail size={18} strokeWidth={2.25} />} token="email" label="Email"
             onClick={() => window.location.href = `mailto:${c.email}`} />
@@ -286,6 +291,13 @@ export function ContactDetail() {
             <a href={mUrl(c.website)} target="_blank" rel="noreferrer"
               style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.website}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Website</div>
+          </DetailRow>
+        )}
+        {c.instagram && (
+          <DetailRow icon={<Camera size={16} strokeWidth={2} />} bg="var(--action-instagram-fg)">
+            <a href={instagramWebUrl(c.instagram)} onClick={(e) => { e.preventDefault(); openInstagram(c.instagram) }}
+              style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>@{c.instagram}</a>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Instagram</div>
           </DetailRow>
         )}
       </Section>
@@ -375,7 +387,7 @@ const saveBtnStyle: React.CSSProperties = {
   fontSize: 15, cursor: 'pointer',
 }
 
-type ActionToken = 'call' | 'message' | 'map' | 'email' | 'sheets' | 'invoice' | 'edit' | 'neutral'
+type ActionToken = 'call' | 'message' | 'map' | 'email' | 'sheets' | 'invoice' | 'edit' | 'neutral' | 'instagram'
 
 function ActionBtn({ icon, token, label, onClick }: {
   icon: ReactNode; token: ActionToken; label: string; onClick: () => void

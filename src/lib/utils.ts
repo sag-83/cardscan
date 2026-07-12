@@ -20,6 +20,35 @@ export function mUrl(u: string): string {
   return /^https?:\/\//.test(u) ? u : 'https://' + u
 }
 
+export function instagramWebUrl(handle: string): string {
+  return `https://instagram.com/${handle}`
+}
+
+/** Tries the native Instagram app first, falls back to the web profile if the app isn't installed. */
+export function openInstagram(handle: string): void {
+  if (!handle) return
+  const webUrl = instagramWebUrl(handle)
+
+  if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    window.open(webUrl, '_blank')
+    return
+  }
+
+  const fallback = window.setTimeout(() => {
+    window.location.href = webUrl
+  }, 1200)
+
+  const onVisibilityChange = () => {
+    if (document.hidden) {
+      window.clearTimeout(fallback)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
+  window.location.href = `instagram://user?username=${handle}`
+}
+
 export function formatDate(d: string): string {
   if (!d || d === 'UNKNOWN') return 'UNKNOWN'
   try {
@@ -51,7 +80,44 @@ export function normalizeContact(c: Contact): Contact {
     zip: norm(c.zip),
     country: norm(c.country),
     email: (c.email ?? '').toLowerCase().trim(),
+    instagram: normalizeInstagramField(c.instagram),
   }
+}
+
+function cleanInstagramHandle(raw: string): string {
+  return raw.trim().replace(/^@+/, '').replace(/[.,;:]+$/, '').toLowerCase()
+}
+
+const INSTAGRAM_URL_RE = /instagram\.com\/([a-zA-Z0-9._]{2,30})/i
+const INSTAGRAM_LABEL_RE = /\b(?:instagram|insta|ig)\b\s*[:\-]?\s*@?([a-zA-Z0-9._]{2,30})/i
+
+/** A raw instagram field value that could be a bare handle, @handle, or a full profile URL. */
+export function normalizeInstagramField(value: string | undefined | null): string {
+  const source = (value ?? '').trim()
+  if (!source) return ''
+  const urlMatch = source.match(INSTAGRAM_URL_RE)
+  if (urlMatch?.[1]) return cleanInstagramHandle(urlMatch[1])
+  return cleanInstagramHandle(source)
+}
+
+/** Pulls an Instagram handle out of freeform OCR'd text like "Instagram: heartofgold_stamford". */
+export function extractInstagramFromText(text: string | undefined | null): string {
+  const source = (text ?? '').trim()
+  if (!source) return ''
+  const urlMatch = source.match(INSTAGRAM_URL_RE)
+  if (urlMatch?.[1]) return cleanInstagramHandle(urlMatch[1])
+  const labelMatch = source.match(INSTAGRAM_LABEL_RE)
+  if (labelMatch?.[1]) return cleanInstagramHandle(labelMatch[1])
+  return ''
+}
+
+/** Backfill helper: derive an Instagram handle from a contact's existing notes fields. */
+export function deriveInstagramFromNotes(c: Pick<Contact, 'notes' | 'back_notes' | 'user_notes'>): string {
+  return (
+    extractInstagramFromText(c.notes) ||
+    extractInstagramFromText(c.back_notes) ||
+    extractInstagramFromText(c.user_notes)
+  )
 }
 
 function compact(s: string | undefined | null): string {
@@ -116,6 +182,7 @@ export function mergeContact(existing: Contact, incoming: Contact): Contact {
     phone_work: base.phone_work || other.phone_work,
     phone_fax: base.phone_fax || other.phone_fax,
     website: base.website || other.website,
+    instagram: base.instagram || other.instagram,
     address: base.address || other.address,
     city: base.city || other.city,
     state: base.state || other.state,
@@ -201,6 +268,7 @@ export function blankContact(): Contact {
     phone_work: '',
     phone_fax: '',
     website: '',
+    instagram: '',
     address: '',
     city: '',
     state: '',

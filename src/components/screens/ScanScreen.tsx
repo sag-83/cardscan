@@ -14,7 +14,15 @@ import { AmbientShadowOverlay } from '@/components/ui/ambient-shadow-overlay'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
-import { findDuplicateContact, normalizeContact, uid, blankContact } from '../../lib/utils'
+import {
+  findDuplicateContact,
+  normalizeContact,
+  uid,
+  blankContact,
+  normalizeInstagramField,
+  extractInstagramFromText,
+  deriveInstagramFromNotes,
+} from '../../lib/utils'
 import {
   findDuplicateContactInDB,
   getLastSupabaseError,
@@ -292,6 +300,9 @@ export function ScanScreen() {
           if (bd.name && !merged.name) merged.name = scanText(bd.name)
           if (bd.title && !merged.title) merged.title = scanText(bd.title)
           if (bd.company && !merged.company) merged.company = scanText(bd.company)
+          if (!merged.instagram) {
+            merged.instagram = normalizeInstagramField(bd.instagram) || extractInstagramFromText(bd.notes)
+          }
 
           if (bd.notes?.trim()) {
             merged.back_notes = [merged.back_notes, scanText(bd.notes)].filter(Boolean).join(' | ')
@@ -313,8 +324,9 @@ export function ScanScreen() {
         return
       }
 
-      const newCards: Contact[] = extracted.map((raw: Record<string, string>) =>
-        normalizeContact({
+      const newCards: Contact[] = extracted.map((raw: Record<string, string>) => {
+        const notes = scanText(raw.notes)
+        return normalizeContact({
           ...blankContact(),
           id: uid(),
           name: scanText(raw.name),
@@ -325,15 +337,16 @@ export function ScanScreen() {
           phone_work: raw.phone_work ?? '',
           phone_fax: raw.phone_fax ?? '',
           website: raw.website ?? '',
+          instagram: normalizeInstagramField(raw.instagram) || deriveInstagramFromNotes({ notes, back_notes: '', user_notes: '' }),
           address: scanText(raw.address),
           city: scanText(raw.city),
           state: scanText(raw.state),
           zip: scanText(raw.zip),
           country: scanText(raw.country),
-          notes: scanText(raw.notes),
+          notes,
           front_image: thumb,
         })
-      )
+      })
 
       const {
         unique: uniqueCards,

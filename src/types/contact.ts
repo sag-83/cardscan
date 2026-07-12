@@ -8,6 +8,7 @@ export interface Contact {
   phone_work: string
   phone_fax: string
   website: string
+  instagram: string
   address: string
   city: string
   state: string

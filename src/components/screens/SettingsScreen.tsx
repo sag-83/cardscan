@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Bell,
+  Camera,
   Check,
   MapPin,
   ChevronDown,
@@ -31,7 +32,7 @@ import {
 } from '../../lib/invoiceSync'
 import { pullAndMergeFromCloud } from '../../lib/cloudSync'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
-import { dedupeContacts, normalizeContact } from '../../lib/utils'
+import { dedupeContacts, normalizeContact, deriveInstagramFromNotes } from '../../lib/utils'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
 import { Contact } from '../../types/contact'
 import {
@@ -257,6 +258,36 @@ export function SettingsScreen() {
     window.location.replace(`${window.location.pathname}?v=${Date.now()}`)
   }
 
+  const handleBackfillInstagram = async () => {
+    if (!contacts.length) {
+      showToast('No contacts to scan')
+      return
+    }
+
+    const updated = contacts.map((contact) => {
+      if (contact.instagram) return contact
+      const found = deriveInstagramFromNotes(contact)
+      return found ? { ...contact, instagram: found } : contact
+    })
+
+    const changed = updated.filter((contact, i) => contact.instagram !== contacts[i].instagram)
+    if (!changed.length) {
+      showToast('No Instagram handles found in existing notes')
+      return
+    }
+
+    setContacts(updated)
+
+    if (IS_DEMO_MODE) {
+      showToast(`Found Instagram for ${changed.length} contact(s) (demo mode: not saved to cloud)`)
+      return
+    }
+
+    showToast(`Found Instagram for ${changed.length} contact(s), saving to cloud…`)
+    const result = await saveContactsToDB(changed, { skipDedupe: true })
+    showToast(`Instagram backfill: ${result.ok + result.merged} saved${result.failed ? `, ${result.failed} failed` : ''}`)
+  }
+
   return (
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: '16px 16px 0', fontSize: 22, fontWeight: 800 }}>Settings</div>
@@ -388,6 +419,16 @@ export function SettingsScreen() {
         <div onClick={handleUndoNormalize} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>Undo Last Normalize (restore backup)</div>
           <div style={{ color: '#ff9500', display: 'flex' }}><Undo2 size={18} strokeWidth={2} aria-hidden /></div>
+        </div>
+        <Divider />
+        <div onClick={handleBackfillInstagram} style={{ ...rowStyle, cursor: 'pointer' }}>
+          <div style={{ flex: 1, fontSize: 15 }}>
+            Find Instagram in Existing Notes
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              One-time: scans old contacts' notes for Instagram handles and fills the new Instagram field. Safe to run more than once.
+            </div>
+          </div>
+          <div style={{ color: 'var(--action-instagram-fg)', display: 'flex' }}><Camera size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
         <div onClick={() => restoreInputRef.current?.click()} style={{ ...rowStyle, cursor: 'pointer' }}>

@@ -1,7 +1,8 @@
 const GEMINI_PROMPT = `You are a business card OCR extractor. Extract ALL contact info from this image.
 Carefully read phone labels: if a number is labelled Cell/Mobile put in phone_mobile; if Tel/Work/Office put in phone_work; if Fax put in phone_fax. If no label, use phone_mobile.
+If an Instagram handle or instagram.com URL appears anywhere on the card, put just the bare username (no @, no URL) in "instagram". Do not repeat it in notes. Other social media (Facebook, LinkedIn, etc.) still goes in notes.
 Return ONLY a valid JSON array, no markdown. Example:
-[{"name":"Full Name","title":"Job Title","company":"Company","email":"name@co.com","phone_mobile":"+1 917 555 0100","phone_work":"+1 718 555 0200","phone_fax":"","website":"co.com","address":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA","notes":"LinkedIn: linkedin.com/in/name"}]
+[{"name":"Full Name","title":"Job Title","company":"Company","email":"name@co.com","phone_mobile":"+1 917 555 0100","phone_work":"+1 718 555 0200","phone_fax":"","website":"co.com","instagram":"companyhandle","address":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA","notes":"LinkedIn: linkedin.com/in/name"}]
 Empty string for missing fields. Return ONLY the JSON array.`
 
 const OCR_TIMEOUT_MS = 45_000

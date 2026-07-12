@@ -37,6 +37,8 @@
   --action-invoice-fg: #b8860b;
   --action-edit-bg: #f2f2f7;
   --action-edit-fg: #3c3c43;
+  --action-instagram-bg: #fce4f1;
+  --action-instagram-fg: #c2186d;
   --action-neutral-bg: #e5e5ea;
   --action-neutral-fg: #636366;
 
@@ -92,6 +94,8 @@
   --action-invoice-fg: #ffc866;
   --action-edit-bg: rgba(235, 235, 245, 0.1);
   --action-edit-fg: rgba(235, 235, 245, 0.85);
+  --action-instagram-bg: rgba(225, 48, 108, 0.18);
+  --action-instagram-fg: #ff77ac;
   --action-neutral-bg: rgba(235, 235, 245, 0.12);
   --action-neutral-fg: rgba(235, 235, 245, 0.75);
 

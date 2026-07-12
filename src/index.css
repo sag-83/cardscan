@@ -188,17 +188,23 @@
    macOS's overlay scrollbars don't hit this.
    Value is "none" (not "contain") so pulling past the top/bottom edge doesn't
    rubber-band and reveal blank space at all — content stays pinned exactly at
-   the scroll boundary.
-   overflow-x:hidden stays on BOTH html and body — dropping it from body allowed a
-   horizontal swipe/rubber-band on iOS Safari to reveal blank space at the edge of
-   the fixed-position panels (ContactDetail, EditModal, etc). */
+   the scroll boundary. */
 html {
   overscroll-behavior: none;
 }
 
+/* Nothing in this chain (html, body, #root) sets overflow-x/-y at all — any
+   ancestor with a non-"visible" overflow value (even just overflow-x:hidden
+   with nothing actually overflowing) establishes a "scrolling box" for CSS
+   purposes and becomes the containing block position:sticky measures against.
+   That's what was breaking the sticky header: it was sticking relative to
+   #root's scroll position (which never moves) instead of the real page
+   scroll. overscroll-behavior:none (above, html only) already prevents the
+   pull-to-edge bounce/white-space on its own — a plain "overflow" property
+   isn't needed for that, and the app hasn't shown a genuine horizontal
+   scrollbar in testing without it. */
 html,
 body {
-  overflow-x: hidden;
   font-family: 'DM Sans', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);

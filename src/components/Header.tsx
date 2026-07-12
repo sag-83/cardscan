@@ -1,4 +1,4 @@
-import { ArrowUp, Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
@@ -9,8 +9,6 @@ export function Header() {
   const [qrPressed, setQrPressed] = useState(false)
   const { theme, toggle } = useTheme()
   const contacts = useStore((s) => s.contacts)
-
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
   useEffect(() => {
     if (!showQr) return
@@ -88,19 +86,6 @@ export function Header() {
             {contacts.length}
           </span>
         )}
-        <button
-          onClick={scrollToTop}
-          style={{
-            width: 32, height: 32, borderRadius: '50%', border: 'none',
-            background: 'var(--bg3)', color: 'var(--text2)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
-            transition: '0.15s',
-          }}
-          aria-label="Scroll to top"
-          title="Scroll to top"
-        >
-          <ArrowUp size={18} strokeWidth={2.25} />
-        </button>
       </div>
 
       {showQr && (

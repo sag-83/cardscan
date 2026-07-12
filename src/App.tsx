@@ -15,6 +15,7 @@ import { NavBar } from './components/NavBar'
 import { Sidebar, SIDEBAR_WIDTH } from './components/Sidebar'
 import { useIsDesktop } from './hooks/useIsDesktop'
 import { Toast } from './components/Toast'
+import { ScrollToTopButton } from './components/ScrollToTopButton'
 import { ContactDetail, DETAIL_PANEL_WIDTH } from './components/ContactDetail'
 import { EditModal } from './components/modals/EditModal'
 import { ContactMenuModal } from './components/modals/ContactMenuModal'
@@ -279,6 +280,7 @@ export default function App() {
 
       {/* Global overlays — rendered outside the max-width container */}
       <Toast />
+      <ScrollToTopButton />
       <ContactDetail />
       <EditModal />
       <ContactMenuModal />

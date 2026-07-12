@@ -1,18 +1,21 @@
 import type { SavedInvoice, SavedInvoiceItem } from '../types/invoice'
-import type { Contact } from '../types/contact'
+import type { Contact, ContactAddress } from '../types/contact'
 
 const EMPTY_CONTACT_FIELDS = {
   title: '',
   email: '',
+  extra_emails: [] as string[],
   phone_mobile: '',
   phone_work: '',
   phone_fax: '',
+  extra_phones: [] as string[],
   website: '',
   instagram: '',
-  social_media: {},
+  social_media: {} as Record<string, string>,
   address: '',
   zip: '',
   country: '',
+  extra_addresses: [] as ContactAddress[],
   area: '',
   notes: '',
   user_notes: '',

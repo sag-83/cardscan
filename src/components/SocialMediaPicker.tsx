@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { Camera, ThumbsUp, Music2, Pin, Share2 } from 'lucide-react'
 import { getContactSocialLinks, openSocialLink } from '../lib/socialPlatforms'
+import { InstagramBadge, FacebookBadge, TikTokBadge, PinterestBadge } from './icons/SocialBadges'
 import type { Contact } from '../types/contact'
 
-const ICONS: Record<string, ReactNode> = {
-  instagram: <Camera size={22} strokeWidth={2.25} />,
-  facebook: <ThumbsUp size={22} strokeWidth={2.25} />,
-  tiktok: <Music2 size={22} strokeWidth={2.25} />,
-  pinterest: <Pin size={22} strokeWidth={2.25} />,
+const BADGES: Record<string, (size: number) => ReactNode> = {
+  instagram: (size) => <InstagramBadge size={size} />,
+  facebook: (size) => <FacebookBadge size={size} />,
+  tiktok: (size) => <TikTokBadge size={size} />,
+  pinterest: (size) => <PinterestBadge size={size} />,
 }
 
 export function SocialMediaPicker({ contact }: { contact: Contact }) {
@@ -20,23 +20,16 @@ export function SocialMediaPicker({ contact }: { contact: Contact }) {
       <div
         onClick={() => setOpen(true)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
           borderBottom: '1px solid var(--border2)', cursor: 'pointer',
         }}
       >
-        <div style={{
-          width: 32, height: 32, borderRadius: '50%', background: 'var(--action-neutral-bg)',
-          color: 'var(--action-neutral-fg)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', flexShrink: 0,
-        }}>
-          <Share2 size={16} strokeWidth={2} aria-hidden />
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {links.map((link) => (
+            <div key={link.key}>{BADGES[link.key]?.(30)}</div>
+          ))}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {links.map((l) => l.label).join(', ')}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Social Media</div>
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>Social Media</div>
       </div>
 
       {open && (
@@ -72,12 +65,7 @@ export function SocialMediaPicker({ contact }: { contact: Contact }) {
                     background: 'none', border: 'none', cursor: 'pointer', padding: 4, width: 76,
                   }}
                 >
-                  <div style={{
-                    width: 54, height: 54, borderRadius: '50%', background: link.bg, color: link.fg,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {ICONS[link.key]}
-                  </div>
+                  {BADGES[link.key]?.(54)}
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', textAlign: 'center' }}>
                     {link.label}
                   </div>

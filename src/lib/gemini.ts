@@ -1,6 +1,7 @@
 const GEMINI_PROMPT = `You are a business card OCR extractor. Extract ALL contact info from this image.
 Carefully read phone labels: if a number is labelled Cell/Mobile put in phone_mobile; if Tel/Work/Office put in phone_work; if Fax put in phone_fax. If no label, use phone_mobile.
 If an Instagram handle or instagram.com URL appears anywhere on the card, put just the bare username (no @, no URL) in "instagram". Do not repeat it in notes. Other social media (Facebook, LinkedIn, etc.) still goes in notes.
+If the card lists more than one distinct physical address (e.g. two store locations), also include an "addresses" array with one object per address, each shaped {"address","city","state","zip","country"}, in the order they appear on the card. Still fill the single "address"/"city"/"state"/"zip"/"country" fields with the first one. If there is only one address, omit "addresses" entirely.
 Return ONLY a valid JSON array, no markdown. Example:
 [{"name":"Full Name","title":"Job Title","company":"Company","email":"name@co.com","phone_mobile":"+1 917 555 0100","phone_work":"+1 718 555 0200","phone_fax":"","website":"co.com","instagram":"companyhandle","address":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA","notes":"LinkedIn: linkedin.com/in/name"}]
 Empty string for missing fields. Return ONLY the JSON array.`
@@ -8,11 +9,24 @@ Empty string for missing fields. Return ONLY the JSON array.`
 const OCR_TIMEOUT_MS = 45_000
 const GEMINI_KEY_CURSOR = 'cardscan_gemini_key_cursor'
 
+export interface GeminiAddress {
+  address: string
+  city: string
+  state: string
+  zip: string
+  country: string
+}
+
+export interface GeminiCardExtraction {
+  [key: string]: string | GeminiAddress[] | undefined
+  addresses?: GeminiAddress[]
+}
+
 async function callWithKey(
   b64: string,
   mime: string,
   apiKey: string
-): Promise<Record<string, string>[]> {
+): Promise<GeminiCardExtraction[]> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), OCR_TIMEOUT_MS)
 
@@ -50,7 +64,7 @@ async function callWithKey(
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   const match = text.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('No JSON array in response')
-  return JSON.parse(match[0]) as Record<string, string>[]
+  return JSON.parse(match[0]) as GeminiCardExtraction[]
 }
 
 function isQuotaError(err: unknown): boolean {
@@ -79,7 +93,7 @@ export async function callGemini(
   b64: string,
   mime: string,
   keys: string[]
-): Promise<Record<string, string>[]> {
+): Promise<GeminiCardExtraction[]> {
   const validKeys = keys.filter(Boolean)
   if (!validKeys.length) throw new Error('No Gemini API key configured')
 

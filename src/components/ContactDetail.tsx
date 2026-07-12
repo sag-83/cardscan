@@ -5,6 +5,7 @@ import {
   Building2,
   Briefcase,
   Calendar,
+  Check,
   FileText,
   Globe,
   Handshake,
@@ -18,10 +19,13 @@ import {
   Package,
   Pencil,
   Phone,
+  Plus,
   Printer,
   Smartphone,
   Star,
+  Trash2,
   User,
+  X,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { initials, mUrl } from '../lib/utils'
@@ -38,6 +42,7 @@ export const DETAIL_PANEL_WIDTH = 440
 export function ContactDetail() {
   const isDesktop = useIsDesktop()
   const [isSendingSheets, setIsSendingSheets] = useState(false)
+  const [addingField, setAddingField] = useState<'email' | 'phone' | null>(null)
   const detailContactId = useStore((s) => s.detailContactId)
   const contacts = useStore((s) => s.contacts)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
@@ -100,6 +105,40 @@ export function ContactDetail() {
     else showToast('Supabase backup failed')
   }
 
+  const handleAddEmail = async (value: string) => {
+    const next = [...(c.extra_emails ?? []), value]
+    setAddingField(null)
+    if (IS_DEMO_MODE) { updateContact(c.id, { extra_emails: next }); return }
+    const saved = await saveContactToDB({ ...c, extra_emails: next })
+    if (saved) updateContact(c.id, { extra_emails: next })
+    else showToast('Supabase backup failed')
+  }
+
+  const handleRemoveEmail = async (index: number) => {
+    const next = (c.extra_emails ?? []).filter((_, i) => i !== index)
+    if (IS_DEMO_MODE) { updateContact(c.id, { extra_emails: next }); return }
+    const saved = await saveContactToDB({ ...c, extra_emails: next })
+    if (saved) updateContact(c.id, { extra_emails: next })
+    else showToast('Supabase backup failed')
+  }
+
+  const handleAddPhone = async (value: string) => {
+    const next = [...(c.extra_phones ?? []), value]
+    setAddingField(null)
+    if (IS_DEMO_MODE) { updateContact(c.id, { extra_phones: next }); return }
+    const saved = await saveContactToDB({ ...c, extra_phones: next })
+    if (saved) updateContact(c.id, { extra_phones: next })
+    else showToast('Supabase backup failed')
+  }
+
+  const handleRemovePhone = async (index: number) => {
+    const next = (c.extra_phones ?? []).filter((_, i) => i !== index)
+    if (IS_DEMO_MODE) { updateContact(c.id, { extra_phones: next }); return }
+    const saved = await saveContactToDB({ ...c, extra_phones: next })
+    if (saved) updateContact(c.id, { extra_phones: next })
+    else showToast('Supabase backup failed')
+  }
+
   const handleSaveToPhone = () => {
     downloadVCard(c)
     showToast('Open the .vcf file to save!')
@@ -142,6 +181,12 @@ export function ContactDetail() {
   }
 
   const fullAddress = [c.address, c.city, c.state, c.zip, c.country].filter(Boolean).join(', ')
+  const phoneAnchor = c.phone_mobile ? 'mobile' : c.phone_work ? 'work' : c.phone_fax ? 'fax' : null
+
+  const openInMaps = (company: string, addressText: string) => {
+    const q = [company, addressText].filter(Boolean).join(' ')
+    window.open(`https://maps.google.com/?q=${encodeURIComponent(q)}`, '_blank')
+  }
 
   return (
     <div style={isDesktop ? {
@@ -250,25 +295,62 @@ export function ContactDetail() {
       <Section>
         {c.company && <SimpleRow icon={<Building2 size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.company} label="Company" />}
         {c.title && <SimpleRow icon={<Briefcase size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.title} label="Job Title" />}
-        {c.email && (
-          <DetailRow icon={<Mail size={16} strokeWidth={2} />} bg="var(--accent)">
+        {c.email ? (
+          <DetailRow icon={<Mail size={16} strokeWidth={2} />} bg="var(--accent)"
+            right={<PlusButton onClick={() => setAddingField(addingField === 'email' ? null : 'email')} />}>
             <a href={`mailto:${c.email}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.email}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Email</div>
           </DetailRow>
+        ) : (
+          <AddTriggerRow label="Add Email" onClick={() => setAddingField(addingField === 'email' ? null : 'email')} />
         )}
+        {(c.extra_emails ?? []).map((email, i) => (
+          <DetailRow key={i} icon={<Mail size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)"
+            right={<RemoveButton onClick={() => handleRemoveEmail(i)} />}>
+            <a href={`mailto:${email}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{email}</a>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Email {i + 2}</div>
+          </DetailRow>
+        ))}
+        {addingField === 'email' && (
+          <AddInlineRow type="email" placeholder="Add email address"
+            onSubmit={handleAddEmail} onCancel={() => setAddingField(null)} />
+        )}
+
         {c.phone_mobile && (
-          <DetailRow icon={<Smartphone size={16} strokeWidth={2} />} bg="var(--chip-success-fg)">
+          <DetailRow icon={<Smartphone size={16} strokeWidth={2} />} bg="var(--chip-success-fg)"
+            right={phoneAnchor === 'mobile' ? <PlusButton onClick={() => setAddingField(addingField === 'phone' ? null : 'phone')} /> : undefined}>
             <a href={`tel:${c.phone_mobile}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.phone_mobile}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Mobile</div>
           </DetailRow>
         )}
         {c.phone_work && (
-          <DetailRow icon={<Phone size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
+          <DetailRow icon={<Phone size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)"
+            right={phoneAnchor === 'work' ? <PlusButton onClick={() => setAddingField(addingField === 'phone' ? null : 'phone')} /> : undefined}>
             <a href={`tel:${c.phone_work}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{c.phone_work}</a>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Work Tel</div>
           </DetailRow>
         )}
-        {c.phone_fax && <SimpleRow icon={<Printer size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)" value={c.phone_fax} label="Fax" />}
+        {c.phone_fax && (
+          <DetailRow icon={<Printer size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)"
+            right={phoneAnchor === 'fax' ? <PlusButton onClick={() => setAddingField(addingField === 'phone' ? null : 'phone')} /> : undefined}>
+            <div style={{ fontSize: 15, fontWeight: 500 }}>{c.phone_fax}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Fax</div>
+          </DetailRow>
+        )}
+        {!phoneAnchor && (
+          <AddTriggerRow label="Add Phone" onClick={() => setAddingField(addingField === 'phone' ? null : 'phone')} />
+        )}
+        {(c.extra_phones ?? []).map((phone, i) => (
+          <DetailRow key={i} icon={<Phone size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)"
+            right={<RemoveButton onClick={() => handleRemovePhone(i)} />}>
+            <a href={`tel:${phone}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>{phone}</a>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Phone {i + 2}</div>
+          </DetailRow>
+        ))}
+        {addingField === 'phone' && (
+          <AddInlineRow type="tel" placeholder="Add phone number"
+            onSubmit={handleAddPhone} onCancel={() => setAddingField(null)} />
+        )}
         {c.website && (
           <DetailRow icon={<Globe size={16} strokeWidth={2} />} bg="var(--action-email-fg)">
             <a href={mUrl(c.website)} target="_blank" rel="noreferrer"
@@ -300,10 +382,29 @@ export function ContactDetail() {
         <>
           <SectionTitle>Address</SectionTitle>
           <Section>
-            <DetailRow icon={<MapPin size={16} strokeWidth={2} />} bg="var(--chip-warning-fg)">
+            <DetailRow icon={<MapPin size={16} strokeWidth={2} />} bg="var(--chip-warning-fg)"
+              right={<MapButton onClick={() => openInMaps(c.company, fullAddress)} />}>
               <div style={{ fontSize: 14, whiteSpace: 'normal' }}>{fullAddress}</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Company Address</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Company Address
+                {c.extra_addresses.length > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--chip-accent-bg)',
+                    borderRadius: 5, padding: '1px 6px', textTransform: 'uppercase', letterSpacing: '0.3px',
+                  }}>Primary</span>
+                )}
+              </div>
             </DetailRow>
+            {c.extra_addresses.map((addr, i) => {
+              const text = [addr.address, addr.city, addr.state, addr.zip, addr.country].filter(Boolean).join(', ')
+              return (
+                <DetailRow key={i} icon={<MapPin size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)"
+                  right={<MapButton onClick={() => openInMaps(c.company, text)} />}>
+                  <div style={{ fontSize: 14, whiteSpace: 'normal' }}>{text}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Address {i + 2}</div>
+                </DetailRow>
+              )
+            })}
           </Section>
         </>
       )}
@@ -425,7 +526,7 @@ function Section({ children }: { children: React.ReactNode }) {
   )
 }
 
-function DetailRow({ icon, bg, children }: { icon: ReactNode; bg: string; children: React.ReactNode }) {
+function DetailRow({ icon, bg, right, children }: { icon: ReactNode; bg: string; right?: ReactNode; children: React.ReactNode }) {
   const isNeutral = bg === 'var(--action-neutral-bg)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
@@ -436,6 +537,7 @@ function DetailRow({ icon, bg, children }: { icon: ReactNode; bg: string; childr
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+      {right}
     </div>
   )
 }
@@ -446,6 +548,90 @@ function SimpleRow({ icon, bg, value, label }: { icon: ReactNode; bg: string; va
       <div style={{ fontSize: 15, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>{label}</div>
     </DetailRow>
+  )
+}
+
+function PlusButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--border)',
+      background: 'var(--bg3)', color: 'var(--accent)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0,
+    }} aria-label="Add another">
+      <Plus size={14} strokeWidth={2.5} />
+    </button>
+  )
+}
+
+function MapButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      width: 30, height: 30, borderRadius: '50%', border: 'none',
+      background: 'var(--chip-warning-bg)', color: 'var(--chip-warning-fg)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0,
+    }} aria-label="Open in Maps">
+      <MapPin size={15} strokeWidth={2.25} />
+    </button>
+  )
+}
+
+function RemoveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer',
+      padding: 6, display: 'flex', flexShrink: 0,
+    }} aria-label="Remove">
+      <Trash2 size={15} strokeWidth={2} />
+    </button>
+  )
+}
+
+function AddTriggerRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', width: '100%',
+      background: 'none', border: 'none', borderBottom: '1px solid var(--border2)',
+      color: 'var(--accent)', fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+    }}>
+      <Plus size={15} strokeWidth={2.5} /> {label}
+    </button>
+  )
+}
+
+function AddInlineRow({ type, placeholder, onSubmit, onCancel }: {
+  type: 'email' | 'tel'
+  placeholder: string
+  onSubmit: (value: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState('')
+  const submit = () => { if (value.trim()) onSubmit(value.trim()) }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid var(--border2)' }}>
+      <input
+        autoFocus
+        type={type}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit()
+          if (e.key === 'Escape') onCancel()
+        }}
+        placeholder={placeholder}
+        style={{ flex: 1, minWidth: 0, padding: '9px 12px', background: 'var(--bg3)',
+          border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 14, color: 'var(--text)' }}
+      />
+      <button type="button" onClick={submit} style={{
+        background: 'var(--accent)', border: 'none', borderRadius: 8, width: 32, height: 32,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+        cursor: 'pointer', flexShrink: 0, padding: 0,
+      }} aria-label="Confirm"><Check size={16} strokeWidth={2.5} /></button>
+      <button type="button" onClick={onCancel} style={{
+        background: 'var(--bg3)', border: 'none', borderRadius: 8, width: 32, height: 32,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)',
+        cursor: 'pointer', flexShrink: 0, padding: 0,
+      }} aria-label="Cancel"><X size={16} strokeWidth={2.5} /></button>
+    </div>
   )
 }
 

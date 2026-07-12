@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { Contact } from '../types/contact'
+import { Contact, ContactAddress } from '../types/contact'
 import { SavedInvoice } from '../types/invoice'
 import { normalizePaidBy } from './invoiceNormalize'
 import { contactDedupKey, findDuplicateContact, mergeContact } from './utils'
@@ -11,9 +11,11 @@ create table if not exists contacts (
   title text default '',
   company text default '',
   email text default '',
+  extra_emails jsonb default '[]',
   phone_mobile text default '',
   phone_work text default '',
   phone_fax text default '',
+  extra_phones jsonb default '[]',
   website text default '',
   instagram text default '',
   social_media jsonb default '{}',
@@ -22,6 +24,7 @@ create table if not exists contacts (
   state text default '',
   zip text default '',
   country text default '',
+  extra_addresses jsonb default '[]',
   area text default '',
   notes text default '',
   back_notes text default '',
@@ -55,6 +58,9 @@ alter table contacts add column if not exists is_old_customer boolean default fa
 alter table contacts add column if not exists sent_to_sheets boolean default false;
 alter table contacts add column if not exists instagram text default '';
 alter table contacts add column if not exists social_media jsonb default '{}';
+alter table contacts add column if not exists extra_emails jsonb default '[]';
+alter table contacts add column if not exists extra_phones jsonb default '[]';
+alter table contacts add column if not exists extra_addresses jsonb default '[]';
 
 -- Web push subscriptions (server sends reminders when app is closed)
 create table if not exists push_subscriptions (
@@ -204,6 +210,24 @@ export function ensureSupabaseClient(): SupabaseClient | null {
   return null
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
+function asAddressArray(value: unknown): ContactAddress[] {
+  if (!Array.isArray(value)) return []
+  return value.map((v) => {
+    const a = (v ?? {}) as Record<string, unknown>
+    return {
+      address: String(a.address ?? ''),
+      city: String(a.city ?? ''),
+      state: String(a.state ?? ''),
+      zip: String(a.zip ?? ''),
+      country: String(a.country ?? ''),
+    }
+  })
+}
+
 export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
   const r = row as Record<string, unknown>
   return {
@@ -212,9 +236,11 @@ export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
     title: String(r.title ?? ''),
     company: String(r.company ?? ''),
     email: String(r.email ?? ''),
+    extra_emails: asStringArray(r.extra_emails),
     phone_mobile: String(r.phone_mobile ?? ''),
     phone_work: String(r.phone_work ?? ''),
     phone_fax: String(r.phone_fax ?? ''),
+    extra_phones: asStringArray(r.extra_phones),
     website: String(r.website ?? ''),
     instagram: String(r.instagram ?? ''),
     social_media: (r.social_media && typeof r.social_media === 'object' ? r.social_media : {}) as Record<string, string>,
@@ -223,6 +249,7 @@ export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
     state: String(r.state ?? ''),
     zip: String(r.zip ?? ''),
     country: String(r.country ?? ''),
+    extra_addresses: asAddressArray(r.extra_addresses),
     area: String(r.area ?? ''),
     notes: String(r.notes ?? ''),
     back_notes: String(r.back_notes ?? ''),
@@ -252,9 +279,11 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     title:           contact.title,
     company:         contact.company,
     email:           contact.email,
+    extra_emails:    contact.extra_emails ?? [],
     phone_mobile:    contact.phone_mobile,
     phone_work:      contact.phone_work,
     phone_fax:       contact.phone_fax,
+    extra_phones:    contact.extra_phones ?? [],
     website:         contact.website,
     instagram:       contact.instagram ?? '',
     social_media:    contact.social_media ?? {},
@@ -263,6 +292,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     state:           contact.state,
     zip:             contact.zip,
     country:         contact.country,
+    extra_addresses: contact.extra_addresses ?? [],
     area:            contact.area,
     notes:           contact.notes,
     back_notes:      contact.back_notes,

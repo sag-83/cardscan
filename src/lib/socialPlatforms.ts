@@ -4,8 +4,6 @@ import { openInstagram } from './utils'
 export interface SocialPlatformConfig {
   key: string
   label: string
-  bg: string
-  fg: string
   webUrl: (handle: string) => string
   urlPattern: RegExp
   labelPattern: RegExp
@@ -20,8 +18,6 @@ export const SOCIAL_PLATFORMS: SocialPlatformConfig[] = [
   {
     key: 'facebook',
     label: 'Facebook',
-    bg: 'rgba(24, 119, 242, 0.14)',
-    fg: '#1877f2',
     webUrl: (h) => `https://facebook.com/${h}`,
     urlPattern: /facebook\.com\/([a-zA-Z0-9._-]{2,50})/i,
     labelPattern: /\b(?:facebook|fb)\b\s*[:\-]?\s*@?([a-zA-Z0-9._-]{2,50})/i,
@@ -29,8 +25,6 @@ export const SOCIAL_PLATFORMS: SocialPlatformConfig[] = [
   {
     key: 'tiktok',
     label: 'TikTok',
-    bg: 'rgba(0, 0, 0, 0.08)',
-    fg: '#111111',
     webUrl: (h) => `https://tiktok.com/@${h.replace(/^@/, '')}`,
     urlPattern: /tiktok\.com\/@?([a-zA-Z0-9._]{2,30})/i,
     labelPattern: /\btik ?tok\b\s*[:\-]?\s*@?([a-zA-Z0-9._]{2,30})/i,
@@ -38,8 +32,6 @@ export const SOCIAL_PLATFORMS: SocialPlatformConfig[] = [
   {
     key: 'pinterest',
     label: 'Pinterest',
-    bg: 'rgba(230, 0, 35, 0.14)',
-    fg: '#e60023',
     webUrl: (h) => `https://pinterest.com/${h}`,
     urlPattern: /pinterest\.com\/([a-zA-Z0-9._]{2,30})/i,
     labelPattern: /\bpinterest\b\s*[:\-]?\s*@?([a-zA-Z0-9._]{2,30})/i,
@@ -77,8 +69,6 @@ export interface ContactSocialLink {
   key: string
   label: string
   handle: string
-  bg: string
-  fg: string
   url: string
 }
 
@@ -92,8 +82,6 @@ export function getContactSocialLinks(
       key: 'instagram',
       label: 'Instagram',
       handle: c.instagram,
-      bg: 'var(--action-instagram-bg)',
-      fg: 'var(--action-instagram-fg)',
       url: `https://instagram.com/${c.instagram}`,
     })
   }
@@ -104,8 +92,6 @@ export function getContactSocialLinks(
       key: platform.key,
       label: platform.label,
       handle,
-      bg: platform.bg,
-      fg: platform.fg,
       url: platform.webUrl(handle),
     })
   }

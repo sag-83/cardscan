@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
-import type { Contact } from '../types/contact'
+import type { Contact, ContactAddress } from '../types/contact'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -168,6 +168,30 @@ function scoreContact(c: Contact): number {
   ].filter(Boolean).length + c.stars
 }
 
+function mergeUniqueStrings(a: string[] | undefined, b: string[] | undefined): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of [...(a ?? []), ...(b ?? [])]) {
+    const key = value.trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    result.push(value.trim())
+  }
+  return result
+}
+
+function mergeUniqueAddresses(a: ContactAddress[] | undefined, b: ContactAddress[] | undefined): ContactAddress[] {
+  const seen = new Set<string>()
+  const result: ContactAddress[] = []
+  for (const addr of [...(a ?? []), ...(b ?? [])]) {
+    const key = JSON.stringify(addr)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(addr)
+  }
+  return result
+}
+
 export function mergeContact(existing: Contact, incoming: Contact): Contact {
   const base = scoreContact(incoming) > scoreContact(existing) ? incoming : existing
   const other = base === incoming ? existing : incoming
@@ -178,9 +202,11 @@ export function mergeContact(existing: Contact, incoming: Contact): Contact {
     title: base.title || other.title,
     company: base.company || other.company,
     email: base.email || other.email,
+    extra_emails: mergeUniqueStrings(base.extra_emails, other.extra_emails),
     phone_mobile: base.phone_mobile || other.phone_mobile,
     phone_work: base.phone_work || other.phone_work,
     phone_fax: base.phone_fax || other.phone_fax,
+    extra_phones: mergeUniqueStrings(base.extra_phones, other.extra_phones),
     website: base.website || other.website,
     instagram: base.instagram || other.instagram,
     social_media: { ...other.social_media, ...base.social_media },
@@ -189,6 +215,7 @@ export function mergeContact(existing: Contact, incoming: Contact): Contact {
     state: base.state || other.state,
     zip: base.zip || other.zip,
     country: base.country || other.country,
+    extra_addresses: mergeUniqueAddresses(base.extra_addresses, other.extra_addresses),
     area: base.area || other.area,
     notes: base.notes || other.notes,
     back_notes: base.back_notes || other.back_notes,
@@ -265,9 +292,11 @@ export function blankContact(): Contact {
     title: '',
     company: '',
     email: '',
+    extra_emails: [],
     phone_mobile: '',
     phone_work: '',
     phone_fax: '',
+    extra_phones: [],
     website: '',
     instagram: '',
     social_media: {},
@@ -276,6 +305,7 @@ export function blankContact(): Contact {
     state: '',
     zip: '',
     country: '',
+    extra_addresses: [],
     area: '',
     notes: '',
     user_notes: '',

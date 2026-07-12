@@ -7,13 +7,14 @@ import {
   CornerDownLeft,
   Loader2,
   Mail,
+  MapPin,
   Sparkles,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { AmbientShadowOverlay } from '@/components/ui/ambient-shadow-overlay'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { callGemini, fileToBase64, resizeImage } from '../../lib/gemini'
+import { callGemini, fileToBase64, resizeImage, type GeminiAddress, type GeminiCardExtraction } from '../../lib/gemini'
 import {
   findDuplicateContact,
   normalizeContact,
@@ -69,6 +70,14 @@ function scanText(value: string | undefined): string {
   return (value ?? '').toUpperCase().trim()
 }
 
+function rawStr(value: string | GeminiAddress[] | undefined): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function rawAddresses(value: string | GeminiAddress[] | undefined): GeminiAddress[] {
+  return Array.isArray(value) ? value : []
+}
+
 async function filterUniqueAgainstLocalAndCloud(
   cards: Contact[],
   contacts: Contact[]
@@ -106,6 +115,8 @@ export function ScanScreen() {
   const backInputRef = useRef<HTMLInputElement | null>(null)
   const backFileInputRef = useRef<HTMLInputElement | null>(null)
   const [isSavingPreview, setIsSavingPreview] = useState(false)
+  const [addressPickerCardId, setAddressPickerCardId] = useState<string | null>(null)
+  const seenAddressPickerIds = useRef<Set<string>>(new Set())
 
   const {
     contacts,
@@ -157,6 +168,32 @@ export function ScanScreen() {
       backInputRef.current?.click()
     }
   }, [triggerBackScan, setTriggerBackScan])
+
+  // If a scanned card has more than one address, ask which one should be
+  // primary (used by the Map button) before the preview is accepted/saved.
+  useEffect(() => {
+    if (addressPickerCardId) return
+    const needsPick = previewCards.find(
+      (c) => c.extra_addresses.length > 0 && !seenAddressPickerIds.current.has(c.id)
+    )
+    if (needsPick) setAddressPickerCardId(needsPick.id)
+  }, [previewCards, addressPickerCardId])
+
+  const resolveAddressPicker = (cardId: string, chosenIndex: number | null) => {
+    seenAddressPickerIds.current.add(cardId)
+    setAddressPickerCardId(null)
+    if (chosenIndex === null || chosenIndex === 0) return
+
+    const card = previewCards.find((c) => c.id === cardId)
+    if (!card) return
+    const allAddresses = [
+      { address: card.address, city: card.city, state: card.state, zip: card.zip, country: card.country },
+      ...card.extra_addresses,
+    ]
+    const chosen = allAddresses[chosenIndex]
+    const rest = allAddresses.filter((_, i) => i !== chosenIndex)
+    setPreviewCards(previewCards.map((c) => (c.id === cardId ? { ...c, ...chosen, extra_addresses: rest } : c)))
+  }
 
   const startScan = (side: 'front' | 'back', source: 'camera' | 'files' = 'camera') => {
     if (IS_DEMO_MODE) {
@@ -260,7 +297,7 @@ export function ScanScreen() {
         }
 
         if (target) {
-          const bd = (extracted[0] ?? {}) as Record<string, string>
+          const bd = (extracted[0] ?? {}) as unknown as Record<string, string>
 
           await saveImage(`${pendingBackId}_back`, scanB64).catch(() => {})
           const backUrl = await uploadCardPhoto(pendingBackId, 'back', scanB64)
@@ -326,26 +363,32 @@ export function ScanScreen() {
         return
       }
 
-      const newCards: Contact[] = extracted.map((raw: Record<string, string>) => {
-        const notes = scanText(raw.notes)
+      const newCards: Contact[] = extracted.map((raw: GeminiCardExtraction) => {
+        const notes = scanText(rawStr(raw.notes))
+        const addressList = rawAddresses(raw.addresses)
+        const [primaryAddr, ...restAddr] = addressList.map((a) => ({
+          address: scanText(a.address), city: scanText(a.city), state: scanText(a.state),
+          zip: scanText(a.zip), country: scanText(a.country),
+        }))
         return normalizeContact({
           ...blankContact(),
           id: uid(),
-          name: scanText(raw.name),
-          title: scanText(raw.title),
-          company: scanText(raw.company),
-          email: raw.email ?? '',
-          phone_mobile: raw.phone_mobile ?? '',
-          phone_work: raw.phone_work ?? '',
-          phone_fax: raw.phone_fax ?? '',
-          website: raw.website ?? '',
-          instagram: normalizeInstagramField(raw.instagram) || deriveInstagramFromNotes({ notes, back_notes: '', user_notes: '' }),
+          name: scanText(rawStr(raw.name)),
+          title: scanText(rawStr(raw.title)),
+          company: scanText(rawStr(raw.company)),
+          email: rawStr(raw.email),
+          phone_mobile: rawStr(raw.phone_mobile),
+          phone_work: rawStr(raw.phone_work),
+          phone_fax: rawStr(raw.phone_fax),
+          website: rawStr(raw.website),
+          instagram: normalizeInstagramField(rawStr(raw.instagram)) || deriveInstagramFromNotes({ notes, back_notes: '', user_notes: '' }),
           social_media: deriveSocialMediaFromNotes({ notes, back_notes: '', user_notes: '' }),
-          address: scanText(raw.address),
-          city: scanText(raw.city),
-          state: scanText(raw.state),
-          zip: scanText(raw.zip),
-          country: scanText(raw.country),
+          address: primaryAddr ? primaryAddr.address : scanText(rawStr(raw.address)),
+          city: primaryAddr ? primaryAddr.city : scanText(rawStr(raw.city)),
+          state: primaryAddr ? primaryAddr.state : scanText(rawStr(raw.state)),
+          zip: primaryAddr ? primaryAddr.zip : scanText(rawStr(raw.zip)),
+          country: primaryAddr ? primaryAddr.country : scanText(rawStr(raw.country)),
+          extra_addresses: restAddr,
           notes,
           front_image: thumb,
         })
@@ -507,13 +550,33 @@ export function ScanScreen() {
   }
 
   if (previewCards.length) {
+    const addressPickerCard = addressPickerCardId
+      ? previewCards.find((c) => c.id === addressPickerCardId)
+      : undefined
+
     return (
-      <PreviewPanel
-        cards={previewCards}
-        onAccept={acceptPreview}
-        onCancel={cancelPreview}
-        isSaving={isSavingPreview}
-      />
+      <>
+        <PreviewPanel
+          cards={previewCards}
+          onAccept={acceptPreview}
+          onCancel={cancelPreview}
+          isSaving={isSavingPreview}
+        />
+        {addressPickerCard && (
+          <AddressPickerModal
+            cardName={addressPickerCard.name || addressPickerCard.company || 'This card'}
+            addresses={[
+              {
+                address: addressPickerCard.address, city: addressPickerCard.city,
+                state: addressPickerCard.state, zip: addressPickerCard.zip, country: addressPickerCard.country,
+              },
+              ...addressPickerCard.extra_addresses,
+            ]}
+            onSelect={(index) => resolveAddressPicker(addressPickerCard.id, index)}
+            onSkip={() => resolveAddressPicker(addressPickerCard.id, null)}
+          />
+        )}
+      </>
     )
   }
 
@@ -657,6 +720,67 @@ export function ScanScreen() {
           </CardFooter>
         )}
       </Card>
+    </div>
+  )
+}
+
+function AddressPickerModal({ cardName, addresses, onSelect, onSkip }: {
+  cardName: string
+  addresses: GeminiAddress[]
+  onSelect: (index: number) => void
+  onSkip: () => void
+}) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'var(--modal-bg)', zIndex: 500,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', animation: 'fadeIn 0.18s ease',
+    }}>
+      <div style={{
+        background: 'var(--bg2)', borderRadius: '22px 22px 0 0', width: '100%', maxWidth: 480,
+        padding: '16px 16px 36px', animation: 'sheetUp 0.3s cubic-bezier(0.16,1,0.3,1)',
+      }}>
+        <div style={{ width: 36, height: 4, borderRadius: 4, background: 'var(--bg4)', margin: '0 auto 16px' }} />
+        <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>Multiple Addresses Found</div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>
+          {cardName} lists {addresses.length} addresses. Which should be primary — used by the Map button?
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {addresses.map((addr, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onSelect(i)}
+              style={{
+                textAlign: 'left', padding: '12px 14px', borderRadius: 12,
+                border: i === 0 ? '2px solid var(--accent)' : '1.5px solid var(--border)',
+                background: 'var(--bg3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+              }}
+            >
+              <MapPin size={16} strokeWidth={2} color={i === 0 ? 'var(--accent)' : 'var(--text3)'} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
+                  {[addr.address, addr.city, addr.state].filter(Boolean).join(', ')}
+                </div>
+                {i === 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2, fontWeight: 700 }}>
+                    CURRENT DEFAULT
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onSkip}
+          style={{
+            marginTop: 14, width: '100%', padding: '11px', borderRadius: 10, border: 'none',
+            background: 'none', color: 'var(--text3)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Keep default
+        </button>
+      </div>
     </div>
   )
 }

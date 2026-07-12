@@ -195,7 +195,7 @@ export function InvoiceModal() {
           maxWidth: 480,
           maxHeight: '92dvh',
           overflowY: 'auto',
-          overscrollBehavior: 'contain',
+          overscrollBehavior: 'none',
           padding: '16px 16px 24px',
         }}
       >

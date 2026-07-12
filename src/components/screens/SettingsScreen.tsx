@@ -417,7 +417,7 @@ export function SettingsScreen() {
         </div>
         <Divider />
         <div onClick={handleNormalizeNow} style={{ ...rowStyle, cursor: 'pointer' }}>
-          <div style={{ flex: 1, fontSize: 15 }}>Normalize Existing Data Now (ALL CAPS + dedupe)</div>
+          <div style={{ flex: 1, fontSize: 15 }}>Normalize Existing Data Now (ALL CAPS + dedupe + fix state names)</div>
           <div style={{ color: '#34c759', display: 'flex' }}><Check size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />

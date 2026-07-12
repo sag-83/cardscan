@@ -89,7 +89,7 @@ export function EditModal() {
         style={{
           background: 'var(--bg2)', borderRadius: '22px 22px 0 0',
           width: '100%', maxWidth: 480, maxHeight: '90dvh',
-          overflowY: 'auto', padding: '16px 16px 44px',
+          overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 16px 44px',
           animation: 'sheetUp 0.3s cubic-bezier(0.16,1,0.3,1)',
         }}
       >

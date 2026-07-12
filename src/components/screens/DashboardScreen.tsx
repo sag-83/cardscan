@@ -17,6 +17,7 @@ import { SavedInvoice, SavedInvoiceItem } from '../../types/invoice'
 import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
 import { isInvoiceInCalendarMonth } from '../../lib/invoiceStats'
 import { uid } from '../../lib/utils'
+import { normalizeStateValue } from '../../lib/usStates'
 
 function openWebAnalyticsDashboard() {
   const base = window.location.origin.replace(/\/$/, '')
@@ -68,11 +69,12 @@ function StatsTab() {
   const byState = useMemo<GroupStats[]>(() => {
     const map = new Map<string, { total: number; customers: number }>()
     contacts.forEach((c) => {
-      if (!c.state) return
-      const item = map.get(c.state) ?? { total: 0, customers: 0 }
+      const state = normalizeStateValue(c.state)
+      if (!state) return
+      const item = map.get(state) ?? { total: 0, customers: 0 }
       item.total += 1
       if (c.is_customer) item.customers += 1
-      map.set(c.state, item)
+      map.set(state, item)
     })
     return Array.from(map.entries())
       .map(([key, val]) => ({ key, total: val.total, customers: val.customers, conversion: val.total ? (val.customers / val.total) * 100 : 0 }))

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   BarChart3,
+  Bell,
   Download,
   Loader2,
   Mail,
@@ -17,9 +18,11 @@ import {
 import { saveContactsToDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
+import { syncFollowupReminders } from '../../lib/reminderNotifications'
 
 export function BulkScreen() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
+  const [isSettingFollowups, setIsSettingFollowups] = useState(false)
   const {
     contacts, selectedIds, clearSelected,
     deleteContact, setContacts, setBulkMessageType, showToast,
@@ -37,6 +40,7 @@ export function BulkScreen() {
     ? contacts.filter((c) => selectedIds.includes(c.id))
     : contacts
   const unsentTargetContacts = filterUnsentContactsForSheets(targetContacts)
+  const contactsMissingFollowup = targetContacts.filter((c) => !c.followup_at)
 
   const handleExportCSV = () => {
     if (!targetContacts.length) { showToast('No contacts'); return }
@@ -86,6 +90,45 @@ export function BulkScreen() {
     }
   }
 
+  const handleBulkSetFollowup = async () => {
+    if (isSettingFollowups) return
+    if (!contactsMissingFollowup.length) {
+      showToast('Everyone in this selection already has a follow-up set')
+      return
+    }
+
+    const followupAt = (() => {
+      const d = new Date()
+      d.setDate(d.getDate() + 30)
+      d.setHours(10, 0, 0, 0)
+      return d.toISOString()
+    })()
+
+    const idsToSet = new Set(contactsMissingFollowup.map((c) => c.id))
+    const updated = contacts.map((c) => (
+      idsToSet.has(c.id) ? { ...c, followup_at: followupAt, followup_note: c.followup_note || 'Follow up' } : c
+    ))
+
+    if (IS_DEMO_MODE) {
+      setContacts(updated)
+      showToast(`Demo mode: set 30-day follow-up for ${idsToSet.size} contact(s)`)
+      return
+    }
+
+    setIsSettingFollowups(true)
+    try {
+      setContacts(updated)
+      const changed = updated.filter((c) => idsToSet.has(c.id))
+      const result = await saveContactsToDB(changed, { skipDedupe: true })
+      await syncFollowupReminders(updated)
+      showToast(`Set 30-day follow-up for ${result.ok + result.merged} contact(s)${result.failed ? `, ${result.failed} failed` : ''}`)
+    } catch (err) {
+      showToast('Failed: ' + (err as Error).message)
+    } finally {
+      setIsSettingFollowups(false)
+    }
+  }
+
   const handleDeleteSelected = () => {
     if (!selectedIds.length) return
     if (!confirm(`Remove ${selectedIds.length} contact(s) from this app? Supabase backup will stay saved.`)) return
@@ -117,6 +160,14 @@ export function BulkScreen() {
       />
       <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
       <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
+      <ActionButton
+        icon={isSettingFollowups ? <Loader2 className="size-[18px] shrink-0 animate-spin" /> : <Bell className="size-[18px] shrink-0" />}
+        label={isSettingFollowups
+          ? 'Setting follow-ups...'
+          : `Set 30-Day Follow-up (${contactsMissingFollowup.length} with none set)`}
+        onClick={handleBulkSetFollowup}
+        disabled={isSettingFollowups}
+      />
 
       {IS_DEMO_MODE && <SheetsPreview contacts={targetContacts} />}
 

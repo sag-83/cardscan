@@ -17,6 +17,21 @@ function toDatetimeLocal(iso: string): string {
   return new Date(d.getTime() - offset).toISOString().slice(0, 16)
 }
 
+const PRESETS = [
+  { label: '1 week', days: 7 },
+  { label: '2 weeks', days: 14 },
+  { label: '1 month', days: 30 },
+  { label: '3 months', days: 90 },
+]
+
+/** Days from now, defaulted to 10am local so reminders don't land at odd hours. */
+function presetDatetimeLocal(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  d.setHours(10, 0, 0, 0)
+  return toDatetimeLocal(d.toISOString())
+}
+
 export function FollowupModal() {
   const followupContactId = useStore((s) => s.followupContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
@@ -102,6 +117,24 @@ export function FollowupModal() {
           <button type="button" onClick={close} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: '2px 6px', display: 'flex' }} aria-label="Close">
             <X size={22} strokeWidth={2} />
           </button>
+        </div>
+
+        {/* Quick-set presets */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          {PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setDateValue(presetDatetimeLocal(preset.days))}
+              style={{
+                flex: 1, padding: '9px 4px', borderRadius: 9, fontSize: 12.5, fontWeight: 700,
+                border: '1.5px solid var(--border)', background: 'var(--bg3)',
+                color: 'var(--text2)', cursor: 'pointer',
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
 
         {/* Date & Time */}

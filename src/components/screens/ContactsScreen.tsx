@@ -24,6 +24,7 @@ import { initials, phoneKey, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
+import { normalizeStateValue } from '../../lib/usStates'
 
 function useFollowups(contacts: Contact[]) {
   return useMemo(() => {
@@ -94,9 +95,9 @@ export function ContactsScreen() {
     }
   }
 
-  const states = useMemo(() => [...new Set(contacts.map((c) => c.state).filter(Boolean))].sort(), [contacts])
+  const states = useMemo(() => [...new Set(contacts.map((c) => normalizeStateValue(c.state)).filter(Boolean))].sort(), [contacts])
   const cities = useMemo(() => {
-    const source = filterState ? contacts.filter((c) => c.state === filterState) : contacts
+    const source = filterState ? contacts.filter((c) => normalizeStateValue(c.state) === filterState) : contacts
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filterState])
   const areas = useMemo(() => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(), [contacts])
@@ -117,14 +118,15 @@ export function ContactsScreen() {
   const stateCounts = useMemo(() => {
     const counts = new Map<string, number>()
     contacts.forEach((contact) => {
-      if (!contact.state) return
-      counts.set(contact.state, (counts.get(contact.state) ?? 0) + 1)
+      const state = normalizeStateValue(contact.state)
+      if (!state) return
+      counts.set(state, (counts.get(state) ?? 0) + 1)
     })
     return counts
   }, [contacts])
   const cityCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    const source = filterState ? contacts.filter((c) => c.state === filterState) : contacts
+    const source = filterState ? contacts.filter((c) => normalizeStateValue(c.state) === filterState) : contacts
     source.forEach((contact) => {
       if (!contact.city) return
       counts.set(contact.city, (counts.get(contact.city) ?? 0) + 1)
@@ -161,7 +163,7 @@ export function ContactsScreen() {
 
   const baseFiltered = useMemo(() => contacts.filter((c) => {
     if (filterStars > 0 && c.stars !== filterStars) return false
-    if (filterState && c.state !== filterState) return false
+    if (filterState && normalizeStateValue(c.state) !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
     if (filterArea && c.area !== filterArea) return false
     if (filterType === 'customer' && !c.is_customer) return false
@@ -196,7 +198,7 @@ export function ContactsScreen() {
   const onStateChange = (nextState: string) => {
     setFilterState(nextState)
     if (filterCity) {
-      const cityStillValid = contacts.some((c) => c.city === filterCity && c.state === nextState)
+      const cityStillValid = contacts.some((c) => c.city === filterCity && normalizeStateValue(c.state) === nextState)
       if (!nextState || !cityStillValid) {
         setFilterCity('')
       }

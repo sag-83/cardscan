@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
 import type { Contact, ContactAddress } from '../types/contact'
+import { normalizeStateValue } from './usStates'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -76,7 +77,7 @@ export function normalizeContact(c: Contact): Contact {
     company: norm(c.company),
     area: norm(c.area),
     city: norm(c.city),
-    state: norm(c.state),
+    state: normalizeStateValue(c.state),
     zip: norm(c.zip),
     country: norm(c.country),
     email: (c.email ?? '').toLowerCase().trim(),

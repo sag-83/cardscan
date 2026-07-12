@@ -186,11 +186,14 @@
    ambiguous, which on Windows (classic, space-reserving scrollbars) can make wheel
    input silently no-op while the native scrollbar thumb still drags correctly —
    macOS's overlay scrollbars don't hit this.
+   Value is "none" (not "contain") so pulling past the top/bottom edge doesn't
+   rubber-band and reveal blank space at all — content stays pinned exactly at
+   the scroll boundary.
    overflow-x:hidden stays on BOTH html and body — dropping it from body allowed a
    horizontal swipe/rubber-band on iOS Safari to reveal blank space at the edge of
    the fixed-position panels (ContactDetail, EditModal, etc). */
 html {
-  overscroll-behavior-y: contain;
+  overscroll-behavior: none;
 }
 
 html,

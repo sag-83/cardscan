@@ -20,16 +20,16 @@ export function SocialMediaPicker({ contact }: { contact: Contact }) {
       <div
         onClick={() => setOpen(true)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px',
           borderBottom: '1px solid var(--border2)', cursor: 'pointer',
         }}
       >
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 14, flex: 1 }}>
           {links.map((link) => (
-            <div key={link.key}>{BADGES[link.key]?.(30)}</div>
+            <div key={link.key} style={{ padding: 2 }}>{BADGES[link.key]?.(40)}</div>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>Social Media</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)', flexShrink: 0 }}>Social Media</div>
       </div>
 
       {open && (

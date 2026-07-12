@@ -254,7 +254,7 @@ export function ContactsScreen() {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}
-            style={dropdownStyle(filterStars > 0)}>
+            style={{ ...dropdownStyle(filterStars > 0), flex: 0.8 }}>
             <option value={0}>Stars</option>
             <option value={1}>1 star ({starCounts.get(1) ?? 0})</option>
             <option value={2}>2 stars ({starCounts.get(2) ?? 0})</option>
@@ -262,12 +262,12 @@ export function ContactsScreen() {
             <option value={4}>4 stars ({starCounts.get(4) ?? 0})</option>
           </select>
           <select value={filterState} onChange={(e) => onStateChange(e.target.value)}
-            style={dropdownStyle(!!filterState)}>
+            style={{ ...dropdownStyle(!!filterState), flex: 0.6 }}>
             <option value="">ST</option>
             {states.map((s) => <option key={s} value={s}>{s} ({stateCounts.get(s) ?? 0})</option>)}
           </select>
           <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)}
-            style={dropdownStyle(!!filterCity)}>
+            style={{ ...dropdownStyle(!!filterCity), flex: 1.6, minWidth: 0 }}>
             <option value="">City</option>
             {cities.map((c) => <option key={c} value={c}>{c} ({cityCounts.get(c) ?? 0})</option>)}
           </select>

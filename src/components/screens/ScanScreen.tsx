@@ -23,6 +23,7 @@ import {
   extractInstagramFromText,
   deriveInstagramFromNotes,
 } from '../../lib/utils'
+import { deriveSocialMediaFromNotes, extractSocialFromText } from '../../lib/socialPlatforms'
 import {
   findDuplicateContactInDB,
   getLastSupabaseError,
@@ -303,6 +304,7 @@ export function ScanScreen() {
           if (!merged.instagram) {
             merged.instagram = normalizeInstagramField(bd.instagram) || extractInstagramFromText(bd.notes)
           }
+          merged.social_media = { ...extractSocialFromText(bd.notes), ...merged.social_media }
 
           if (bd.notes?.trim()) {
             merged.back_notes = [merged.back_notes, scanText(bd.notes)].filter(Boolean).join(' | ')
@@ -338,6 +340,7 @@ export function ScanScreen() {
           phone_fax: raw.phone_fax ?? '',
           website: raw.website ?? '',
           instagram: normalizeInstagramField(raw.instagram) || deriveInstagramFromNotes({ notes, back_notes: '', user_notes: '' }),
+          social_media: deriveSocialMediaFromNotes({ notes, back_notes: '', user_notes: '' }),
           address: scanText(raw.address),
           city: scanText(raw.city),
           state: scanText(raw.state),

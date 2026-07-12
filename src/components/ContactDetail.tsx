@@ -5,7 +5,6 @@ import {
   Building2,
   Briefcase,
   Calendar,
-  Camera,
   FileText,
   Globe,
   Handshake,
@@ -25,12 +24,13 @@ import {
   User,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { initials, mUrl, openInstagram, instagramWebUrl } from '../lib/utils'
+import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets, hasBeenSentToSheets, markContactsSentToSheets } from '../lib/export'
 import { IS_DEMO_MODE } from '../lib/demo'
 import { useIsDesktop } from '../hooks/useIsDesktop'
+import { SocialMediaPicker } from './SocialMediaPicker'
 import type { Contact } from '../types/contact'
 
 export const DETAIL_PANEL_WIDTH = 440
@@ -202,13 +202,6 @@ export function ContactDetail() {
 
       {/* Quick action row */}
       <div style={{ display: 'flex', background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
-        {(c.phone_mobile || c.phone_work) && (
-          <ActionBtn icon={<Phone size={18} strokeWidth={2.25} />} token="call" label="Call"
-            onClick={() => window.location.href = `tel:${c.phone_mobile || c.phone_work}`} />
-        )}
-        {(c.phone_mobile || c.phone_work) && (
-          <ActionBtn icon={<MessageCircle size={18} strokeWidth={2.25} />} token="message" label="WhatsApp" onClick={handleWhatsApp} />
-        )}
         {(c.address || c.city) && (
           <ActionBtn icon={<MapPin size={18} strokeWidth={2.25} />} token="map" label="Map"
             onClick={() => {
@@ -216,20 +209,10 @@ export function ContactDetail() {
               window.open(`https://maps.google.com/?q=${encodeURIComponent(q)}`, '_blank')
             }} />
         )}
-        {c.instagram && (
-          <ActionBtn icon={<Camera size={18} strokeWidth={2.25} />} token="instagram" label="Instagram"
-            onClick={() => openInstagram(c.instagram)} />
-        )}
         {c.email && (
           <ActionBtn icon={<Mail size={18} strokeWidth={2.25} />} token="email" label="Email"
             onClick={() => window.location.href = `mailto:${c.email}`} />
         )}
-        <ActionBtn
-          icon={isSendingSheets ? <Loader2 size={18} className="animate-spin" /> : <BarChart3 size={18} strokeWidth={2} />}
-          token="sheets"
-          label={isSendingSheets ? 'Sending…' : 'Sheets'}
-          onClick={handleSendToSheets}
-        />
         <ActionBtn icon={<FileText size={18} strokeWidth={2.25} />} token="invoice" label="Invoice" onClick={() => setInvoiceContactId(c.id)} />
         <ActionBtn icon={<Pencil size={18} strokeWidth={2.25} />} token="edit" label="Edit"
           onClick={() => setEditModal({ contact: c, isNew: false })} />
@@ -293,13 +276,24 @@ export function ContactDetail() {
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Website</div>
           </DetailRow>
         )}
-        {c.instagram && (
-          <DetailRow icon={<Camera size={16} strokeWidth={2} />} bg="var(--action-instagram-fg)">
-            <a href={instagramWebUrl(c.instagram)} onClick={(e) => { e.preventDefault(); openInstagram(c.instagram) }}
-              style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>@{c.instagram}</a>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Instagram</div>
-          </DetailRow>
-        )}
+        <SocialMediaPicker contact={c} />
+        <div onClick={handleSendToSheets} style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%', background: 'var(--action-sheets-bg)',
+            color: 'var(--action-sheets-fg)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', flexShrink: 0,
+          }}>
+            {isSendingSheets ? <Loader2 size={16} className="animate-spin" /> : <BarChart3 size={16} strokeWidth={2} />}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 500 }}>
+              {isSendingSheets ? 'Sending…' : hasBeenSentToSheets(c) ? 'Sent to Google Sheets' : 'Send to Google Sheets'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>Google Sheets</div>
+          </div>
+        </div>
       </Section>
 
       {(c.address || c.city) && (

@@ -9,6 +9,8 @@ export interface Contact {
   phone_fax: string
   website: string
   instagram: string
+  /** Other platforms keyed by 'facebook' | 'tiktok' | 'pinterest' -> handle. */
+  social_media: Record<string, string>
   address: string
   city: string
   state: string

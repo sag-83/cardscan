@@ -9,6 +9,7 @@ const EMPTY_CONTACT_FIELDS = {
   phone_fax: '',
   website: '',
   instagram: '',
+  social_media: {},
   address: '',
   zip: '',
   country: '',

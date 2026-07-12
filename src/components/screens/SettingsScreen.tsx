@@ -33,6 +33,7 @@ import {
 import { pullAndMergeFromCloud } from '../../lib/cloudSync'
 import { backupToJSON, restoreFromJSON } from '../../lib/export'
 import { dedupeContacts, normalizeContact, deriveInstagramFromNotes } from '../../lib/utils'
+import { deriveSocialMediaFromNotes } from '../../lib/socialPlatforms'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from '../../lib/demo'
 import { Contact } from '../../types/contact'
 import {
@@ -258,34 +259,38 @@ export function SettingsScreen() {
     window.location.replace(`${window.location.pathname}?v=${Date.now()}`)
   }
 
-  const handleBackfillInstagram = async () => {
+  const handleBackfillSocialMedia = async () => {
     if (!contacts.length) {
       showToast('No contacts to scan')
       return
     }
 
     const updated = contacts.map((contact) => {
-      if (contact.instagram) return contact
-      const found = deriveInstagramFromNotes(contact)
-      return found ? { ...contact, instagram: found } : contact
+      const instagram = contact.instagram || deriveInstagramFromNotes(contact)
+      const foundSocial = deriveSocialMediaFromNotes(contact)
+      const social_media = { ...foundSocial, ...contact.social_media }
+      return { ...contact, instagram, social_media }
     })
 
-    const changed = updated.filter((contact, i) => contact.instagram !== contacts[i].instagram)
+    const changed = updated.filter((contact, i) => (
+      contact.instagram !== contacts[i].instagram ||
+      JSON.stringify(contact.social_media) !== JSON.stringify(contacts[i].social_media)
+    ))
     if (!changed.length) {
-      showToast('No Instagram handles found in existing notes')
+      showToast('No social media handles found in existing notes')
       return
     }
 
     setContacts(updated)
 
     if (IS_DEMO_MODE) {
-      showToast(`Found Instagram for ${changed.length} contact(s) (demo mode: not saved to cloud)`)
+      showToast(`Found social media for ${changed.length} contact(s) (demo mode: not saved to cloud)`)
       return
     }
 
-    showToast(`Found Instagram for ${changed.length} contact(s), saving to cloud…`)
+    showToast(`Found social media for ${changed.length} contact(s), saving to cloud…`)
     const result = await saveContactsToDB(changed, { skipDedupe: true })
-    showToast(`Instagram backfill: ${result.ok + result.merged} saved${result.failed ? `, ${result.failed} failed` : ''}`)
+    showToast(`Social media backfill: ${result.ok + result.merged} saved${result.failed ? `, ${result.failed} failed` : ''}`)
   }
 
   return (
@@ -421,11 +426,11 @@ export function SettingsScreen() {
           <div style={{ color: '#ff9500', display: 'flex' }}><Undo2 size={18} strokeWidth={2} aria-hidden /></div>
         </div>
         <Divider />
-        <div onClick={handleBackfillInstagram} style={{ ...rowStyle, cursor: 'pointer' }}>
+        <div onClick={handleBackfillSocialMedia} style={{ ...rowStyle, cursor: 'pointer' }}>
           <div style={{ flex: 1, fontSize: 15 }}>
-            Find Instagram in Existing Notes
+            Find Social Media in Existing Notes
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-              One-time: scans old contacts' notes for Instagram handles and fills the new Instagram field. Safe to run more than once.
+              One-time: scans old contacts' notes for Instagram, Facebook, TikTok, and Pinterest handles. Safe to run more than once.
             </div>
           </div>
           <div style={{ color: 'var(--action-instagram-fg)', display: 'flex' }}><Camera size={18} strokeWidth={2} aria-hidden /></div>

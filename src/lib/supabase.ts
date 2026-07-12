@@ -16,6 +16,7 @@ create table if not exists contacts (
   phone_fax text default '',
   website text default '',
   instagram text default '',
+  social_media jsonb default '{}',
   address text default '',
   city text default '',
   state text default '',
@@ -53,6 +54,7 @@ alter table contacts add column if not exists followup_notified_at timestamptz;
 alter table contacts add column if not exists is_old_customer boolean default false;
 alter table contacts add column if not exists sent_to_sheets boolean default false;
 alter table contacts add column if not exists instagram text default '';
+alter table contacts add column if not exists social_media jsonb default '{}';
 
 -- Web push subscriptions (server sends reminders when app is closed)
 create table if not exists push_subscriptions (
@@ -215,6 +217,7 @@ export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
     phone_fax: String(r.phone_fax ?? ''),
     website: String(r.website ?? ''),
     instagram: String(r.instagram ?? ''),
+    social_media: (r.social_media && typeof r.social_media === 'object' ? r.social_media : {}) as Record<string, string>,
     address: String(r.address ?? ''),
     city: String(r.city ?? ''),
     state: String(r.state ?? ''),
@@ -254,6 +257,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     phone_fax:       contact.phone_fax,
     website:         contact.website,
     instagram:       contact.instagram ?? '',
+    social_media:    contact.social_media ?? {},
     address:         contact.address,
     city:            contact.city,
     state:           contact.state,

@@ -32,6 +32,7 @@ import { initials, mUrl } from '../lib/utils'
 import { downloadVCard } from '../lib/vcard'
 import { saveContactToDB } from '../lib/supabase'
 import { sendToGoogleSheets, hasBeenSentToSheets, markContactsSentToSheets } from '../lib/export'
+import { loadImages } from '../lib/imageStore'
 import { IS_DEMO_MODE } from '../lib/demo'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { SocialMediaPicker } from './SocialMediaPicker'
@@ -271,19 +272,13 @@ export function ContactDetail() {
             {(c.front_image || c.front_image_url) && (
               <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Front Side</div>
-                <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
-                  style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
-                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card front" />
+                <CardImage base64={c.front_image} url={c.front_image_url} cacheKey={`${c.id}_front`} alt="Card front" />
               </DetailRow>
             )}
             {(c.back_image || c.back_image_url) && (
               <DetailRow icon={<ImageIcon size={16} strokeWidth={2} />} bg="var(--action-neutral-bg)">
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Back Side</div>
-                <img src={c.back_image ? `data:image/jpeg;base64,${c.back_image}` : c.back_image_url}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
-                  style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
-                    maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="Card back" />
+                <CardImage base64={c.back_image} url={c.back_image_url} cacheKey={`${c.id}_back`} alt="Card back" />
               </DetailRow>
             )}
           </Section>
@@ -539,6 +534,35 @@ function DetailRow({ icon, bg, right, children }: { icon: ReactNode; bg: string;
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
       {right}
     </div>
+  )
+}
+
+// Falls back to the original scan cached in this device's IndexedDB (saved at
+// scan time, never deleted) if the hosted URL fails to load — e.g. while
+// Supabase Storage is temporarily unreachable.
+function CardImage({ base64, url, cacheKey, alt }: { base64: string; url: string; cacheKey: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  const [localSrc, setLocalSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!failed || localSrc) return
+    let cancelled = false
+    loadImages([cacheKey]).then((images) => {
+      if (cancelled) return
+      const cached = images[cacheKey]
+      if (cached) setLocalSrc(`data:image/jpeg;base64,${cached}`)
+    })
+    return () => { cancelled = true }
+  }, [failed, localSrc, cacheKey])
+
+  return (
+    <img
+      src={localSrc || (base64 ? `data:image/jpeg;base64,${base64}` : url)}
+      onError={(e) => {
+        if (localSrc) { e.currentTarget.style.display = 'none' } else { setFailed(true) }
+      }}
+      style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
+        maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt={alt} />
   )
 }
 

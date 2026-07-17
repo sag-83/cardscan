@@ -29,6 +29,7 @@ import {
   uploadCardPhoto,
 } from '../../lib/supabase'
 import { resizeImage } from '../../lib/gemini'
+import { loadImages } from '../../lib/imageStore'
 import {
   pruneOrphanInvoicesFromDB,
   reconcileInvoiceDeletions,
@@ -315,6 +316,7 @@ export function SettingsScreen() {
     showToast(`Generating thumbnails for ${missing.length} contact(s)… this can take a while`)
 
     let succeeded = 0
+    let fromCache = 0
     let failed = 0
     const thumbUrls: Record<string, string> = {}
     const BATCH_SIZE = 6
@@ -323,15 +325,25 @@ export function SettingsScreen() {
       const batch = missing.slice(i, i + BATCH_SIZE)
       await Promise.all(batch.map(async (contact) => {
         try {
-          const res = await fetch(contact.front_image_url)
-          if (!res.ok) throw new Error('fetch failed')
-          const blob = await res.blob()
-          const fullB64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve((reader.result as string).split(',')[1])
-            reader.onerror = () => reject(new Error('read failed'))
-            reader.readAsDataURL(blob)
-          })
+          // Try this device's local IndexedDB cache first — it's saved at
+          // scan time and never deleted, so it's often still there even when
+          // Supabase Storage can't be reached, and skips a network fetch too.
+          const cacheKey = `${contact.id}_front`
+          const cached = (await loadImages([cacheKey]))[cacheKey]
+          let fullB64 = cached
+          if (fullB64) {
+            fromCache += 1
+          } else {
+            const res = await fetch(contact.front_image_url)
+            if (!res.ok) throw new Error('fetch failed')
+            const blob = await res.blob()
+            fullB64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve((reader.result as string).split(',')[1])
+              reader.onerror = () => reject(new Error('read failed'))
+              reader.readAsDataURL(blob)
+            })
+          }
           const thumbB64 = await resizeImage(fullB64, 'image/jpeg', 280, 0.6)
           const thumbUrl = await uploadCardPhoto(contact.id, 'front', thumbB64, 'image/jpeg', 'thumb')
           if (!thumbUrl) throw new Error('upload failed')
@@ -352,6 +364,7 @@ export function SettingsScreen() {
     setIsBackfillingThumbs(false)
     showToast(
       `Thumbnails: ${succeeded} generated` +
+      (fromCache ? ` (${fromCache} from this device's local cache)` : '') +
       (failed ? `, ${failed} failed (Supabase Storage may still be restricted — try again later)` : '')
     )
   }

@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, type CSSProperties } from 'react'
+import { useRef, useState, useMemo, useEffect, type CSSProperties } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -25,6 +25,7 @@ import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 import { normalizeStateValue } from '../../lib/usStates'
+import { loadImages } from '../../lib/imageStore'
 
 function useFollowups(contacts: Contact[]) {
   return useMemo(() => {
@@ -429,6 +430,24 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
   const swipeOffsetRef = useRef(0)
   const didSwipeRef = useRef(false)
 
+  // If the hosted photo URL fails (e.g. Supabase Storage temporarily
+  // unreachable), fall back to the original scan still cached on this device
+  // in IndexedDB — it's saved there at scan time and never deleted, so it
+  // often still exists locally even when the cloud copy can't be reached.
+  const [imgLoadFailed, setImgLoadFailed] = useState(false)
+  const [localFallbackSrc, setLocalFallbackSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!imgLoadFailed || localFallbackSrc) return
+    let cancelled = false
+    loadImages([`${c.id}_front`]).then((images) => {
+      if (cancelled) return
+      const cached = images[`${c.id}_front`]
+      if (cached) setLocalFallbackSrc(`data:image/jpeg;base64,${cached}`)
+    })
+    return () => { cancelled = true }
+  }, [imgLoadFailed, localFallbackSrc, c.id])
+
   const shareBusinessCard = async () => {
     const text = contactShareText(c)
     const title = c.name || c.company || 'Contact'
@@ -623,8 +642,10 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
           zIndex: 1,
         }}
       >
-      {(c.front_image || c.front_thumb_url || c.front_image_url) ? (
-        <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : (c.front_thumb_url || c.front_image_url)}
+      {(c.front_image || c.front_thumb_url || c.front_image_url || localFallbackSrc) ? (
+        <img
+          src={localFallbackSrc || (c.front_image ? `data:image/jpeg;base64,${c.front_image}` : (c.front_thumb_url || c.front_image_url))}
+          onError={() => setImgLoadFailed(true)}
           style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
             flexShrink: 0, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="" />
       ) : (

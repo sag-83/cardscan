@@ -41,6 +41,13 @@ const MAX_PDF_BYTES = 6 * 1024 * 1024
 const SUPPORTED_SCAN_TYPES = ['application/pdf']
 const THUMB_MAX_WIDTH = 280
 const THUMB_QUALITY = 0.6
+// OCR needs real resolution to read small card text accurately, but nothing
+// displays the "full" image wider than ~180px tall in this app — 1600px was
+// being stored/uploaded/cached for something that only ever renders small.
+// STORE_* is a separate, smaller pass applied AFTER the OCR call, so OCR
+// accuracy is unaffected while storage/egress/local-cache size drop ~4x.
+const STORE_MAX_WIDTH = 900
+const STORE_QUALITY = 0.72
 
 const ENV_GEMINI_KEYS = [
   (import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string),
@@ -274,13 +281,17 @@ export function ScanScreen() {
 
       const isPdf = file.type === 'application/pdf'
 
-      // Full-quality image stored on the contact (1600px) — also used for OCR
+      // OCR-quality image (1600px) — sent to Gemini, never stored or uploaded
       const scanB64 = isPdf ? b64 : await resizeImage(b64, file.type, 1600)
 
-      // Small thumbnail only for PDF placeholder (PDFs can't render as <img>)
-      const thumb = isPdf ? '' : scanB64
-
       const extracted = await callGemini(scanB64, isPdf ? 'application/pdf' : 'image/jpeg', geminiKeys)
+
+      // Smaller pass for what's actually stored/displayed — nothing in the
+      // app renders this wider than ~180px tall, so 1600px was pure waste.
+      // Small thumbnail only for PDF placeholder (PDFs can't render as <img>)
+      const thumb = isPdf ? '' : await resizeImage(scanB64, 'image/jpeg', STORE_MAX_WIDTH, STORE_QUALITY)
+      // Back-side merge stores the raw PDF file (front has no such fallback need)
+      const storeB64 = isPdf ? scanB64 : thumb
 
       if (!extracted.length) {
         showToast('No card detected — try a clearer photo')
@@ -301,12 +312,12 @@ export function ScanScreen() {
         if (target) {
           const bd = (extracted[0] ?? {}) as unknown as Record<string, string>
 
-          await saveImage(`${pendingBackId}_back`, scanB64).catch(() => {})
-          const backUrl = await uploadCardPhoto(pendingBackId, 'back', scanB64)
+          await saveImage(`${pendingBackId}_back`, storeB64).catch(() => {})
+          const backUrl = await uploadCardPhoto(pendingBackId, 'back', storeB64)
 
           const merged: Contact = {
             ...target,
-            back_image: scanB64,
+            back_image: storeB64,
             ...(backUrl ? { back_image_url: backUrl } : {}),
           }
 

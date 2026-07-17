@@ -9,6 +9,7 @@ import {
   Cloud,
   CloudOff,
   Download,
+  HardDrive,
   Image as ImageIcon,
   Loader2,
   Moon,
@@ -29,7 +30,7 @@ import {
   uploadCardPhoto,
 } from '../../lib/supabase'
 import { resizeImage } from '../../lib/gemini'
-import { loadImages } from '../../lib/imageStore'
+import { loadImages, saveImage } from '../../lib/imageStore'
 import {
   pruneOrphanInvoicesFromDB,
   reconcileInvoiceDeletions,
@@ -76,6 +77,7 @@ export function SettingsScreen() {
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false)
+  const [isBackingUpPhotos, setIsBackingUpPhotos] = useState(false)
   const { theme, setTheme } = useTheme()
 
   const {
@@ -369,6 +371,81 @@ export function SettingsScreen() {
     )
   }
 
+  // One-time sweep that pulls every contact's photos onto this device's
+  // IndexedDB cache, independent of Supabase. Ongoing per-scan caching
+  // already happens automatically (saveImage is called at scan time) — this
+  // only needs to run to catch up contacts scanned before that existed, or
+  // to re-check after Supabase Storage access comes back.
+  const handleBackupAllPhotosLocally = async () => {
+    if (isBackingUpPhotos) return
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: nothing to back up locally')
+      return
+    }
+
+    setIsBackingUpPhotos(true)
+    showToast("Checking this device's local photo cache…")
+
+    const allKeys: string[] = []
+    contacts.forEach((c) => {
+      if (c.front_image_url) allKeys.push(`${c.id}_front`)
+      if (c.back_image_url) allKeys.push(`${c.id}_back`)
+    })
+    const alreadyCached = await loadImages(allKeys)
+
+    const jobs: { key: string; url: string }[] = []
+    contacts.forEach((c) => {
+      if (c.front_image_url && !alreadyCached[`${c.id}_front`]) {
+        jobs.push({ key: `${c.id}_front`, url: c.front_image_url })
+      }
+      if (c.back_image_url && !alreadyCached[`${c.id}_back`]) {
+        jobs.push({ key: `${c.id}_back`, url: c.back_image_url })
+      }
+    })
+
+    const alreadyCount = allKeys.length - jobs.length
+
+    if (!jobs.length) {
+      setIsBackingUpPhotos(false)
+      showToast(`All ${alreadyCount} photo(s) already backed up on this device`)
+      return
+    }
+
+    showToast(`Backing up ${jobs.length} photo(s) to this device… this can take a while`)
+
+    let succeeded = 0
+    let failed = 0
+    const BATCH_SIZE = 8
+
+    for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
+      const batch = jobs.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(async (job) => {
+        try {
+          const res = await fetch(job.url)
+          if (!res.ok) throw new Error('fetch failed')
+          const blob = await res.blob()
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve((reader.result as string).split(',')[1])
+            reader.onerror = () => reject(new Error('read failed'))
+            reader.readAsDataURL(blob)
+          })
+          await saveImage(job.key, base64)
+          succeeded += 1
+        } catch {
+          failed += 1
+        }
+      }))
+    }
+
+    setIsBackingUpPhotos(false)
+    showToast(
+      `Local backup: ${succeeded} photo(s) saved to this device` +
+      (alreadyCount ? `, ${alreadyCount} already had a copy` : '') +
+      (failed ? `, ${failed} failed (Supabase Storage may still be restricted — try again later)` : '')
+    )
+  }
+
   return (
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: '16px 16px 0', fontSize: 22, fontWeight: 800 }}>Settings</div>
@@ -521,6 +598,18 @@ export function SettingsScreen() {
           </div>
           <div style={{ color: 'var(--accent)', display: 'flex' }}>
             {isBackfillingThumbs ? <Loader2 size={18} strokeWidth={2} className="animate-spin" aria-hidden /> : <ImageIcon size={18} strokeWidth={2} aria-hidden />}
+          </div>
+        </div>
+        <Divider />
+        <div onClick={handleBackupAllPhotosLocally} style={{ ...rowStyle, cursor: isBackingUpPhotos ? 'default' : 'pointer', opacity: isBackingUpPhotos ? 0.65 : 1 }}>
+          <div style={{ flex: 1, fontSize: 15 }}>
+            {isBackingUpPhotos ? 'Backing Up Photos to This Device…' : 'Backup All Photos to This Device'}
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              Saves every contact's photos to this phone's storage, independent of Supabase. New scans are cached here automatically — run this to catch up older contacts. Safe to run more than once.
+            </div>
+          </div>
+          <div style={{ color: '#34c759', display: 'flex' }}>
+            {isBackingUpPhotos ? <Loader2 size={18} strokeWidth={2} className="animate-spin" aria-hidden /> : <HardDrive size={18} strokeWidth={2} aria-hidden />}
           </div>
         </div>
         <Divider />

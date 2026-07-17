@@ -39,6 +39,8 @@ import type { Contact } from '../../types/contact'
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const MAX_PDF_BYTES = 6 * 1024 * 1024
 const SUPPORTED_SCAN_TYPES = ['application/pdf']
+const THUMB_MAX_WIDTH = 280
+const THUMB_QUALITY = 0.6
 
 const ENV_GEMINI_KEYS = [
   (import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string),
@@ -488,8 +490,16 @@ export function ScanScreen() {
           if (c.front_image) {
             await saveImage(`${c.id}_front`, c.front_image).catch(() => {})
             const url = await uploadCardPhoto(c.id, 'front', c.front_image)
-            if (url) return { ...c, front_image_url: url }
-            photoUploadFailed = true
+            if (!url) {
+              photoUploadFailed = true
+              return c
+            }
+            // A small, heavily-compressed copy for list-row thumbnails — the
+            // list is scrolled far more often than any single contact is
+            // opened, so this is the single biggest lever on Storage egress.
+            const thumbB64 = await resizeImage(c.front_image, 'image/jpeg', THUMB_MAX_WIDTH, THUMB_QUALITY)
+            const thumbUrl = await uploadCardPhoto(c.id, 'front', thumbB64, 'image/jpeg', 'thumb')
+            return { ...c, front_image_url: url, front_thumb_url: thumbUrl ?? '' }
           }
           return c
         })

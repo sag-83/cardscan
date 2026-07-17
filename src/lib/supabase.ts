@@ -33,6 +33,7 @@ create table if not exists contacts (
   back_image text default '',
   front_image_url text default '',
   back_image_url text default '',
+  front_thumb_url text default '',
   dedupe_key text default '',
   stars integer default 0,
   visited boolean default false,
@@ -61,6 +62,7 @@ alter table contacts add column if not exists social_media jsonb default '{}';
 alter table contacts add column if not exists extra_emails jsonb default '[]';
 alter table contacts add column if not exists extra_phones jsonb default '[]';
 alter table contacts add column if not exists extra_addresses jsonb default '[]';
+alter table contacts add column if not exists front_thumb_url text default '';
 
 -- Web push subscriptions (server sends reminders when app is closed)
 create table if not exists push_subscriptions (
@@ -258,6 +260,7 @@ export function mapContactRow(row: Record<string, unknown> | Contact): Contact {
     back_image: String(r.back_image ?? ''),
     front_image_url: String(r.front_image_url ?? ''),
     back_image_url: String(r.back_image_url ?? ''),
+    front_thumb_url: String(r.front_thumb_url ?? ''),
     stars: Number(r.stars ?? 0),
     scanned_at: String(r.scanned_at ?? ''),
     sent_to_sheets: Boolean(r.sent_to_sheets ?? false),
@@ -301,6 +304,7 @@ function sanitizeContactForDB(contact: Contact): Record<string, unknown> {
     back_image:      '',
     front_image_url: contact.front_image_url,
     back_image_url:  contact.back_image_url,
+    front_thumb_url: contact.front_thumb_url ?? '',
     dedupe_key:      contactDedupKey(contact),
     stars:           contact.stars,
     visited:         contact.visited ?? false,
@@ -624,7 +628,8 @@ export async function uploadCardPhoto(
   contactId: string,
   side: 'front' | 'back',
   base64: string,
-  mimeType = 'image/jpeg'
+  mimeType = 'image/jpeg',
+  variant: 'full' | 'thumb' = 'full'
 ): Promise<string | null> {
   const sb = ensureSupabaseClient()
   if (!sb || !base64) return null
@@ -635,11 +640,15 @@ export async function uploadCardPhoto(
       byteArray[i] = byteChars.charCodeAt(i)
     }
     const blob = new Blob([byteArray], { type: mimeType })
-    const path = `${contactId}_${side}.jpg`
+    const path = variant === 'thumb' ? `${contactId}_${side}_thumb.jpg` : `${contactId}_${side}.jpg`
 
+    // cacheControl is long-lived (1 year) since the same path is only ever
+    // overwritten by a deliberate re-scan — this is what lets a device that's
+    // already fetched an image skip re-downloading it on every subsequent
+    // view, which is most of what was driving egress usage up.
     const { error } = await sb.storage
       .from('card-photos')
-      .upload(path, blob, { upsert: true, contentType: mimeType })
+      .upload(path, blob, { upsert: true, contentType: mimeType, cacheControl: '31536000' })
 
     if (error) {
       rememberSupabaseError('Photo upload failed', error)

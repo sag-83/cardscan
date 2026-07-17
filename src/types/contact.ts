@@ -41,6 +41,8 @@ export interface Contact {
   back_image: string
   front_image_url: string
   back_image_url: string
+  /** Small (~280px) compressed copy of front_image_url, used for list-row thumbnails to cut egress. */
+  front_thumb_url: string
   sent_to_sheets: boolean
   visited: boolean
   is_customer: boolean

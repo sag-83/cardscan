@@ -24,6 +24,7 @@ const EMPTY_CONTACT_FIELDS = {
   front_image: '',
   back_image: '',
   front_image_url: '',
+  front_thumb_url: '',
   back_image_url: '',
   sent_to_sheets: false,
   visited: false,

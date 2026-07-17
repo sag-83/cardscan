@@ -9,6 +9,8 @@ import {
   Cloud,
   CloudOff,
   Download,
+  Image as ImageIcon,
+  Loader2,
   Moon,
   RefreshCw,
   Shield,
@@ -24,7 +26,9 @@ import {
   saveContactsToDB,
   SUPABASE_SCHEMA_SQL,
   syncInvoicesFromDB,
+  uploadCardPhoto,
 } from '../../lib/supabase'
+import { resizeImage } from '../../lib/gemini'
 import {
   pruneOrphanInvoicesFromDB,
   reconcileInvoiceDeletions,
@@ -70,6 +74,7 @@ const ENV_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 export function SettingsScreen() {
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false)
   const { theme, setTheme } = useTheme()
 
   const {
@@ -293,6 +298,64 @@ export function SettingsScreen() {
     showToast(`Social media backfill: ${result.ok + result.merged} saved${result.failed ? `, ${result.failed} failed` : ''}`)
   }
 
+  const handleBackfillThumbnails = async () => {
+    if (isBackfillingThumbs) return
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: thumbnails are not generated')
+      return
+    }
+
+    const missing = contacts.filter((c) => c.front_image_url && !c.front_thumb_url)
+    if (!missing.length) {
+      showToast('Every contact already has a thumbnail')
+      return
+    }
+
+    setIsBackfillingThumbs(true)
+    showToast(`Generating thumbnails for ${missing.length} contact(s)… this can take a while`)
+
+    let succeeded = 0
+    let failed = 0
+    const thumbUrls: Record<string, string> = {}
+    const BATCH_SIZE = 6
+
+    for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+      const batch = missing.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(async (contact) => {
+        try {
+          const res = await fetch(contact.front_image_url)
+          if (!res.ok) throw new Error('fetch failed')
+          const blob = await res.blob()
+          const fullB64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve((reader.result as string).split(',')[1])
+            reader.onerror = () => reject(new Error('read failed'))
+            reader.readAsDataURL(blob)
+          })
+          const thumbB64 = await resizeImage(fullB64, 'image/jpeg', 280, 0.6)
+          const thumbUrl = await uploadCardPhoto(contact.id, 'front', thumbB64, 'image/jpeg', 'thumb')
+          if (!thumbUrl) throw new Error('upload failed')
+          thumbUrls[contact.id] = thumbUrl
+          succeeded += 1
+        } catch {
+          failed += 1
+        }
+      }))
+    }
+
+    if (succeeded > 0) {
+      const nextContacts = contacts.map((c) => (thumbUrls[c.id] ? { ...c, front_thumb_url: thumbUrls[c.id] } : c))
+      setContacts(nextContacts)
+      await saveContactsToDB(nextContacts.filter((c) => thumbUrls[c.id]), { skipDedupe: true })
+    }
+
+    setIsBackfillingThumbs(false)
+    showToast(
+      `Thumbnails: ${succeeded} generated` +
+      (failed ? `, ${failed} failed (Supabase Storage may still be restricted — try again later)` : '')
+    )
+  }
+
   return (
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: '16px 16px 0', fontSize: 22, fontWeight: 800 }}>Settings</div>
@@ -434,6 +497,18 @@ export function SettingsScreen() {
             </div>
           </div>
           <div style={{ color: 'var(--action-instagram-fg)', display: 'flex' }}><Camera size={18} strokeWidth={2} aria-hidden /></div>
+        </div>
+        <Divider />
+        <div onClick={handleBackfillThumbnails} style={{ ...rowStyle, cursor: isBackfillingThumbs ? 'default' : 'pointer', opacity: isBackfillingThumbs ? 0.65 : 1 }}>
+          <div style={{ flex: 1, fontSize: 15 }}>
+            {isBackfillingThumbs ? 'Generating Thumbnails…' : 'Generate Photo Thumbnails'}
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              One-time: creates a small, fast-loading copy of each card photo so the contact list uses far less data. Safe to run more than once — needs Supabase Storage to be reachable.
+            </div>
+          </div>
+          <div style={{ color: 'var(--accent)', display: 'flex' }}>
+            {isBackfillingThumbs ? <Loader2 size={18} strokeWidth={2} className="animate-spin" aria-hidden /> : <ImageIcon size={18} strokeWidth={2} aria-hidden />}
+          </div>
         </div>
         <Divider />
         <div onClick={() => restoreInputRef.current?.click()} style={{ ...rowStyle, cursor: 'pointer' }}>

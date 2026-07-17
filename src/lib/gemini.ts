@@ -135,7 +135,7 @@ export async function fileToBase64(file: File): Promise<string> {
   })
 }
 
-export async function resizeImage(b64: string, mime: string, maxWidth: number): Promise<string> {
+export async function resizeImage(b64: string, mime: string, maxWidth: number, quality = 0.78): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
@@ -144,7 +144,7 @@ export async function resizeImage(b64: string, mime: string, maxWidth: number): 
       canvas.width = Math.round(img.width * scale)
       canvas.height = Math.round(img.height * scale)
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-      resolve(canvas.toDataURL('image/jpeg', 0.78).split(',')[1])
+      resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
     }
     img.onerror = () => resolve(b64) // fallback: send original if resize fails
     img.src = `data:${mime};base64,${b64}`

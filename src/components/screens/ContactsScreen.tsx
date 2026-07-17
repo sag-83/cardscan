@@ -623,8 +623,8 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
           zIndex: 1,
         }}
       >
-      {(c.front_image || c.front_image_url) ? (
-        <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : c.front_image_url}
+      {(c.front_image || c.front_thumb_url || c.front_image_url) ? (
+        <img src={c.front_image ? `data:image/jpeg;base64,${c.front_image}` : (c.front_thumb_url || c.front_image_url)}
           style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
             flexShrink: 0, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="" />
       ) : (

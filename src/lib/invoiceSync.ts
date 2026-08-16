@@ -37,16 +37,21 @@ export function clearInvoiceDeletion(id: string): void {
   persistDeletedIds(ids)
 }
 
-/** Delete from Supabase first, then local store. Prevents sync/backup from resurrecting rows. */
+/**
+ * Remove locally right away — recordInvoiceDeletion + reconcileInvoiceDeletions
+ * (run on the next successful cloud sync) retries the Supabase delete later, so
+ * this stays safe even when Supabase can't be reached at all right now. Returns
+ * whether the cloud delete happened immediately (used only for toast wording).
+ */
 export async function deleteInvoiceSynced(
   id: string,
   removeLocal: (id: string) => void,
 ): Promise<boolean> {
-  const ok = await deleteInvoiceFromDB(id)
-  if (!ok) return false
   recordInvoiceDeletion(id)
   removeLocal(id)
-  return true
+  const ok = await deleteInvoiceFromDB(id)
+  if (ok) clearInvoiceDeletion(id)
+  return ok
 }
 
 export async function saveInvoiceSynced(invoice: SavedInvoice): Promise<boolean> {

@@ -59,18 +59,15 @@ export function FollowupModal() {
     if (!dateValue) { showToast('Pick a date and time first'); return }
     const followup_at = new Date(dateValue).toISOString()
     const followup_note = noteValue.trim()
-    if (!IS_DEMO_MODE) {
-      const saved = await saveContactToDB({ ...contact, followup_at, followup_note })
-      if (!saved) { showToast('Supabase backup failed'); return }
-    }
     updateContact(contact.id, { followup_at, followup_note })
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at, followup_note } : c))
     await onFollowupScheduleChanged(contact.id, nextContacts)
+    const saved = IS_DEMO_MODE ? true : await saveContactToDB({ ...contact, followup_at, followup_note })
     if (supportsReminderPush() && !isReminderPushEnabled() && Notification.permission === 'default') {
       const result = await enableReminderPush(nextContacts)
       showToast(result === 'granted' ? 'Follow-up set · notifications on' : 'Follow-up set!')
     } else {
-      showToast('Follow-up set!')
+      showToast(saved ? 'Follow-up set!' : 'Follow-up set on this device — Supabase backup failed, will retry later')
     }
     close()
   }

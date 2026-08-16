@@ -361,14 +361,15 @@ export function ScanScreen() {
           }
 
           const saved = await saveContactToDB(merged)
-          if (!saved) {
-            showToast(getLastSupabaseError() || 'Back scanned locally, but Supabase backup failed')
-            setIsScanning(false)
-            return
-          }
 
+          // Keep the merge on-device even if the cloud write failed — same
+          // reasoning as the front-side save below: a temporarily
+          // Supabase-only-unsynced contact beats silently losing the back
+          // scan the client just took.
           updateContact(pendingBackId, merged)
-          showToast('Back side merged into contact!')
+          showToast(saved
+            ? 'Back side merged into contact!'
+            : (getLastSupabaseError() || 'Back side merged locally — Supabase backup failed, will retry later'))
         }
 
         setPendingBackId(null)
@@ -517,17 +518,23 @@ export function ScanScreen() {
       )
 
       const saved = await saveContactsToDB(enriched)
-      if (saved.failed > 0) {
-        showToast(saved.error || `${saved.failed} contact backup(s) failed — check Supabase settings`)
-        return
-      }
 
+      // Always keep the scan on-device, even if Supabase couldn't be
+      // reached — losing a card the client just scanned because the cloud
+      // backup failed is worse than a contact that's temporarily
+      // local-only. "Force backup to Supabase" in Settings re-pushes
+      // anything that didn't make it up once the cloud is reachable again.
       addContacts(enriched)
-      showToast(photoUploadFailed
-        ? `${enriched.length} contact(s) added! (photo stored locally only — check Supabase storage bucket)`
-        : `${enriched.length} contact(s) added!`)
       setPreviewCards([])
       setActiveScreen('contacts')
+
+      if (saved.failed > 0) {
+        showToast(`${enriched.length} contact(s) saved on this device — ${saved.failed} didn't back up to Supabase yet (will retry, or use "Force backup to Supabase" in Settings)`)
+      } else {
+        showToast(photoUploadFailed
+          ? `${enriched.length} contact(s) added! (photo stored locally only — check Supabase storage bucket)`
+          : `${enriched.length} contact(s) added!`)
+      }
     } catch (err) {
       showToast('Cloud save failed: ' + (err as Error).message)
     } finally {

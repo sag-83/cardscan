@@ -45,25 +45,25 @@ export function EditModal() {
   const handleSave = async () => {
     const normalized = normalizeContact(form)
 
-    if (!IS_DEMO_MODE) {
-      const saved = await saveContactToDB(normalized)
-      if (!saved) {
-        showToast('Supabase backup failed — check Settings')
-        return
-      }
-    }
-
+    // Apply locally first — an edit the client just typed shouldn't vanish
+    // just because Supabase couldn't be reached right now.
     if (isNew) {
       addContacts([normalized])
     } else {
       updateContact(normalized.id, normalized)
     }
     setEditModal(null)
-    showToast(IS_DEMO_MODE ? 'Demo mode: saved locally' : 'Saved!')
     if (!isNew) {
       // Re-open detail with fresh data
       setDetailContactId(normalized.id)
     }
+
+    const saved = IS_DEMO_MODE ? true : await saveContactToDB(normalized)
+    showToast(
+      IS_DEMO_MODE ? 'Demo mode: saved locally'
+      : saved ? 'Saved!'
+      : 'Saved on this device — Supabase backup failed, will retry later'
+    )
   }
 
   const handleDelete = () => {

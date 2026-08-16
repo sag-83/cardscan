@@ -73,71 +73,70 @@ export function ContactDetail() {
       return
     }
 
-    const saved = await saveContactToDB({ ...c, stars: newStars })
-    if (!saved) {
-      showToast('Supabase backup failed — star was not changed')
-      return
-    }
-
+    // Apply locally first — a Supabase hiccup shouldn't discard an edit the
+    // client just made on-device. It stays in local storage either way and
+    // "Force backup to Supabase" (Settings) will re-push it once reachable.
     updateContact(c.id, { stars: newStars })
+    const saved = await saveContactToDB({ ...c, stars: newStars })
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleToggleVisited = async () => {
     const next = !c.visited
     if (IS_DEMO_MODE) { updateContact(c.id, { visited: next }); return }
+    updateContact(c.id, { visited: next })
     const saved = await saveContactToDB({ ...c, visited: next })
-    if (saved) updateContact(c.id, { visited: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleToggleCustomer = async () => {
     const next = !c.is_customer
     if (IS_DEMO_MODE) { updateContact(c.id, { is_customer: next }); return }
+    updateContact(c.id, { is_customer: next })
     const saved = await saveContactToDB({ ...c, is_customer: next })
-    if (saved) updateContact(c.id, { is_customer: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleToggleOldCustomer = async () => {
     const next = !c.is_old_customer
     if (IS_DEMO_MODE) { updateContact(c.id, { is_old_customer: next }); return }
+    updateContact(c.id, { is_old_customer: next })
     const saved = await saveContactToDB({ ...c, is_old_customer: next })
-    if (saved) updateContact(c.id, { is_old_customer: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleAddEmail = async (value: string) => {
     const next = [...(c.extra_emails ?? []), value]
     setAddingField(null)
     if (IS_DEMO_MODE) { updateContact(c.id, { extra_emails: next }); return }
+    updateContact(c.id, { extra_emails: next })
     const saved = await saveContactToDB({ ...c, extra_emails: next })
-    if (saved) updateContact(c.id, { extra_emails: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleRemoveEmail = async (index: number) => {
     const next = (c.extra_emails ?? []).filter((_, i) => i !== index)
     if (IS_DEMO_MODE) { updateContact(c.id, { extra_emails: next }); return }
+    updateContact(c.id, { extra_emails: next })
     const saved = await saveContactToDB({ ...c, extra_emails: next })
-    if (saved) updateContact(c.id, { extra_emails: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleAddPhone = async (value: string) => {
     const next = [...(c.extra_phones ?? []), value]
     setAddingField(null)
     if (IS_DEMO_MODE) { updateContact(c.id, { extra_phones: next }); return }
+    updateContact(c.id, { extra_phones: next })
     const saved = await saveContactToDB({ ...c, extra_phones: next })
-    if (saved) updateContact(c.id, { extra_phones: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleRemovePhone = async (index: number) => {
     const next = (c.extra_phones ?? []).filter((_, i) => i !== index)
     if (IS_DEMO_MODE) { updateContact(c.id, { extra_phones: next }); return }
+    updateContact(c.id, { extra_phones: next })
     const saved = await saveContactToDB({ ...c, extra_phones: next })
-    if (saved) updateContact(c.id, { extra_phones: next })
-    else showToast('Supabase backup failed')
+    if (!saved) showToast('Saved on this device — Supabase backup failed, will retry later')
   }
 
   const handleSaveToPhone = () => {

@@ -155,8 +155,7 @@ function RevenueTab({
 
   const handleClearMemo = async (id: string) => {
     const ok = await deleteInvoiceSynced(id, deleteInvoice)
-    if (ok) showToast('Memo cleared')
-    else showToast('Could not delete from cloud — try again in Settings')
+    showToast(ok ? 'Memo cleared' : 'Memo cleared on this device — will finish deleting from cloud once reachable')
   }
 
   const handleConvertMemo = async (inv: SavedInvoice, selectedIndices: number[], soldDate: string) => {
@@ -177,19 +176,14 @@ function RevenueTab({
       date: saleDate,
       saved_at: new Date().toISOString(),
     }
-    const saved = await saveInvoiceSynced(newInv)
-    if (!saved) {
-      showToast('Could not save new invoice to cloud')
-      return
-    }
+    // Apply the conversion locally first — losing it because Supabase
+    // couldn't be reached is worse than a temporarily cloud-unsynced invoice.
     addInvoice(newInv)
     await deleteInvoiceSynced(inv.id, deleteInvoice)
+    const saved = await saveInvoiceSynced(newInv)
     const discarded = inv.items.length - selected.length
-    if (discarded > 0) {
-      showToast(`Invoice created · ${discarded} unsold item(s) discarded`)
-    } else {
-      showToast('Memo converted to invoice')
-    }
+    const base = discarded > 0 ? `Invoice created · ${discarded} unsold item(s) discarded` : 'Memo converted to invoice'
+    showToast(saved ? base : `${base} (Supabase backup failed, will retry later)`)
   }
 
   const summary = useMemo(() => {

@@ -15,6 +15,7 @@ import {
   Moon,
   RefreshCw,
   Shield,
+  Shrink,
   Sun,
   Undo2,
   Upload,
@@ -31,6 +32,7 @@ import {
 } from '../../lib/supabase'
 import { resizeImage } from '../../lib/gemini'
 import { loadImages, saveImage } from '../../lib/imageStore'
+import { STORE_MAX_WIDTH, STORE_QUALITY, THUMB_MAX_WIDTH, THUMB_QUALITY } from '../../lib/imageSizing'
 import {
   pruneOrphanInvoicesFromDB,
   reconcileInvoiceDeletions,
@@ -78,6 +80,7 @@ export function SettingsScreen() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false)
   const [isBackingUpPhotos, setIsBackingUpPhotos] = useState(false)
+  const [isShrinkingPhotos, setIsShrinkingPhotos] = useState(false)
   const { theme, setTheme } = useTheme()
 
   const {
@@ -346,7 +349,7 @@ export function SettingsScreen() {
               reader.readAsDataURL(blob)
             })
           }
-          const thumbB64 = await resizeImage(fullB64, 'image/jpeg', 280, 0.6)
+          const thumbB64 = await resizeImage(fullB64, 'image/jpeg', THUMB_MAX_WIDTH, THUMB_QUALITY)
           const thumbUrl = await uploadCardPhoto(contact.id, 'front', thumbB64, 'image/jpeg', 'thumb')
           if (!thumbUrl) throw new Error('upload failed')
           thumbUrls[contact.id] = thumbUrl
@@ -442,6 +445,90 @@ export function SettingsScreen() {
     showToast(
       `Local backup: ${succeeded} photo(s) saved to this device` +
       (alreadyCount ? `, ${alreadyCount} already had a copy` : '') +
+      (failed ? `, ${failed} failed (Supabase Storage may still be restricted — try again later)` : '')
+    )
+  }
+
+  // One-time sweep that re-compresses every already-stored front/back photo
+  // down to STORE_MAX_WIDTH/STORE_QUALITY and overwrites it in place (same
+  // storage path, so this can't create duplicate files). Photos scanned
+  // before today's resolution change are still sitting in Supabase Storage
+  // at their original larger size — this reclaims that space. Safe to
+  // re-run: any photo that wouldn't shrink meaningfully is skipped, so
+  // photos already scanned at the new size are left alone.
+  const handleShrinkStoredPhotos = async () => {
+    if (isShrinkingPhotos) return
+    if (IS_DEMO_MODE) {
+      showToast('Demo mode: nothing to shrink')
+      return
+    }
+
+    const targets: { contactId: string; side: 'front' | 'back'; url: string; cacheKey: string }[] = []
+    contacts.forEach((c) => {
+      if (c.front_image_url) targets.push({ contactId: c.id, side: 'front', url: c.front_image_url, cacheKey: `${c.id}_front` })
+      if (c.back_image_url) targets.push({ contactId: c.id, side: 'back', url: c.back_image_url, cacheKey: `${c.id}_back` })
+    })
+
+    if (!targets.length) {
+      showToast('No stored photos to shrink')
+      return
+    }
+
+    setIsShrinkingPhotos(true)
+    showToast(`Checking ${targets.length} stored photo(s)… this can take a while`)
+
+    let shrunk = 0
+    let skipped = 0
+    let failed = 0
+    let savedChars = 0
+    const BATCH_SIZE = 6
+
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      const batch = targets.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(async (t) => {
+        try {
+          // Local cache first — skips a network download when possible.
+          const cached = (await loadImages([t.cacheKey]))[t.cacheKey]
+          let original = cached
+          if (!original) {
+            const res = await fetch(t.url)
+            if (!res.ok) throw new Error('fetch failed')
+            const blob = await res.blob()
+            original = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve((reader.result as string).split(',')[1])
+              reader.onerror = () => reject(new Error('read failed'))
+              reader.readAsDataURL(blob)
+            })
+          }
+
+          const shrunkB64 = await resizeImage(original, 'image/jpeg', STORE_MAX_WIDTH, STORE_QUALITY)
+
+          // Skip the re-upload if it wouldn't meaningfully help — this is
+          // what makes the tool idempotent for photos already at this size.
+          if (shrunkB64.length >= original.length * 0.9) {
+            skipped += 1
+            return
+          }
+
+          const url = await uploadCardPhoto(t.contactId, t.side, shrunkB64)
+          if (!url) throw new Error('upload failed')
+
+          savedChars += original.length - shrunkB64.length
+          await saveImage(t.cacheKey, shrunkB64)
+          shrunk += 1
+        } catch {
+          failed += 1
+        }
+      }))
+    }
+
+    setIsShrinkingPhotos(false)
+    // base64 -> raw bytes is ~0.75x char count; rough estimate for the toast.
+    const savedMB = ((savedChars * 0.75) / (1024 * 1024)).toFixed(1)
+    showToast(
+      `Shrink complete: ${shrunk} photo(s) resized (~${savedMB} MB freed in Supabase Storage)` +
+      (skipped ? `, ${skipped} already small enough` : '') +
       (failed ? `, ${failed} failed (Supabase Storage may still be restricted — try again later)` : '')
     )
   }
@@ -587,6 +674,18 @@ export function SettingsScreen() {
             </div>
           </div>
           <div style={{ color: 'var(--action-instagram-fg)', display: 'flex' }}><Camera size={18} strokeWidth={2} aria-hidden /></div>
+        </div>
+        <Divider />
+        <div onClick={handleShrinkStoredPhotos} style={{ ...rowStyle, cursor: isShrinkingPhotos ? 'default' : 'pointer', opacity: isShrinkingPhotos ? 0.65 : 1 }}>
+          <div style={{ flex: 1, fontSize: 15 }}>
+            {isShrinkingPhotos ? 'Shrinking Stored Photos…' : 'Shrink Stored Photos'}
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              One-time: recompresses photos scanned before the size reduction to reclaim Supabase Storage space. Safe to run more than once — needs Supabase Storage to be reachable.
+            </div>
+          </div>
+          <div style={{ color: '#ff9500', display: 'flex' }}>
+            {isShrinkingPhotos ? <Loader2 size={18} strokeWidth={2} className="animate-spin" aria-hidden /> : <Shrink size={18} strokeWidth={2} aria-hidden />}
+          </div>
         </div>
         <Divider />
         <div onClick={handleBackfillThumbnails} style={{ ...rowStyle, cursor: isBackfillingThumbs ? 'default' : 'pointer', opacity: isBackfillingThumbs ? 0.65 : 1 }}>

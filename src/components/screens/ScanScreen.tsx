@@ -34,20 +34,12 @@ import {
 } from '../../lib/supabase'
 import { saveImage } from '../../lib/imageStore'
 import { demoScannedContact, IS_DEMO_MODE } from '../../lib/demo'
+import { STORE_MAX_WIDTH, STORE_QUALITY, THUMB_MAX_WIDTH, THUMB_QUALITY } from '../../lib/imageSizing'
 import type { Contact } from '../../types/contact'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const MAX_PDF_BYTES = 6 * 1024 * 1024
 const SUPPORTED_SCAN_TYPES = ['application/pdf']
-const THUMB_MAX_WIDTH = 280
-const THUMB_QUALITY = 0.6
-// OCR needs real resolution to read small card text accurately, but nothing
-// displays the "full" image wider than ~180px tall in this app — 1600px was
-// being stored/uploaded/cached for something that only ever renders small.
-// STORE_* is a separate, smaller pass applied AFTER the OCR call, so OCR
-// accuracy is unaffected while storage/egress/local-cache size drop ~4x.
-const STORE_MAX_WIDTH = 900
-const STORE_QUALITY = 0.72
 
 const ENV_GEMINI_KEYS = [
   (import.meta.env.VITE_GEMINI_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string),

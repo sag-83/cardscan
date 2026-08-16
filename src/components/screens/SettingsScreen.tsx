@@ -456,6 +456,26 @@ export function SettingsScreen() {
   // at their original larger size — this reclaims that space. Safe to
   // re-run: any photo that wouldn't shrink meaningfully is skipped, so
   // photos already scanned at the new size are left alone.
+  // Unlike lib/gemini's resizeImage (which deliberately falls back to the
+  // original bytes on decode failure, so a weird photo never blocks a scan),
+  // this tool needs to know when a resize genuinely failed vs. when a photo
+  // is already small — otherwise a decode failure would silently look
+  // identical to "already optimized" and hide real failures from the toast.
+  const resizeImageOrThrow = (b64: string, mime: string, maxWidth: number, quality: number): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
+      }
+      img.onerror = () => reject(new Error('image decode failed'))
+      img.src = `data:${mime};base64,${b64}`
+    })
+
   const handleShrinkStoredPhotos = async () => {
     if (isShrinkingPhotos) return
     if (IS_DEMO_MODE) {
@@ -502,7 +522,7 @@ export function SettingsScreen() {
             })
           }
 
-          const shrunkB64 = await resizeImage(original, 'image/jpeg', STORE_MAX_WIDTH, STORE_QUALITY)
+          const shrunkB64 = await resizeImageOrThrow(original, 'image/jpeg', STORE_MAX_WIDTH, STORE_QUALITY)
 
           // Skip the re-upload if it wouldn't meaningfully help — this is
           // what makes the tool idempotent for photos already at this size.

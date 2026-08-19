@@ -15,12 +15,13 @@ import {
   MessageSquare,
   Package,
   Phone,
+  Plus,
   Search,
   Star,
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { initials, phoneKey, sortContactsAlphabetically } from '../../lib/utils'
+import { blankContact, initials, phoneKey, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
@@ -58,6 +59,7 @@ export function ContactsScreen() {
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
+  const setEditModal = useStore((s) => s.setEditModal)
   const showToast = useStore((s) => s.showToast)
 
   const { overdue, dueSoon } = useFollowups(contacts)
@@ -232,28 +234,44 @@ export function ContactsScreen() {
         borderBottom: '1px solid var(--border2)',
         display: 'flex', flexDirection: 'column', gap: 8,
       }}>
-        <div style={{ position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-            width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="var(--text3)" strokeWidth="2.5" strokeLinecap="round">
-            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, company, or phone..."
-            style={{ width: '100%', padding: '9px 36px 9px 36px',
-              background: 'var(--bg3)', border: 'none', borderRadius: 10,
-              fontSize: 15, color: 'var(--text)' }} />
-          {query && (
-            <button type="button" onClick={() => setQuery('')} style={{
-              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-              width: 20, height: 20, borderRadius: '50%',
-              background: 'var(--text3)', border: 'none', cursor: 'pointer',
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="var(--text3)" strokeWidth="2.5" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, company, or phone..."
+              style={{ width: '100%', padding: '9px 36px 9px 36px',
+                background: 'var(--bg3)', border: 'none', borderRadius: 10,
+                fontSize: 15, color: 'var(--text)' }} />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} style={{
+                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                width: 20, height: 20, borderRadius: '50%',
+                background: 'var(--text3)', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--bg)', padding: 0,
+              }} aria-label="Clear search">
+                <X size={12} strokeWidth={3} />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditModal({ contact: blankContact(), isNew: true })}
+            aria-label="Add contact manually"
+            title="Add contact manually — for cards that won't scan"
+            style={{
+              flexShrink: 0, width: 38, height: 38, borderRadius: 10,
+              background: 'var(--accent)', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--bg)', padding: 0,
-            }} aria-label="Clear search">
-              <X size={12} strokeWidth={3} />
-            </button>
-          )}
+              color: '#fff',
+            }}
+          >
+            <Plus size={20} strokeWidth={2.5} aria-hidden />
+          </button>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={filterStars} onChange={(e) => setFilterStars(Number(e.target.value))}

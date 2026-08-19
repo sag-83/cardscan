@@ -38,7 +38,10 @@ async function callWithKey(
       signal: controller.signal,
       body: JSON.stringify({
         contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: b64 } }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+        // Headroom above a normal single-card reply (usually a few hundred
+        // tokens) so a card with two addresses, long notes, or multiple
+        // cards in one photo doesn't get its JSON truncated mid-array.
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
       }),
     }
   ).finally(() => window.clearTimeout(timeout))
@@ -61,9 +64,30 @@ async function callWithKey(
     throw err
   }
   const data = await res.json()
-  const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+
+  // A request can be blocked before Gemini even generates a reply (e.g. the
+  // image trips a safety filter) — that shows up here, not on a candidate.
+  if (data.promptFeedback?.blockReason) {
+    throw new Error(`Gemini blocked this image (${data.promptFeedback.blockReason}) — try a clearer photo of just the card`)
+  }
+
+  const candidate = data.candidates?.[0]
+  const text: string = candidate?.content?.parts?.[0]?.text ?? ''
   const match = text.match(/\[[\s\S]*\]/)
-  if (!match) throw new Error('No JSON array in response')
+
+  if (!match) {
+    if (candidate?.finishReason === 'MAX_TOKENS') {
+      throw new Error('Gemini reply was cut off (too much text detected) — try scanning one card at a time, or a tighter crop')
+    }
+    if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+      throw new Error(`Gemini couldn't process this image (${candidate.finishReason}) — try a clearer or different photo`)
+    }
+    // Surface whatever Gemini actually said, so a repeat failure on one
+    // specific card is diagnosable instead of just "No JSON array".
+    const snippet = text.trim().slice(0, 140)
+    throw new Error(snippet ? `No JSON array in response: "${snippet}"` : 'No JSON array in response (empty reply from Gemini)')
+  }
+
   return JSON.parse(match[0]) as GeminiCardExtraction[]
 }
 

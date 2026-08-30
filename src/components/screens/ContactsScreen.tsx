@@ -805,10 +805,21 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
 }
 
 function contactShareText(contact: Contact): string {
+  const person = (contact.name ?? '').trim()
+  const company = (contact.company ?? '').trim()
   const address = [contact.address, contact.city, contact.state, contact.zip, contact.country].filter(Boolean).join(', ')
+  const phone = contact.phone_mobile || contact.phone_work
+
+  // Headline the company, then name the person under it — unless the card has
+  // no company, in which case the person is already the headline.
+  const personLine = person && company
+    ? `Contact: ${[person, (contact.title ?? '').trim()].filter(Boolean).join(' · ')}`
+    : ''
+
   const lines = [
-    contact.company || contact.name || 'Company',
-    contact.phone_mobile || contact.phone_work ? `Number: ${contact.phone_mobile || contact.phone_work}` : '',
+    company || person || 'Company',
+    personLine,
+    phone ? `Number: ${phone}` : '',
     address ? `Address: ${address}` : '',
   ].filter(Boolean)
   return lines.join('\n')

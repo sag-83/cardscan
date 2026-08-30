@@ -968,7 +968,8 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
   contacts: Contact[]
   showToast: (msg: string) => void
 }) {
-  const status = getReminderPushStatus(contacts)
+  const invoices = useStore((s) => s.invoices)
+  const status = getReminderPushStatus(contacts, invoices)
   const ready = status.enabled && status.permission === 'granted'
 
   const statusLine = !status.supported
@@ -998,7 +999,7 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
               showToast('Reminder notifications off')
               return
             }
-            const result = await enableReminderPush(contacts)
+            const result = await enableReminderPush(contacts, invoices)
             if (result === 'granted') showToast('On — you’ll get one alert per follow-up at its due time')
             else if (result === 'denied') showToast('Allow notifications in iPhone Settings')
             else showToast('Notifications not supported')
@@ -1048,7 +1049,7 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
           </button>
           <button
             type="button"
-            onClick={() => void syncFollowupReminders(contacts).then(() => showToast('Reminders rescheduled'))}
+            onClick={() => void syncFollowupReminders(contacts, invoices).then(() => showToast('Reminders rescheduled'))}
             style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
           >
             Reschedule all

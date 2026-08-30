@@ -43,6 +43,7 @@ export default function App() {
   const sbUrl = useStore((s) => s.sbUrl)
   const sbKey = useStore((s) => s.sbKey)
   const contacts = useStore((s) => s.contacts)
+  const invoices = useStore((s) => s.invoices)
   const setContacts = useStore((s) => s.setContacts)
   const setInvoices = useStore((s) => s.setInvoices)
   const deleteContact = useStore((s) => s.deleteContact)
@@ -144,10 +145,13 @@ export default function App() {
     if (!isUnlocked) return
     void (async () => {
       await registerReminderServiceWorker()
-      await syncFollowupReminders(contacts)
+      await syncFollowupReminders(contacts, invoices)
     })()
-    return startFollowupReminderPolling(() => useStore.getState().contacts)
-  }, [isUnlocked, contacts])
+    return startFollowupReminderPolling(
+      () => useStore.getState().contacts,
+      () => useStore.getState().invoices,
+    )
+  }, [isUnlocked, contacts, invoices])
 
   useEffect(() => {
     if (!isUnlocked) return

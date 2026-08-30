@@ -16,6 +16,8 @@ export type SavedInvoice = {
   date: string
   docKind: 'invoice' | 'memo'
   paidBy: 'cash' | 'check' | 'pending'
+  /** Payment terms in days (30/60/90). 0 or absent means due on receipt. */
+  termsDays?: number
   items: SavedInvoiceItem[]
   total: number
   notes: string

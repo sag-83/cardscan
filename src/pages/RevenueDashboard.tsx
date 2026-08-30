@@ -22,6 +22,7 @@ import { printSavedInvoice } from '../lib/invoicePrint'
 import { contactStubFromInvoice } from '../lib/invoiceFormUtils'
 import { saveInvoiceSynced } from '../lib/invoiceSync'
 import { normalizePaidBy } from '../lib/invoiceNormalize'
+import { normalizeTermsDays } from '../lib/invoiceTerms'
 import { BonusesIncentivesCard } from '@/components/ui/animated-dashboard-card'
 import JobListingComponent, { type Job } from '@/components/ui/joblisting-component'
 
@@ -40,6 +41,7 @@ async function fetchInvoices(): Promise<SavedInvoice[]> {
     id: r.id, contactId: r.contact_id, company: r.company,
     contactName: r.contact_name, state: r.state, city: r.city,
     date: r.date, docKind: r.doc_kind, paidBy: normalizePaidBy(r.paid_by),
+    termsDays: normalizeTermsDays(r.terms_days),
     items: r.items ?? [], total: Number(r.total),
     notes: r.notes, saved_at: r.saved_at,
   })) as SavedInvoice[]

@@ -1,5 +1,6 @@
 import type { Contact } from '../types/contact'
 import type { SavedInvoice } from '../types/invoice'
+import { normalizeTermsDays } from './invoiceTerms'
 import {
   ensureSupabaseClient,
   mapContactRow,
@@ -139,6 +140,7 @@ function applyInvoiceRow(store: CloudSyncStore, row: Record<string, unknown>, ev
     date: String(row.date ?? ''),
     docKind: (row.doc_kind as SavedInvoice['docKind']) ?? 'invoice',
     paidBy: (row.paid_by as SavedInvoice['paidBy']) ?? 'cash',
+    termsDays: normalizeTermsDays(row.terms_days),
     items: (row.items as SavedInvoice['items']) ?? [],
     total: Number(row.total ?? 0),
     notes: String(row.notes ?? ''),

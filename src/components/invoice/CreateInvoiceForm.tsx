@@ -16,6 +16,7 @@ import {
   type InvoiceFormItem,
   type PaidBy,
 } from '../../lib/invoiceFormUtils'
+import { dueDateLabel, normalizeTermsDays, PRE_DUE_DAYS, TERMS_PRESETS } from '../../lib/invoiceTerms'
 import { dashboardInputClass, dashboardLabelClass } from '../../lib/dashboardStyles'
 import { cn } from '../../lib/utils'
 
@@ -36,6 +37,7 @@ function formStateFromInvoice(invoice: SavedInvoice) {
     docKind: invoice.docKind,
     invoiceDate: invoice.date,
     paidBy: invoice.paidBy,
+    termsDays: normalizeTermsDays(invoice.termsDays),
     notes: invoice.notes || '',
     grandTotalOverride: grandTotalOverrideFromInvoice(invoice),
     items:
@@ -58,6 +60,11 @@ export function CreateInvoiceForm({
     () => initialInvoice?.date ?? new Date().toISOString().slice(0, 10),
   )
   const [paidBy, setPaidBy] = useState<PaidBy>(() => initialInvoice?.paidBy ?? 'pending')
+  const [termsDays, setTermsDays] = useState(() => normalizeTermsDays(initialInvoice?.termsDays))
+  const [customTerms, setCustomTerms] = useState(() => {
+    const days = normalizeTermsDays(initialInvoice?.termsDays)
+    return days > 0 && !TERMS_PRESETS.includes(days)
+  })
   const [notes, setNotes] = useState(() => initialInvoice?.notes ?? '')
   const [grandTotalOverride, setGrandTotalOverride] = useState(
     () => (initialInvoice ? grandTotalOverrideFromInvoice(initialInvoice) : ''),
@@ -74,6 +81,8 @@ export function CreateInvoiceForm({
       setDocKind(s.docKind)
       setInvoiceDate(s.invoiceDate)
       setPaidBy(s.paidBy)
+      setTermsDays(s.termsDays)
+      setCustomTerms(s.termsDays > 0 && !TERMS_PRESETS.includes(s.termsDays))
       setNotes(s.notes)
       setGrandTotalOverride(s.grandTotalOverride)
       setItems(s.items)
@@ -82,6 +91,8 @@ export function CreateInvoiceForm({
     setDocKind('invoice')
     setInvoiceDate(new Date().toISOString().slice(0, 10))
     setPaidBy('pending')
+    setTermsDays(0)
+    setCustomTerms(false)
     setNotes('')
     setGrandTotalOverride('')
     setItems([blankInvoiceItem()])
@@ -101,9 +112,14 @@ export function CreateInvoiceForm({
     setItems((current) => (current.length === 1 ? current : current.filter((item) => item.id !== id)))
   }
 
+  const dueLabel = useMemo(
+    () => dueDateLabel({ date: invoiceDate, termsDays }),
+    [invoiceDate, termsDays],
+  )
+
   const handleSubmit = () => {
     if (finalTotal <= 0) return
-    const input = { docKind, invoiceDate, paidBy, notes, items, grandTotalOverride }
+    const input = { docKind, invoiceDate, paidBy, termsDays, notes, items, grandTotalOverride }
     const invoice = initialInvoice
       ? buildSavedInvoiceUpdate(contact, initialInvoice, input)
       : buildSavedInvoice(contact, input)
@@ -142,18 +158,65 @@ export function CreateInvoiceForm({
       </div>
 
       {docKind === 'invoice' && (
-        <label className="block">
-          <span className={labelClass}>Paid by</span>
-          <select
-            value={paidBy}
-            onChange={(e) => setPaidBy(e.target.value as PaidBy)}
-            className={cn(inputClass, 'mt-1')}
-          >
-            <option value="cash">Cash</option>
-            <option value="check">Check</option>
-            <option value="pending">Payment pending</option>
-          </select>
-        </label>
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className={labelClass}>Paid by</span>
+              <select
+                value={paidBy}
+                onChange={(e) => setPaidBy(e.target.value as PaidBy)}
+                className={cn(inputClass, 'mt-1')}
+              >
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="pending">Payment pending</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Terms (days)</span>
+              <select
+                value={customTerms ? 'custom' : String(termsDays)}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setCustomTerms(true)
+                    return
+                  }
+                  setCustomTerms(false)
+                  setTermsDays(Number(e.target.value))
+                }}
+                className={cn(inputClass, 'mt-1')}
+              >
+                <option value="0">Due on receipt</option>
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+          </div>
+
+          {customTerms && (
+            <label className="block">
+              <span className={labelClass}>Custom terms (days)</span>
+              <input
+                value={termsDays || ''}
+                onChange={(e) => setTermsDays(normalizeTermsDays(e.target.value.replace(/[^\d]/g, '')))}
+                placeholder="e.g. 45"
+                inputMode="numeric"
+                className={cn(inputClass, 'mt-1')}
+              />
+            </label>
+          )}
+
+          {dueLabel && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Payment due {dueLabel}
+              {paidBy === 'pending'
+                ? ` · reminder ${PRE_DUE_DAYS} days before and on the due date`
+                : ' · no reminder (already marked paid)'}
+            </p>
+          )}
+        </div>
       )}
 
       <div>

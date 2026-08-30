@@ -120,7 +120,7 @@ export function BulkScreen() {
       setContacts(updated)
       const changed = updated.filter((c) => idsToSet.has(c.id))
       const result = await saveContactsToDB(changed, { skipDedupe: true })
-      await syncFollowupReminders(updated)
+      await syncFollowupReminders(updated, useStore.getState().invoices)
       showToast(`Set 30-day follow-up for ${result.ok + result.merged} contact(s)${result.failed ? `, ${result.failed} failed` : ''}`)
     } catch (err) {
       showToast('Failed: ' + (err as Error).message)

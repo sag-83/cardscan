@@ -912,7 +912,7 @@ function FollowupBanner({ overdue, dueSoon, onOpenContact, onEditFollowup }: {
             }}>
               <div onClick={() => onEditFollowup(c.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.name || c.company || 'Unknown'}
+                  {c.company || c.name || 'Unknown'}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
                   {new Date(c.followup_at!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}

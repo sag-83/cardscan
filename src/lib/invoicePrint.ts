@@ -1,9 +1,8 @@
 import { SavedInvoice } from '../types/invoice'
+import { dueDateLabel, termsLabel } from './invoiceTerms'
 
-const COMPANY_ADDRESS = '30 West 47th Street #MEZZ 26 New York-10036.'
 const COMPANY_PHONE = '+1(212)380-3190'
 const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
-const COMPANY_LOGO = '/delta-logo.png'
 
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
@@ -44,16 +43,13 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   <title>${docTitle}</title>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:28px;color:#111827;text-transform:uppercase;">
-  <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="Delta Diamonds" style="max-width:460px;width:100%;height:auto;" />
-  </div>
-  <div style="text-align:center;color:#374151;margin:8px 0 18px;">
-    <div>${COMPANY_ADDRESS}</div>
+  <div style="text-align:center;color:#374151;margin:0 0 18px;">
     <div>Tel: ${COMPANY_PHONE} &nbsp;|&nbsp; ${COMPANY_EMAIL}</div>
   </div>
   <h1 style="margin:0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom:6px;color:#374151;">Date: ${formatUsDate(inv.date)}</div>
-  ${inv.docKind === 'invoice' ? `<div style="margin-bottom:14px;color:#374151;">Paid by: ${upper(inv.paidBy)}</div>` : ''}
+  ${inv.docKind === 'invoice' ? `<div style="margin-bottom:6px;color:#374151;">Paid by: ${upper(inv.paidBy)} &nbsp;|&nbsp; Terms: ${esc(upper(termsLabel(inv.termsDays ?? 0)))}</div>` : ''}
+  ${inv.docKind === 'invoice' && dueDateLabel(inv) ? `<div style="margin-bottom:14px;color:#374151;">Payment due: ${esc(dueDateLabel(inv))}</div>` : ''}
   <div style="margin-bottom:18px;">
     <div style="font-weight:700;">Bill To</div>
     <div>${esc(customer)}</div>

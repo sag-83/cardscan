@@ -1,5 +1,14 @@
 import type { Contact } from '../types/contact'
+import type { SavedInvoice } from '../types/invoice'
 import { resetFollowupNotification } from './supabase'
+import { money } from './invoiceFormUtils'
+import {
+  formatDueDate,
+  invoiceDueAt,
+  isAwaitingPayment,
+  PRE_DUE_DAYS,
+  termsLabel,
+} from './invoiceTerms'
 import { isStandalonePwa } from './pwa'
 
 export { isStandalonePwa } from './pwa'
@@ -84,15 +93,14 @@ function isFollowupDueNow(at: string, now = Date.now()): boolean {
   return now - dueAt <= DUE_WINDOW_MS
 }
 
-/** Skip old overdue items so enabling reminders does not notify every past follow-up. */
-function skipStaleFollowupNotifications(contacts: Contact[]): void {
+/** Skip old overdue items so enabling reminders does not notify every past due date. */
+function skipStaleNotifications(reminders: FollowupReminder[]): void {
   const now = Date.now()
-  for (const c of contacts) {
-    if (!c.followup_at) continue
-    const dueAt = new Date(c.followup_at).getTime()
+  for (const reminder of reminders) {
+    const dueAt = new Date(reminder.at).getTime()
     if (Number.isNaN(dueAt) || dueAt > now) continue
-    if (now - dueAt > DUE_WINDOW_MS && !wasNotified(c.id, c.followup_at)) {
-      markNotified(c.id, c.followup_at)
+    if (now - dueAt > DUE_WINDOW_MS && !wasNotified(reminder.id, reminder.at)) {
+      markNotified(reminder.id, reminder.at)
     }
   }
 }
@@ -101,7 +109,7 @@ export function remindersFromContacts(contacts: Contact[]): FollowupReminder[] {
   return contacts
     .filter((c) => c.followup_at)
     .map((c) => {
-      const name = c.name || c.company || 'Contact'
+      const name = c.company || c.name || 'Contact'
       const note = c.followup_note?.trim()
       return {
         id: c.id,
@@ -112,6 +120,50 @@ export function remindersFromContacts(contacts: Contact[]): FollowupReminder[] {
     })
 }
 
+/**
+ * Payment chasers for unpaid invoices sold on terms: one a few days out and one
+ * on the due date. Keyed by invoice so several open invoices for the same
+ * customer each alert independently of that customer's follow-up reminder.
+ */
+export function remindersFromInvoices(invoices: SavedInvoice[]): FollowupReminder[] {
+  const out: FollowupReminder[] = []
+
+  for (const inv of invoices) {
+    if (!isAwaitingPayment(inv)) continue
+    const dueAt = invoiceDueAt(inv)
+    if (!dueAt) continue
+
+    const who = inv.company || inv.contactName || 'Customer'
+    const amount = money(inv.total)
+    const dueLabel = formatDueDate(dueAt)
+    const terms = termsLabel(inv.termsDays ?? 0)
+
+    out.push({
+      id: `inv:${inv.id}:pre`,
+      at: new Date(dueAt.getTime() - PRE_DUE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      title: `Payment due in ${PRE_DUE_DAYS} days: ${who}`,
+      body: `${amount} · ${terms} · due ${dueLabel}`,
+    })
+    out.push({
+      id: `inv:${inv.id}:due`,
+      at: dueAt.toISOString(),
+      title: `Payment due today: ${who}`,
+      body: `${amount} · ${terms} invoice dated ${formatUsDate(inv.date)}`,
+    })
+  }
+
+  return out
+}
+
+function formatUsDate(isoDate: string): string {
+  const parsed = new Date(`${isoDate}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? isoDate : parsed.toLocaleDateString('en-US')
+}
+
+export function allReminders(contacts: Contact[], invoices: SavedInvoice[]): FollowupReminder[] {
+  return [...remindersFromContacts(contacts), ...remindersFromInvoices(invoices)]
+}
+
 export function supportsReminderPush(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator
 }
@@ -120,10 +172,10 @@ export function isServerPushConfigured(): boolean {
   return VAPID_PUBLIC_KEY.length > 0
 }
 
-export function getReminderPushStatus(contacts: Contact[]): ReminderPushStatus {
+export function getReminderPushStatus(contacts: Contact[], invoices: SavedInvoice[]): ReminderPushStatus {
   const supported = supportsReminderPush()
   const permission = supported ? Notification.permission : 'unsupported'
-  const future = remindersFromContacts(contacts).filter((r) => new Date(r.at).getTime() > Date.now())
+  const future = allReminders(contacts, invoices).filter((r) => new Date(r.at).getTime() > Date.now())
   return {
     supported,
     enabled: isReminderPushEnabled(),
@@ -250,34 +302,44 @@ async function showFollowupNotification(reminder: FollowupReminder): Promise<boo
   }
 }
 
-/** Notify only if a follow-up just became due (while app is open). */
-export async function checkDueFollowupReminders(contacts: Contact[]): Promise<number> {
+/** Notify only if a reminder just became due (while app is open). */
+export async function checkDueFollowupReminders(
+  contacts: Contact[],
+  invoices: SavedInvoice[],
+): Promise<number> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return 0
   if (Notification.permission !== 'granted') return 0
 
   const now = Date.now()
   let shown = 0
-  for (const reminder of remindersFromContacts(contacts)) {
+  for (const reminder of allReminders(contacts, invoices)) {
     if (!isFollowupDueNow(reminder.at, now)) continue
     if (await showFollowupNotification(reminder)) shown += 1
   }
   return shown
 }
 
-export async function syncFollowupReminders(contacts: Contact[]): Promise<void> {
+export async function syncFollowupReminders(
+  contacts: Contact[],
+  invoices: SavedInvoice[],
+): Promise<void> {
   if (!isReminderPushEnabled() || !supportsReminderPush()) return
   if (Notification.permission !== 'granted') return
 
-  const reminders = remindersFromContacts(contacts)
+  const reminders = allReminders(contacts, invoices)
   scheduleMainThreadReminders(reminders)
   await postRemindersToWorker(reminders)
   await registerPushSubscription()
 }
 
-export async function onFollowupScheduleChanged(contactId: string, contacts: Contact[]): Promise<void> {
+export async function onFollowupScheduleChanged(
+  contactId: string,
+  contacts: Contact[],
+  invoices: SavedInvoice[],
+): Promise<void> {
   clearNotifiedFollowup(contactId)
   await resetFollowupNotification(contactId)
-  await syncFollowupReminders(contacts)
+  await syncFollowupReminders(contacts, invoices)
 }
 
 export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
@@ -302,9 +364,12 @@ export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 
 
 let pollTimer: number | null = null
 
-export function startFollowupReminderPolling(getContacts: () => Contact[]): () => void {
+export function startFollowupReminderPolling(
+  getContacts: () => Contact[],
+  getInvoices: () => SavedInvoice[],
+): () => void {
   const tick = () => {
-    void checkDueFollowupReminders(getContacts())
+    void checkDueFollowupReminders(getContacts(), getInvoices())
   }
 
   void tick()
@@ -321,14 +386,17 @@ export function startFollowupReminderPolling(getContacts: () => Contact[]): () =
   }
 }
 
-export async function enableReminderPush(contacts: Contact[]): Promise<'granted' | 'denied' | 'unsupported'> {
+export async function enableReminderPush(
+  contacts: Contact[],
+  invoices: SavedInvoice[],
+): Promise<'granted' | 'denied' | 'unsupported'> {
   if (!supportsReminderPush()) return 'unsupported'
   const permission = await requestReminderPermission()
   if (permission !== 'granted') return 'denied'
   setReminderPushEnabled(true)
-  skipStaleFollowupNotifications(contacts)
+  skipStaleNotifications(allReminders(contacts, invoices))
   await registerReminderServiceWorker()
   await registerPushSubscription()
-  await syncFollowupReminders(contacts)
+  await syncFollowupReminders(contacts, invoices)
   return 'granted'
 }

@@ -1,5 +1,6 @@
 import type { SavedInvoice, SavedInvoiceItem } from '../types/invoice'
 import type { Contact, ContactAddress } from '../types/contact'
+import { normalizeTermsDays } from './invoiceTerms'
 
 const EMPTY_CONTACT_FIELDS = {
   title: '',
@@ -104,16 +105,19 @@ export function blankInvoiceItem(): InvoiceFormItem {
   return { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }
 }
 
+export type InvoiceFormInput = {
+  docKind: DocKind
+  invoiceDate: string
+  paidBy: PaidBy
+  termsDays: number
+  notes: string
+  items: InvoiceFormItem[]
+  grandTotalOverride: string
+}
+
 function buildSavedInvoiceCore(
   contact: Contact,
-  input: {
-    docKind: DocKind
-    invoiceDate: string
-    paidBy: PaidBy
-    notes: string
-    items: InvoiceFormItem[]
-    grandTotalOverride: string
-  },
+  input: InvoiceFormInput,
 ): Omit<SavedInvoice, 'id' | 'saved_at'> {
   const subtotal = input.items.reduce((sum, item) => sum + rowTotal(item), 0)
   const finalTotal = input.grandTotalOverride.trim() ? num(input.grandTotalOverride) : subtotal
@@ -136,6 +140,7 @@ function buildSavedInvoiceCore(
     date: input.invoiceDate,
     docKind: input.docKind,
     paidBy: input.docKind === 'invoice' ? input.paidBy : 'pending',
+    termsDays: input.docKind === 'invoice' ? normalizeTermsDays(input.termsDays) : 0,
     items: savedItems.length ? savedItems : [{ size: '-', pcs: 0, ct: 0, pct: 0, amount: finalTotal }],
     total: finalTotal,
     notes: input.notes,
@@ -144,14 +149,7 @@ function buildSavedInvoiceCore(
 
 export function buildSavedInvoice(
   contact: Contact,
-  input: {
-    docKind: DocKind
-    invoiceDate: string
-    paidBy: PaidBy
-    notes: string
-    items: InvoiceFormItem[]
-    grandTotalOverride: string
-  },
+  input: InvoiceFormInput,
 ): SavedInvoice {
   return {
     id: uid(),
@@ -163,14 +161,7 @@ export function buildSavedInvoice(
 export function buildSavedInvoiceUpdate(
   contact: Contact,
   existing: SavedInvoice,
-  input: {
-    docKind: DocKind
-    invoiceDate: string
-    paidBy: PaidBy
-    notes: string
-    items: InvoiceFormItem[]
-    grandTotalOverride: string
-  },
+  input: InvoiceFormInput,
 ): SavedInvoice {
   return {
     id: existing.id,

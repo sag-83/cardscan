@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact, ContactAddress } from '../types/contact'
 import { SavedInvoice } from '../types/invoice'
 import { normalizePaidBy } from './invoiceNormalize'
+import { normalizeTermsDays } from './invoiceTerms'
 import { contactDedupKey, findDuplicateContact, mergeContact } from './utils'
 
 export const SUPABASE_SCHEMA_SQL = `-- 1. Create table (safe to re-run)
@@ -122,12 +123,15 @@ create table if not exists invoices (
   date text default '',
   doc_kind text default 'invoice',
   paid_by text default 'cash',
+  terms_days integer default 0,
   items jsonb default '[]',
   total numeric default 0,
   notes text default '',
   saved_at timestamptz default now()
 );
 alter table invoices disable row level security;
+-- Existing installs: add the payment-terms column (safe to re-run).
+alter table invoices add column if not exists terms_days integer default 0;
 
 -- 6. Realtime sync (run once in Supabase SQL editor if live sync does not work)
 alter table contacts replica identity full;
@@ -525,11 +529,16 @@ export async function testSupabaseConnection(): Promise<void> {
   }
 }
 
+/** True when Supabase rejected a write because the column is not in the table yet. */
+function isMissingColumnError(error: { message?: string } | null, column: string): boolean {
+  return !!error?.message?.includes(column)
+}
+
 export async function saveInvoiceToDB(invoice: SavedInvoice): Promise<boolean> {
   const sb = ensureSupabaseClient()
   if (!sb) return false
 
-  const { error } = await sb.from('invoices').upsert({
+  const row = {
     id:           invoice.id,
     contact_id:   invoice.contactId,
     company:      invoice.company,
@@ -539,11 +548,21 @@ export async function saveInvoiceToDB(invoice: SavedInvoice): Promise<boolean> {
     date:         invoice.date,
     doc_kind:     invoice.docKind,
     paid_by:      invoice.paidBy,
+    terms_days:   normalizeTermsDays(invoice.termsDays),
     items:        invoice.items,
     total:        invoice.total,
     notes:        invoice.notes,
     saved_at:     invoice.saved_at,
-  }, { onConflict: 'id' })
+  }
+
+  let { error } = await sb.from('invoices').upsert(row, { onConflict: 'id' })
+
+  // Older databases predate terms_days — save everything else rather than lose the invoice.
+  if (isMissingColumnError(error, 'terms_days')) {
+    const { terms_days: _omitted, ...legacyRow } = row
+    console.warn('invoices.terms_days column missing — run the migration in the schema comment')
+    ;({ error } = await sb.from('invoices').upsert(legacyRow, { onConflict: 'id' }))
+  }
 
   if (error) {
     rememberSupabaseError('Invoice save failed', error)
@@ -577,6 +596,7 @@ export async function syncInvoicesFromDB(): Promise<SavedInvoice[]> {
     date:        row.date,
     docKind:     row.doc_kind,
     paidBy:      normalizePaidBy(row.paid_by),
+    termsDays:   normalizeTermsDays(row.terms_days),
     items:       row.items ?? [],
     total:       Number(row.total),
     notes:       row.notes,
@@ -590,6 +610,7 @@ export async function updateInvoiceInDB(id: string, patch: Partial<SavedInvoice>
 
   const dbPatch: Record<string, unknown> = {}
   if (patch.paidBy      !== undefined) dbPatch.paid_by      = patch.paidBy
+  if (patch.termsDays   !== undefined) dbPatch.terms_days   = normalizeTermsDays(patch.termsDays)
   if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
   if (patch.total       !== undefined) dbPatch.total       = patch.total
   if (patch.items       !== undefined) dbPatch.items       = patch.items
@@ -602,7 +623,13 @@ export async function updateInvoiceInDB(id: string, patch: Partial<SavedInvoice>
   if (patch.contactId   !== undefined) dbPatch.contact_id  = patch.contactId
   if (patch.saved_at    !== undefined) dbPatch.saved_at    = patch.saved_at
 
-  const { error } = await sb.from('invoices').update(dbPatch).eq('id', id)
+  let { error } = await sb.from('invoices').update(dbPatch).eq('id', id)
+
+  if (isMissingColumnError(error, 'terms_days')) {
+    const { terms_days: _omitted, ...legacyPatch } = dbPatch
+    ;({ error } = await sb.from('invoices').update(legacyPatch).eq('id', id))
+  }
+
   if (error) {
     rememberSupabaseError('Invoice update failed', error)
     console.warn('Supabase invoice update error:', error)

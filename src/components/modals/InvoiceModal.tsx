@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceSynced } from '../../lib/invoiceSync'
 import { money } from '../../lib/invoiceFormUtils'
+import { dueDateLabel, termsLabel } from '../../lib/invoiceTerms'
+import { syncFollowupReminders } from '../../lib/reminderNotifications'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
-const COMPANY_ADDRESS = '30 West 47th Street #MEZZ 26 New York-10036.'
 const COMPANY_PHONE = '+1(212)380-3190'
 const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
-const COMPANY_LOGO = '/delta-logo.png'
 
 function escapeHtml(value: string): string {
   return value
@@ -42,11 +42,15 @@ export function InvoiceModal() {
   const contact = contacts.find((c) => c.id === invoiceContactId) || null
   const [isPreview, setIsPreview] = useState(false)
   const [draft, setDraft] = useState<SavedInvoice | null>(null)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const savedIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!invoiceContactId) return
     setIsPreview(false)
     setDraft(null)
+    setSavedId(null)
+    savedIdRef.current = null
   }, [invoiceContactId])
 
   if (!contact) return null
@@ -54,7 +58,33 @@ export function InvoiceModal() {
   const close = () => {
     setIsPreview(false)
     setDraft(null)
+    setSavedId(null)
+    savedIdRef.current = null
     setInvoiceContactId(null)
+  }
+
+  /** Store + cloud + Sheets. Guarded so Save followed by Print does not file it twice. */
+  const persistInvoice = (record: SavedInvoice) => {
+    if (savedIdRef.current === record.id) return
+    savedIdRef.current = record.id
+    setSavedId(record.id)
+
+    addInvoice(record)
+    void saveInvoiceSynced(record).then((ok) => {
+      if (!ok) showToast('Invoice saved locally — cloud sync failed')
+    })
+    sendInvoiceToSheets(record).catch(() => {
+      // silent — invoice is already saved locally
+    })
+    const { contacts: allContacts, invoices } = useStore.getState()
+    void syncFollowupReminders(allContacts, invoices)
+  }
+
+  const saveInvoice = () => {
+    if (!draft) return
+    const alreadySaved = savedIdRef.current === draft.id
+    persistInvoice(draft)
+    showToast(alreadySaved ? 'Invoice already saved' : 'Invoice saved')
   }
 
   const customer = contact.company || contact.name || 'Customer'
@@ -63,13 +93,7 @@ export function InvoiceModal() {
   const printInvoice = () => {
     if (!draft) return
     const record = draft
-    addInvoice(record)
-    void saveInvoiceSynced(record).then((ok) => {
-      if (!ok) showToast('Invoice saved locally — cloud sync failed')
-    })
-    sendInvoiceToSheets(record).catch(() => {
-      // silent — invoice is already saved locally
-    })
+    persistInvoice(record)
 
     const invoiceRows = record.items
       .map((item) => {
@@ -91,16 +115,13 @@ export function InvoiceModal() {
   <title>${docTitle}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827; text-transform: uppercase;">
-  <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="Delta Diamonds" style="max-width:460px;width:100%;height:auto;" />
-  </div>
-  <div style="text-align:center;color:#374151;margin:8px 0 18px;">
-    <div>${COMPANY_ADDRESS}</div>
+  <div style="text-align:center;color:#374151;margin:0 0 18px;">
     <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
-  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 14px; color: #374151;">Paid by: ${record.paidBy.toUpperCase()}</div>` : ''}
+  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 6px; color: #374151;">Paid by: ${record.paidBy.toUpperCase()} &nbsp; | &nbsp; Terms: ${escapeHtml(upper(termsLabel(record.termsDays ?? 0)))}</div>` : ''}
+  ${record.docKind === 'invoice' && dueDateLabel(record) ? `<div style="margin-bottom: 14px; color: #374151;">Payment due: ${escapeHtml(dueDateLabel(record))}</div>` : ''}
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
     <div>${escapeHtml(upper(customer))}</div>
@@ -219,16 +240,19 @@ export function InvoiceModal() {
         ) : (
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
-              <div style={{ textAlign: 'center' }}>
-                <img src={COMPANY_LOGO} alt="Delta Diamonds" style={{ width: '100%', maxWidth: 400, height: 'auto' }} />
-              </div>
-              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151', marginTop: 6 }}>
-                <div>{COMPANY_ADDRESS}</div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151' }}>
                 <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
               <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>
-              {draft.docKind === 'invoice' && <div style={{ fontSize: 12, color: '#374151' }}>Paid by: {draft.paidBy.toUpperCase()}</div>}
+              {draft.docKind === 'invoice' && (
+                <div style={{ fontSize: 12, color: '#374151' }}>
+                  Paid by: {draft.paidBy.toUpperCase()} | Terms: {upper(termsLabel(draft.termsDays ?? 0))}
+                </div>
+              )}
+              {draft.docKind === 'invoice' && dueDateLabel(draft) && (
+                <div style={{ fontSize: 12, color: '#374151' }}>Payment due: {dueDateLabel(draft)}</div>
+              )}
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>Bill To</div>
                 <div>{upper(customer)}</div>
@@ -262,8 +286,18 @@ export function InvoiceModal() {
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button type="button" onClick={() => setIsPreview(false)} style={ghostBtnStyle}>Back</button>
-              <button type="button" onClick={printInvoice} style={primaryBtnStyle}>Download PDF / Print</button>
+              <button
+                type="button"
+                onClick={saveInvoice}
+                disabled={savedId === draft.id}
+                style={{ ...saveBtnStyle, opacity: savedId === draft.id ? 0.55 : 1 }}
+              >
+                {savedId === draft.id ? 'Saved' : 'Save'}
+              </button>
             </div>
+            <button type="button" onClick={printInvoice} style={{ ...primaryBtnStyle, width: '100%', marginTop: 8 }}>
+              Download PDF / Print
+            </button>
           </>
         )}
       </div>
@@ -276,6 +310,18 @@ const primaryBtnStyle: React.CSSProperties = {
   borderRadius: 10,
   border: 'none',
   background: 'var(--accent)',
+  color: '#fff',
+  fontWeight: 800,
+  fontSize: 14,
+  padding: '11px 12px',
+  cursor: 'pointer',
+}
+
+const saveBtnStyle: React.CSSProperties = {
+  flex: 1,
+  borderRadius: 10,
+  border: 'none',
+  background: '#248a3d',
   color: '#fff',
   fontWeight: 800,
   fontSize: 14,

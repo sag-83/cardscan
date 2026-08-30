@@ -36,6 +36,7 @@ export function FollowupModal() {
   const followupContactId = useStore((s) => s.followupContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
   const contacts = useStore((s) => s.contacts)
+  const invoices = useStore((s) => s.invoices)
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
 
@@ -61,10 +62,10 @@ export function FollowupModal() {
     const followup_note = noteValue.trim()
     updateContact(contact.id, { followup_at, followup_note })
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at, followup_note } : c))
-    await onFollowupScheduleChanged(contact.id, nextContacts)
+    await onFollowupScheduleChanged(contact.id, nextContacts, invoices)
     const saved = IS_DEMO_MODE ? true : await saveContactToDB({ ...contact, followup_at, followup_note })
     if (supportsReminderPush() && !isReminderPushEnabled() && Notification.permission === 'default') {
-      const result = await enableReminderPush(nextContacts)
+      const result = await enableReminderPush(nextContacts, invoices)
       showToast(result === 'granted' ? 'Follow-up set · notifications on' : 'Follow-up set!')
     } else {
       showToast(saved ? 'Follow-up set!' : 'Follow-up set on this device — Supabase backup failed, will retry later')
@@ -78,7 +79,7 @@ export function FollowupModal() {
     }
     updateContact(contact.id, { followup_at: '', followup_note: '' })
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at: '', followup_note: '' } : c))
-    await onFollowupScheduleChanged(contact.id, nextContacts)
+    await onFollowupScheduleChanged(contact.id, nextContacts, invoices)
     showToast('Follow-up cleared')
     close()
   }
@@ -108,7 +109,7 @@ export function FollowupModal() {
           <div>
             <div style={{ fontSize: 19, fontWeight: 800 }}>Set Follow-up</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 3 }}>
-              {contact.name || contact.company || 'Contact'}
+              {contact.company || contact.name || 'Contact'}
             </div>
           </div>
           <button type="button" onClick={close} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: '2px 6px', display: 'flex' }} aria-label="Close">

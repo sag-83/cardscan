@@ -157,7 +157,13 @@ function groupByMonth(invs: SavedInvoice[]) {
     if (!map.has(k)) map.set(k, [])
     map.get(k)!.push(inv)
   })
-  return Array.from(map.entries()).map(([k, list]) => ({ month: k, label: fmtMonthLong(k), invoices: list, total: list.reduce((s, i) => s + i.total, 0) }))
+  return Array.from(map.entries()).map(([k, list]) => ({
+    month: k,
+    label: fmtMonthLong(k),
+    invoices: list,
+    total: list.reduce((s, i) => (i.docKind === 'memo' ? s : s + i.total), 0),
+    memo: list.reduce((s, i) => (i.docKind === 'memo' ? s + i.total : s), 0),
+  }))
 }
 function exportCSV(invoices: SavedInvoice[]) {
   const h = ['Date','Company','State','City','Type','Paid By','Items','Total','Notes']
@@ -397,7 +403,7 @@ function RevenueTrendChart({ invoices, period }: { invoices: SavedInvoice[]; per
   const data = useMemo(() => {
     return buildRevenueTrendSeries(invoices, bucket).map((p) => ({
       label: p.label,
-      'Total Billed': p.totalBilled,
+      Invoiced: p.totalBilled,
       Collected: p.collected,
     }))
   }, [invoices, bucket])
@@ -410,7 +416,7 @@ function RevenueTrendChart({ invoices, period }: { invoices: SavedInvoice[]; per
       <CardHead
         title="Revenue Trend"
         sub={revenueTrendBucketDescription(bucket)}
-        right={<LegendDots items={[{ color: C.indigo, label: 'Billed' }, { color: C.emerald, label: 'Collected' }]} />}
+        right={<LegendDots items={[{ color: C.indigo, label: 'Invoiced' }, { color: C.emerald, label: 'Collected' }]} />}
       />
       <div className="px-2 pb-5">
         {data.length ? (
@@ -441,7 +447,7 @@ function RevenueTrendChart({ invoices, period }: { invoices: SavedInvoice[]; per
               <Tooltip content={<ChartTip />} />
               <Area
                 type="linear"
-                dataKey="Total Billed"
+                dataKey="Invoiced"
                 stroke={C.indigo}
                 strokeWidth={2.5}
                 fill="url(#gI)"
@@ -473,7 +479,7 @@ function PaymentDonut({ invoices }: { invoices: SavedInvoice[] }) {
     return [
       { name: 'Cash',    value: Math.round(get((i) => i.paidBy === 'cash'  && i.docKind !== 'memo')), color: C.emerald, fill: C.emerald },
       { name: 'Check',   value: Math.round(get((i) => i.paidBy === 'check' && i.docKind !== 'memo')), color: C.blue,    fill: C.blue    },
-      { name: 'Pending', value: Math.round(get((i) => i.paidBy === 'pending')),                       color: C.amber,   fill: C.amber   },
+      { name: 'Pending', value: Math.round(get((i) => i.paidBy === 'pending' && i.docKind !== 'memo')), color: C.amber,   fill: C.amber   },
       { name: 'Memo',    value: Math.round(get((i) => i.docKind === 'memo')),                         color: C.violet,  fill: C.violet  },
     ].filter((d) => d.value > 0)
   }, [invoices])
@@ -503,7 +509,7 @@ function PaymentDonut({ invoices }: { invoices: SavedInvoice[] }) {
               </PieChart>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">{money(total)}</p>
-                <p className="text-[10px] text-slate-400">total</p>
+                <p className="text-[10px] text-slate-400">all docs</p>
               </div>
             </div>
             <div className="flex-1 space-y-1">
@@ -531,13 +537,14 @@ function PaymentDonut({ invoices }: { invoices: SavedInvoice[] }) {
 
 function CollectionCard({ invoices }: { invoices: SavedInvoice[] }) {
   const s = useMemo(() => {
-    const total     = invoices.reduce((s, i) => s + i.total, 0)
-    const collected = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pending   = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
+    const sales     = invoices.filter((i) => i.docKind !== 'memo')
+    const total     = sales.reduce((s, i) => s + i.total, 0)
+    const collected = sales.filter((i) => i.paidBy !== 'pending').reduce((s, i) => s + i.total, 0)
+    const pending   = sales.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
     const rate      = total > 0 ? (collected / total) * 100 : 0
-    const ages      = invoices.filter((i) => i.paidBy === 'pending').map((i) => daysAgo(i.date))
+    const ages      = sales.filter((i) => i.paidBy === 'pending').map((i) => daysAgo(i.date))
     const avg       = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0
-    const over30    = invoices.filter((i) => i.paidBy === 'pending' && daysAgo(i.date) > 30).length
+    const over30    = sales.filter((i) => i.paidBy === 'pending' && daysAgo(i.date) > 30).length
     return { rate, collected, pending, avg, over30 }
   }, [invoices])
 
@@ -607,7 +614,7 @@ function StateRevenueChart({ invoices }: { invoices: SavedInvoice[] }) {
   return (
     <Card>
       <CardHead title="Revenue by State" sub="Top 10 states"
-        right={<LegendDots items={[{ color: C.indigo, label: 'Total' }, { color: C.amber, label: 'Pending' }]} />}
+        right={<LegendDots items={[{ color: C.indigo, label: 'Invoiced' }, { color: C.amber, label: 'Pending' }]} />}
       />
       <div className="px-2 pb-5">
         {data.length ? (
@@ -617,7 +624,7 @@ function StateRevenueChart({ invoices }: { invoices: SavedInvoice[] }) {
               <XAxis type="number" tickFormatter={moneyShort} tick={{ fontSize: 10, fill: tick }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="state" tick={{ fontSize: 11, fill: tick, fontWeight: 600 }} axisLine={false} tickLine={false} width={26} />
               <Tooltip content={<ChartTip />} />
-              <Bar dataKey="Revenue" fill={C.indigo} radius={[0,4,4,0]} name="Total" />
+              <Bar dataKey="Revenue" fill={C.indigo} radius={[0,4,4,0]} name="Invoiced" />
               <Bar dataKey="Pending" fill={C.amber}  radius={[0,4,4,0]} name="Pending" />
             </BarChart>
           </ResponsiveContainer>
@@ -636,7 +643,7 @@ function TopCustomers({ invoices }: { invoices: SavedInvoice[] }) {
       const k = inv.company || inv.contactName || 'Unknown'
       const r = map.get(k) ?? { t: 0, p: 0, n: 0 }
       r.t += inv.total; r.n++
-      if (inv.paidBy !== 'pending' && inv.docKind !== 'memo') r.p += inv.total
+      if (inv.paidBy !== 'pending') r.p += inv.total
       map.set(k, r)
     })
     const sorted = Array.from(map.entries())
@@ -654,7 +661,7 @@ function TopCustomers({ invoices }: { invoices: SavedInvoice[] }) {
 
   return (
     <Card>
-      <CardHead title="Top Customers" sub="By total billed value" />
+      <CardHead title="Top Customers" sub="By invoiced value — excludes memos" />
       <div className="px-6 pb-4">
         {list.map((c, i) => (
           <div key={c.name} className={cn('flex items-center gap-3 py-2.5', i > 0 && 'border-t border-slate-50 dark:border-slate-800/60')}>
@@ -767,7 +774,7 @@ function PendingTable({ invoices, onMarkPaid }: {
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const rows = useMemo(() =>
-    invoices.filter((i) => i.paidBy === 'pending')
+    invoices.filter((i) => i.paidBy === 'pending' && i.docKind !== 'memo')
       .map((i) => ({ ...i, days: daysAgo(i.date) }))
       .sort((a, b) => b.days - a.days),
     [invoices]
@@ -916,7 +923,7 @@ function InvoiceRow({ inv, onMarkPaid, onDelete, onEdit }: {
 
 // ─── Shop ledger ──────────────────────────────────────────────────────────────
 
-type ShopRow = { key: string; company: string; state: string; city: string; n: number; sold: number; paid: number; pending: number; last: string; invoices: SavedInvoice[] }
+type ShopRow = { key: string; company: string; state: string; city: string; n: number; sold: number; paid: number; pending: number; memo: number; last: string; invoices: SavedInvoice[] }
 
 function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
   invoices: SavedInvoice[]
@@ -931,9 +938,14 @@ function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
     const map = new Map<string, ShopRow>()
     invoices.forEach((inv) => {
       const key = inv.contactId || inv.company
-      const r = map.get(key) ?? { key, company: inv.company || inv.contactName || 'Unknown', state: inv.state, city: inv.city, n: 0, sold: 0, paid: 0, pending: 0, last: inv.date, invoices: [] }
-      r.n++; r.sold += inv.total
-      if (inv.paidBy === 'pending') r.pending += inv.total; else r.paid += inv.total
+      const r = map.get(key) ?? { key, company: inv.company || inv.contactName || 'Unknown', state: inv.state, city: inv.city, n: 0, sold: 0, paid: 0, pending: 0, memo: 0, last: inv.date, invoices: [] }
+      r.n++
+      if (inv.docKind === 'memo') {
+        r.memo += inv.total
+      } else {
+        r.sold += inv.total
+        if (inv.paidBy === 'pending') r.pending += inv.total; else r.paid += inv.total
+      }
       if (inv.date > r.last) r.last = inv.date
       r.invoices.push(inv); map.set(key, r)
     })
@@ -961,8 +973,8 @@ function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-[2.5fr_1fr_1fr_1fr_0.8fr_40px] gap-0 px-6 py-2.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
-        {['Shop', 'Sold', 'Paid', 'Pending', 'Last Sale', ''].map((h) => (
+      <div className="grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr_0.8fr_40px] gap-0 px-6 py-2.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+        {['Shop', 'Sold', 'Paid', 'Pending', 'Memo', 'Last Sale', ''].map((h) => (
           <span key={h} className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600">{h}</span>
         ))}
       </div>
@@ -970,7 +982,7 @@ function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
       {filtered.map((sh) => (
         <div key={sh.key}>
           <div onClick={() => toggle(sh.key)}
-            className={cn('grid grid-cols-[2.5fr_1fr_1fr_1fr_0.8fr_40px] px-6 py-3.5 border-b border-slate-50 dark:border-slate-800/60 cursor-pointer transition-colors duration-150', exp.has(sh.key) ? 'bg-indigo-50/50 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30')}>
+            className={cn('grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr_0.8fr_40px] px-6 py-3.5 border-b border-slate-50 dark:border-slate-800/60 cursor-pointer transition-colors duration-150', exp.has(sh.key) ? 'bg-indigo-50/50 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30')}>
             <div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{sh.company}</p>
               <p className="text-xs text-slate-400 mt-0.5">{[sh.city, sh.state].filter(Boolean).join(', ')} · {sh.n} inv</p>
@@ -978,16 +990,21 @@ function ShopLedger({ invoices, onMarkPaid, onDelete, onEdit }: {
             <p className="text-sm font-bold tabular-nums self-center" style={{ color: C.indigo }}>{money(sh.sold)}</p>
             <p className="text-sm font-semibold tabular-nums self-center text-emerald-500">{money(sh.paid)}</p>
             <p className={cn('text-sm tabular-nums self-center', sh.pending > 0 ? 'font-bold text-amber-500' : 'text-slate-300 dark:text-slate-700')}>{sh.pending > 0 ? money(sh.pending) : '—'}</p>
+            <p className={cn('text-sm tabular-nums self-center', sh.memo > 0 ? 'font-semibold' : 'text-slate-300 dark:text-slate-700')} style={{ color: sh.memo > 0 ? C.violet : undefined }}>{sh.memo > 0 ? money(sh.memo) : '—'}</p>
             <p className="text-xs text-slate-400 self-center tabular-nums">{sh.last}</p>
             <Icon name="chevron" size={16} className={cn('self-center text-slate-400 dark:text-slate-600 transition-transform duration-200', exp.has(sh.key) ? 'rotate-180' : '')} />
           </div>
           {exp.has(sh.key) && (
             <div className="px-6 py-4 bg-indigo-50/30 dark:bg-indigo-500/[0.03] border-b border-slate-100 dark:border-slate-800 animate-fade-in">
-              {groupByMonth(sh.invoices).map(({ month, label, invoices: mi, total }) => (
+              {groupByMonth(sh.invoices).map(({ month, label, invoices: mi, total, memo }) => (
                 <div key={month} className="mb-5 last:mb-0">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-600">{label}</span>
-                    <span className="text-xs font-bold tabular-nums" style={{ color: C.indigo }}>{money(total)} · {mi.length} inv</span>
+                    <span className="flex items-center gap-2 text-xs font-bold tabular-nums">
+                      {(total > 0 || memo === 0) && <span style={{ color: C.indigo }}>{money(total)}</span>}
+                      {memo > 0 && <span style={{ color: C.violet }}>memo {money(memo)}</span>}
+                      <span className="font-semibold text-slate-400 dark:text-slate-600">{mi.length} doc{mi.length === 1 ? '' : 's'}</span>
+                    </span>
                   </div>
                   {mi.map((inv) => (
                     <InvoiceRow key={inv.id} inv={inv} onMarkPaid={onMarkPaid} onDelete={onDelete} onEdit={onEdit} />
@@ -1022,7 +1039,7 @@ const NAV: { id: SectionId; label: string; icon: IconName }[] = [
 ]
 
 const VIEW_META: Record<SectionId, { title: string; description: string; showFilters: boolean }> = {
-  overview:    { title: 'Overview',        description: 'Key metrics and collection snapshot for the selected period.', showFilters: true },
+  overview:    { title: 'Overview',        description: 'Key metrics and collection snapshot for the selected period. Revenue figures cover invoices only — memos are tracked separately.', showFilters: true },
   accounts:    { title: 'Charge Accounts', description: 'Open charge balances, shop ledgers, and charge invoices.', showFilters: false },
   revenue:     { title: 'Revenue Trend',   description: 'Monthly revenue and invoice volume over time.', showFilters: true },
   payments:    { title: 'Payments',        description: 'Payment mix and collection performance.', showFilters: true },
@@ -1201,8 +1218,13 @@ export function RevenueDashboard() {
     return d
   }, [allInvoices, period, state, search])
 
+  // A memo is goods out on approval, not a sale — it is never revenue and never
+  // a receivable, so every money figure runs off the sales list instead.
+  const salesInvoices = useMemo(() => invoices.filter((i) => i.docKind !== 'memo'), [invoices])
+  const memoInvoices = useMemo(() => invoices.filter((i) => i.docKind === 'memo'), [invoices])
+
   const reminderJobs = useMemo((): Job[] => {
-    return invoices
+    return salesInvoices
       .filter((i) => i.paidBy === 'pending')
       .slice(0, 12)
       .map((inv) => ({
@@ -1223,31 +1245,37 @@ export function RevenueDashboard() {
           />
         ),
       }))
-  }, [invoices])
+  }, [salesInvoices])
 
   const kpi = useMemo(() => {
     const { currStart, prevStart, prevEnd } = periodBounds(period)
     const prev = allInvoices.filter((i) => { const d = new Date(i.date); return d >= prevStart && d <= prevEnd })
-    const total    = invoices.reduce((s, i) => s + i.total, 0)
-    const pTotal   = prev.reduce((s, i) => s + i.total, 0)
-    const coll     = invoices.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pColl    = prev.filter((i) => i.paidBy !== 'pending' && i.docKind !== 'memo').reduce((s, i) => s + i.total, 0)
-    const pending  = invoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
+    const prevSales = prev.filter((i) => i.docKind !== 'memo')
+
+    const total    = salesInvoices.reduce((s, i) => s + i.total, 0)
+    const pTotal   = prevSales.reduce((s, i) => s + i.total, 0)
+    const coll     = salesInvoices.filter((i) => i.paidBy !== 'pending').reduce((s, i) => s + i.total, 0)
+    const pColl    = prevSales.filter((i) => i.paidBy !== 'pending').reduce((s, i) => s + i.total, 0)
+    const pending  = salesInvoices.filter((i) => i.paidBy === 'pending').reduce((s, i) => s + i.total, 0)
+    const memoTotal = memoInvoices.reduce((s, i) => s + i.total, 0)
+    const salesCount = salesInvoices.length
     const n        = invoices.length
     const pN       = prev.length
-    const avg      = n > 0 ? total / n : 0
-    const pAvg     = pN > 0 ? pTotal / pN : 0
+    const avg      = salesCount > 0 ? total / salesCount : 0
+    const pAvg     = prevSales.length > 0 ? pTotal / prevSales.length : 0
     void currStart
     return {
-      total, coll, pending, n, avg,
+      total, coll, pending, n, avg, memoTotal,
+      memoCount:    memoInvoices.length,
+      salesCount,
       collRate:     total > 0 ? (coll / total) * 100 : 0,
-      pendingCount: invoices.filter((i) => i.paidBy === 'pending').length,
+      pendingCount: salesInvoices.filter((i) => i.paidBy === 'pending').length,
       totalT:  trendPct(total, pTotal),
       collT:   trendPct(coll, pColl),
       countT:  trendPct(n, pN),
       avgT:    trendPct(avg, pAvg),
     }
-  }, [invoices, allInvoices, period])
+  }, [invoices, salesInvoices, memoInvoices, allInvoices, period])
 
   const showRemindersNav = reminderJobs.length > 0
   const navOptions = useMemo(
@@ -1464,11 +1492,12 @@ export function RevenueDashboard() {
                       onMoreDetails={() => navTo('receivables')}
                     />
                     <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="All billed"                                    trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   sensitive figuresVisible={figuresVisible} />
+                      <KpiCard label="Total Revenue"   rawValue={kpi.total}   format="money" sub="Invoices only — excludes memos"                trend={kpi.totalT} accent={KPI_ACCENTS[0]} icon="dollar"   delay={0}   sensitive figuresVisible={figuresVisible} />
                       <KpiCard label="Collected"        rawValue={kpi.coll}    format="money" sub={`${kpi.collRate.toFixed(0)}% collection rate`}  trend={kpi.collT}  accent={KPI_ACCENTS[1]} icon="check"    delay={60}  sensitive figuresVisible={figuresVisible} />
                       <KpiCard label="Outstanding"      rawValue={kpi.pending} format="money" sub={`${kpi.pendingCount} invoices`}                 trend={null}       accent={KPI_ACCENTS[2]} icon="clock"    delay={120} sensitive figuresVisible={figuresVisible} />
-                      <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub="Invoices + memos"                              trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={180} />
-                      <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={240} />
+                      <KpiCard label="Memo Total"       rawValue={kpi.memoTotal} format="money" sub={`${kpi.memoCount} memo${kpi.memoCount === 1 ? '' : 's'} out`} trend={null} accent={KPI_ACCENTS[4]} icon="file" delay={180} sensitive figuresVisible={figuresVisible} />
+                      <KpiCard label="Total Documents"  rawValue={kpi.n}       format="count" sub={`${kpi.salesCount} invoices + ${kpi.memoCount} memos`} trend={kpi.countT} accent={KPI_ACCENTS[3]} icon="file"     delay={240} />
+                      <KpiCard label="Avg Deal Size"    rawValue={kpi.avg}     format="money" sub="Per invoice"                                   trend={kpi.avgT}   accent={KPI_ACCENTS[4]} icon="trending" delay={300} />
                     </div>
                   </div>
                 </>
@@ -1477,7 +1506,7 @@ export function RevenueDashboard() {
                 {activeView === 'revenue' && (
                   <>
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
-                    <RevenueTrendChart invoices={invoices} period={period} />
+                    <RevenueTrendChart invoices={salesInvoices} period={period} />
                   </>
                 )}
 
@@ -1486,7 +1515,7 @@ export function RevenueDashboard() {
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
                     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                       <PaymentDonut invoices={invoices} />
-                      <CollectionCard invoices={invoices} />
+                      <CollectionCard invoices={salesInvoices} />
                     </div>
                   </>
                 )}
@@ -1494,14 +1523,14 @@ export function RevenueDashboard() {
                 {activeView === 'geography' && (
                   <>
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
-                    <StateRevenueChart invoices={invoices} />
+                    <StateRevenueChart invoices={salesInvoices} />
                   </>
                 )}
 
                 {activeView === 'customers' && (
                   <>
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
-                    <TopCustomers invoices={invoices} />
+                    <TopCustomers invoices={salesInvoices} />
                   </>
                 )}
 
@@ -1509,7 +1538,7 @@ export function RevenueDashboard() {
                   <>
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
                     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                      <ProductMixChart invoices={invoices} />
+                      <ProductMixChart invoices={salesInvoices} />
                       <ActivityChart invoices={invoices} />
                     </div>
                   </>
@@ -1527,8 +1556,8 @@ export function RevenueDashboard() {
                 {activeView === 'receivables' && (
                   <>
                     <PageIntro title={viewMeta.title} description={viewMeta.description} />
-                  {invoices.some((i) => i.paidBy === 'pending') ? (
-                    <PendingTable invoices={invoices} onMarkPaid={markPaid} />
+                  {salesInvoices.some((i) => i.paidBy === 'pending') ? (
+                    <PendingTable invoices={salesInvoices} onMarkPaid={markPaid} />
                   ) : (
                     <Card>
                       <div className="flex items-center gap-3 p-6">

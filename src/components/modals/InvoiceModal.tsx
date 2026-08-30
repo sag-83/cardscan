@@ -9,8 +9,9 @@ import { syncFollowupReminders } from '../../lib/reminderNotifications'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
-const COMPANY_PHONE = '+1(212)380-3190'
-const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
+const COMPANY_LOGO = '/sv-designs-logo.png'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
+const COMPANY_PHONE = '8622359224'
 
 function escapeHtml(value: string): string {
   return value
@@ -115,8 +116,11 @@ export function InvoiceModal() {
   <title>${docTitle}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827; text-transform: uppercase;">
-  <div style="text-align:center;color:#374151;margin:0 0 18px;">
-    <div>Tel: ${COMPANY_PHONE} &nbsp; | &nbsp; ${COMPANY_EMAIL}</div>
+  <div style="text-align:center;">
+    <img src="${COMPANY_LOGO}" alt="SV Designs" style="max-width:380px;width:100%;height:auto;" />
+  </div>
+  <div style="text-align:center;color:#374151;margin:6px 0 18px;">
+    <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${COMPANY_PHONE}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
@@ -240,8 +244,11 @@ export function InvoiceModal() {
         ) : (
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
-              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151' }}>
-                <div>Tel: {COMPANY_PHONE} | {COMPANY_EMAIL}</div>
+              <div style={{ textAlign: 'center' }}>
+                <img src={COMPANY_LOGO} alt="SV Designs" style={{ width: '100%', maxWidth: 260, height: 'auto' }} />
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151', marginTop: 4 }}>
+                <div>{COMPANY_ADDRESS} | Tel: {COMPANY_PHONE}</div>
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
               <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>

@@ -1,8 +1,9 @@
 import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 
-const COMPANY_PHONE = '+1(212)380-3190'
-const COMPANY_EMAIL = 'info@deltadiamondsinc.com'
+const COMPANY_LOGO = '/sv-designs-logo.png'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
+const COMPANY_PHONE = '8622359224'
 
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
@@ -43,8 +44,11 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   <title>${docTitle}</title>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:28px;color:#111827;text-transform:uppercase;">
-  <div style="text-align:center;color:#374151;margin:0 0 18px;">
-    <div>Tel: ${COMPANY_PHONE} &nbsp;|&nbsp; ${COMPANY_EMAIL}</div>
+  <div style="text-align:center;">
+    <img src="${COMPANY_LOGO}" alt="SV Designs" style="max-width:380px;width:100%;height:auto;" />
+  </div>
+  <div style="text-align:center;color:#374151;margin:6px 0 18px;">
+    <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${COMPANY_PHONE}</div>
   </div>
   <h1 style="margin:0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom:6px;color:#374151;">Date: ${formatUsDate(inv.date)}</div>

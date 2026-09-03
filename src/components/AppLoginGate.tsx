@@ -95,7 +95,7 @@ export function AppLoginGate({ onUnlock }: Props) {
       <form className="login-gate__panel" onSubmit={(e) => void handleSubmit(e)}>
         <div className="login-gate__brand">
           <img src="/apple-touch-icon.png" alt="" className="login-gate__logo" width={72} height={72} />
-          <p className="login-gate__eyebrow">Delta Diamonds Inc.</p>
+          <p className="login-gate__eyebrow">AK Gems Inc.</p>
           <h1 className="login-gate__title">Secure sign-in</h1>
           <p className="login-gate__subtitle">
             {usesTotp

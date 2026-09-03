@@ -9,7 +9,6 @@ import { syncFollowupReminders } from '../../lib/reminderNotifications'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
-const COMPANY_LOGO = '/sv-designs-logo.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
 const COMPANY_PHONE = '8622359224'
 
@@ -117,7 +116,8 @@ export function InvoiceModal() {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827; text-transform: uppercase;">
   <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="SV Designs" style="max-width:380px;width:100%;height:auto;" />
+    <span style="font-family:Georgia,'Times New Roman',serif;font-size:38px;font-weight:700;letter-spacing:1px;">AK</span>
+    <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;letter-spacing:8px;margin-left:16px;">GEMS</span>
   </div>
   <div style="text-align:center;color:#374151;margin:6px 0 18px;">
     <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${COMPANY_PHONE}</div>
@@ -245,7 +245,8 @@ export function InvoiceModal() {
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
               <div style={{ textAlign: 'center' }}>
-                <img src={COMPANY_LOGO} alt="SV Designs" style={{ width: '100%', maxWidth: 260, height: 'auto' }} />
+                <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 32, fontWeight: 700, letterSpacing: 1 }}>AK</span>
+                <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 18, fontWeight: 400, letterSpacing: 7, marginLeft: 14 }}>GEMS</span>
               </div>
               <div style={{ textAlign: 'center', fontSize: 12, color: '#374151', marginTop: 4 }}>
                 <div>{COMPANY_ADDRESS} | Tel: {COMPANY_PHONE}</div>

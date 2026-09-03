@@ -1,7 +1,6 @@
 import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 
-const COMPANY_LOGO = '/sv-designs-logo.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
 const COMPANY_PHONE = '8622359224'
 
@@ -45,7 +44,8 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:28px;color:#111827;text-transform:uppercase;">
   <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="SV Designs" style="max-width:380px;width:100%;height:auto;" />
+    <span style="font-family:Georgia,'Times New Roman',serif;font-size:38px;font-weight:700;letter-spacing:1px;">AK</span>
+    <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;letter-spacing:8px;margin-left:16px;">GEMS</span>
   </div>
   <div style="text-align:center;color:#374151;margin:6px 0 18px;">
     <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${COMPANY_PHONE}</div>

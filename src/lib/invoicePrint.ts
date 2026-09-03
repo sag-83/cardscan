@@ -52,7 +52,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   </div>
   <h1 style="margin:0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom:6px;color:#374151;">Date: ${formatUsDate(inv.date)}</div>
-  ${inv.docKind === 'invoice' ? `<div style="margin-bottom:6px;color:#374151;">Paid by: ${upper(inv.paidBy)} &nbsp;|&nbsp; Terms: ${esc(upper(termsLabel(inv.termsDays ?? 0)))}</div>` : ''}
+  ${inv.docKind === 'invoice' ? `<div style="margin-bottom:6px;color:#374151;">Terms: ${esc(upper(termsLabel(inv.termsDays ?? 0)))}</div>` : ''}
   ${inv.docKind === 'invoice' && dueDateLabel(inv) ? `<div style="margin-bottom:14px;color:#374151;">Payment due: ${esc(dueDateLabel(inv))}</div>` : ''}
   <div style="margin-bottom:18px;">
     <div style="font-weight:700;">Bill To</div>

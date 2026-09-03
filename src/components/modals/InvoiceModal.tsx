@@ -124,7 +124,7 @@ export function InvoiceModal() {
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
-  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 6px; color: #374151;">Paid by: ${record.paidBy.toUpperCase()} &nbsp; | &nbsp; Terms: ${escapeHtml(upper(termsLabel(record.termsDays ?? 0)))}</div>` : ''}
+  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 6px; color: #374151;">Terms: ${escapeHtml(upper(termsLabel(record.termsDays ?? 0)))}</div>` : ''}
   ${record.docKind === 'invoice' && dueDateLabel(record) ? `<div style="margin-bottom: 14px; color: #374151;">Payment due: ${escapeHtml(dueDateLabel(record))}</div>` : ''}
   <div style="margin-bottom: 18px;">
     <div style="font-weight: 700;">Bill To</div>
@@ -255,7 +255,7 @@ export function InvoiceModal() {
               <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>
               {draft.docKind === 'invoice' && (
                 <div style={{ fontSize: 12, color: '#374151' }}>
-                  Paid by: {draft.paidBy.toUpperCase()} | Terms: {upper(termsLabel(draft.termsDays ?? 0))}
+                  Terms: {upper(termsLabel(draft.termsDays ?? 0))}
                 </div>
               )}
               {draft.docKind === 'invoice' && dueDateLabel(draft) && (

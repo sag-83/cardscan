@@ -14,7 +14,7 @@ export function normalizeTermsDays(raw: unknown): number {
 }
 
 export function termsLabel(days: number): string {
-  return normalizeTermsDays(days) > 0 ? `Net ${normalizeTermsDays(days)}` : 'Due on receipt'
+  return normalizeTermsDays(days) > 0 ? `Net ${normalizeTermsDays(days)}` : 'COD'
 }
 
 /** Payment due moment: invoice date + terms, at 10am local. Null when no terms are set. */

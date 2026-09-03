@@ -186,7 +186,7 @@ export function CreateInvoiceForm({
                 }}
                 className={cn(inputClass, 'mt-1')}
               >
-                <option value="0">Due on receipt</option>
+                <option value="0">COD</option>
                 <option value="30">30 days</option>
                 <option value="60">60 days</option>
                 <option value="90">90 days</option>

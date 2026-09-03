@@ -19,6 +19,8 @@ export type SavedInvoice = {
   /** Payment terms in days (30/60/90). 0 or absent means due on receipt. */
   termsDays?: number
   items: SavedInvoiceItem[]
+  /** Flat shipping charge added on top of the line items. Always shown on the printed invoice, even when 0. */
+  shipping?: number
   total: number
   notes: string
   saved_at: string

@@ -42,7 +42,7 @@ async function fetchInvoices(): Promise<SavedInvoice[]> {
     contactName: r.contact_name, state: r.state, city: r.city,
     date: r.date, docKind: r.doc_kind, paidBy: normalizePaidBy(r.paid_by),
     termsDays: normalizeTermsDays(r.terms_days),
-    items: r.items ?? [], total: Number(r.total),
+    items: r.items ?? [], shipping: Number(r.shipping ?? 0), total: Number(r.total),
     notes: r.notes, saved_at: r.saved_at,
   })) as SavedInvoice[]
 }

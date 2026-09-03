@@ -39,6 +39,7 @@ function formStateFromInvoice(invoice: SavedInvoice) {
     paidBy: invoice.paidBy,
     termsDays: normalizeTermsDays(invoice.termsDays),
     notes: invoice.notes || '',
+    shipping: invoice.shipping ? String(invoice.shipping) : '',
     grandTotalOverride: grandTotalOverrideFromInvoice(invoice),
     items:
       invoice.items?.length > 0
@@ -66,6 +67,7 @@ export function CreateInvoiceForm({
     return days > 0 && !TERMS_PRESETS.includes(days)
   })
   const [notes, setNotes] = useState(() => initialInvoice?.notes ?? '')
+  const [shipping, setShipping] = useState(() => (initialInvoice?.shipping ? String(initialInvoice.shipping) : ''))
   const [grandTotalOverride, setGrandTotalOverride] = useState(
     () => (initialInvoice ? grandTotalOverrideFromInvoice(initialInvoice) : ''),
   )
@@ -84,6 +86,7 @@ export function CreateInvoiceForm({
       setTermsDays(s.termsDays)
       setCustomTerms(s.termsDays > 0 && !TERMS_PRESETS.includes(s.termsDays))
       setNotes(s.notes)
+      setShipping(s.shipping)
       setGrandTotalOverride(s.grandTotalOverride)
       setItems(s.items)
       return
@@ -94,12 +97,14 @@ export function CreateInvoiceForm({
     setTermsDays(0)
     setCustomTerms(false)
     setNotes('')
+    setShipping('')
     setGrandTotalOverride('')
     setItems([blankInvoiceItem()])
   }, [contact.id, initialInvoice?.id])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
-  const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal
+  const shippingAmount = num(shipping)
+  const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal + shippingAmount
 
   const customer = contact.company || contact.name || 'Customer'
   const customerAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
@@ -119,7 +124,7 @@ export function CreateInvoiceForm({
 
   const handleSubmit = () => {
     if (finalTotal <= 0) return
-    const input = { docKind, invoiceDate, paidBy, termsDays, notes, items, grandTotalOverride }
+    const input = { docKind, invoiceDate, paidBy, termsDays, notes, items, shipping, grandTotalOverride }
     const invoice = initialInvoice
       ? buildSavedInvoiceUpdate(contact, initialInvoice, input)
       : buildSavedInvoice(contact, input)
@@ -299,6 +304,20 @@ export function CreateInvoiceForm({
       </div>
 
       <label className="block">
+        <span className={labelClass}>Shipping</span>
+        <input
+          value={shipping}
+          onChange={(e) => setShipping(e.target.value)}
+          placeholder="0.00"
+          inputMode="decimal"
+          className={cn(inputClass, 'mt-1')}
+        />
+        <span className="mt-1 block text-xs text-slate-400">
+          Always printed on the invoice and added to the total, even when 0.
+        </span>
+      </label>
+
+      <label className="block">
         <span className={labelClass}>Notes</span>
         <textarea
           value={notes}
@@ -319,7 +338,7 @@ export function CreateInvoiceForm({
           <input
             value={grandTotalOverride}
             onChange={(e) => setGrandTotalOverride(e.target.value)}
-            placeholder={subtotal.toFixed(2)}
+            placeholder={(subtotal + shippingAmount).toFixed(2)}
             inputMode="decimal"
             className={inputClass}
           />

@@ -142,6 +142,7 @@ function applyInvoiceRow(store: CloudSyncStore, row: Record<string, unknown>, ev
     paidBy: (row.paid_by as SavedInvoice['paidBy']) ?? 'cash',
     termsDays: normalizeTermsDays(row.terms_days),
     items: (row.items as SavedInvoice['items']) ?? [],
+    shipping: Number(row.shipping ?? 0),
     total: Number(row.total ?? 0),
     notes: String(row.notes ?? ''),
     saved_at: String(row.saved_at ?? new Date().toISOString()),

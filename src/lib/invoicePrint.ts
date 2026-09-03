@@ -79,7 +79,10 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <div style="margin-top:14px;text-align:right;font-size:18px;font-weight:700;">
+  <div style="margin-top:14px;text-align:right;color:#374151;">
+    Shipping: ${money(inv.shipping ?? 0)}
+  </div>
+  <div style="margin-top:6px;text-align:right;font-size:18px;font-weight:700;">
     Total: ${money(inv.total)}
   </div>
   ${inv.notes ? `<div style="margin-top:22px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}

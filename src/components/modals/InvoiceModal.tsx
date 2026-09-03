@@ -152,7 +152,10 @@ export function InvoiceModal() {
     </thead>
     <tbody>${invoiceRows}</tbody>
   </table>
-  <div style="margin-top: 14px; text-align: right; font-size: 18px; font-weight: 700;">
+  <div style="margin-top: 14px; text-align: right; color: #374151;">
+    Shipping: ${money(record.shipping ?? 0)}
+  </div>
+  <div style="margin-top: 6px; text-align: right; font-size: 18px; font-weight: 700;">
     Total: ${money(record.total)}
   </div>
   <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(record.notes || ''))}</div>
@@ -296,7 +299,8 @@ export function InvoiceModal() {
                   ))}
                 </tbody>
               </table>
-              <div style={{ marginTop: 10, textAlign: 'right', fontWeight: 800 }}>Total: {money(draft.total)}</div>
+              <div style={{ marginTop: 10, textAlign: 'right', fontSize: 12, color: '#374151' }}>Shipping: {money(draft.shipping ?? 0)}</div>
+              <div style={{ marginTop: 4, textAlign: 'right', fontWeight: 800 }}>Total: {money(draft.total)}</div>
               {draft.notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(draft.notes)}</div>}
             </div>
 

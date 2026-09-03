@@ -115,6 +115,7 @@ export type InvoiceFormInput = {
   termsDays: number
   notes: string
   items: InvoiceFormItem[]
+  shipping: string
   grandTotalOverride: string
 }
 
@@ -123,7 +124,8 @@ function buildSavedInvoiceCore(
   input: InvoiceFormInput,
 ): Omit<SavedInvoice, 'id' | 'saved_at'> {
   const subtotal = input.items.reduce((sum, item) => sum + rowTotal(item), 0)
-  const finalTotal = input.grandTotalOverride.trim() ? num(input.grandTotalOverride) : subtotal
+  const shippingAmount = num(input.shipping)
+  const finalTotal = input.grandTotalOverride.trim() ? num(input.grandTotalOverride) : subtotal + shippingAmount
   const savedItems: SavedInvoiceItem[] = input.items
     .filter((item) => rowTotal(item) > 0 || item.size.trim() || item.prefix)
     .map((item) => ({
@@ -145,6 +147,7 @@ function buildSavedInvoiceCore(
     paidBy: input.docKind === 'invoice' ? input.paidBy : 'pending',
     termsDays: input.docKind === 'invoice' ? normalizeTermsDays(input.termsDays) : 0,
     items: savedItems.length ? savedItems : [{ size: '-', pcs: 0, ct: 0, pct: 0, amount: finalTotal }],
+    shipping: shippingAmount,
     total: finalTotal,
     notes: input.notes,
   }
@@ -198,7 +201,7 @@ export function savedItemToFormItem(item: SavedInvoiceItem): InvoiceFormItem {
 }
 
 export function grandTotalOverrideFromInvoice(invoice: SavedInvoice): string {
-  const lineSum = (invoice.items ?? []).reduce((s, it) => s + it.amount, 0)
+  const lineSum = (invoice.items ?? []).reduce((s, it) => s + it.amount, 0) + (invoice.shipping ?? 0)
   if (Math.abs(lineSum - invoice.total) < 0.01) return ''
   return String(invoice.total)
 }

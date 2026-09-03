@@ -124,8 +124,8 @@ export function InvoiceModal() {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 48px 40px; color: #111827; text-transform: uppercase;">
   <div style="text-align:left;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:top;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:top;">GEMS INC</span>
+    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
+    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
   </div>
   <div style="text-align:left;color:#374151;margin:22px 0 26px;">
     <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>
@@ -253,8 +253,8 @@ export function InvoiceModal() {
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
               <div style={{ textAlign: 'left' }}>
-                <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'top' }} />
-                <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'top' }}>GEMS INC</span>
+                <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'bottom' }} />
+                <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'bottom' }}>GEMS INC</span>
               </div>
               <div style={{ textAlign: 'left', fontSize: 12, color: '#374151', marginTop: 16 }}>
                 <div>{COMPANY_ADDRESS} | Tel: {formatPhone(COMPANY_PHONE)}</div>

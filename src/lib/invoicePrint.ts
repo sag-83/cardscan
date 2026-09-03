@@ -52,8 +52,8 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:48px 40px;color:#111827;text-transform:uppercase;">
   <div style="text-align:left;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:top;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:top;">GEMS INC</span>
+    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
+    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
   </div>
   <div style="text-align:left;color:#374151;margin:22px 0 26px;">
     <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>

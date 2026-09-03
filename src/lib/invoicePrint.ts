@@ -6,12 +6,11 @@ const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
 
 // ⚠️ Transcribed from a handwritten note — please double-check every digit
-// (account number, routing number, zip) before this goes out on a real invoice.
+// (account number, zip) before this goes out on a real invoice.
 const WIRE_ACCOUNT_NAME = 'AK Gems Inc'
 const WIRE_BANK_NAME = 'JP Morgan Chase'
 const WIRE_BANK_ADDRESS = '90 Hackensack St, East Rutherford, NJ 07073, US'
 const WIRE_ACCOUNT_NUMBER = '2911976566'
-const WIRE_ABA_ROUTING = '021202337'
 const WIRE_ZELLE = 'angandhi2@gmail.com'
 
 function money(value: number): string {
@@ -75,7 +74,6 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
       </td>
       <td style="vertical-align:top;text-align:right;">
         <div style="font-size:26px;font-weight:800;">${docTitle}</div>
-        <div style="margin-top:4px;color:#374151;font-size:12px;">${docTitle} #: ${esc(inv.id)}</div>
       </td>
     </tr>
   </table>
@@ -133,8 +131,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
         <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
         <div>Bank Address: ${esc(WIRE_BANK_ADDRESS)}</div>
         <div>Account Number: ${esc(WIRE_ACCOUNT_NUMBER)}</div>
-        <div>ABA Routing No: ${esc(WIRE_ABA_ROUTING)}</div>
-        <div>Zelle: ${esc(WIRE_ZELLE)}</div>
+        <div>Zelle: <span style="text-transform:lowercase;">${esc(WIRE_ZELLE)}</span></div>
       </td>
       <td style="width:44%;vertical-align:top;text-align:right;">
         <div style="color:#374151;">Subtotal: ${money(subtotal)}</div>

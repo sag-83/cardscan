@@ -23,6 +23,12 @@ function formatUsDate(isoDate: string): string {
   return parsed.toLocaleDateString('en-US')
 }
 
+function formatPhone(digits: string): string {
+  const d = digits.replace(/\D/g, '')
+  if (d.length !== 10) return digits
+  return `(${d.slice(0, 3)})-${d.slice(3, 6)}-${d.slice(6)}`
+}
+
 export function buildInvoiceHtml(inv: SavedInvoice): string {
   const docTitle = inv.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
   const customer = upper(inv.company || inv.contactName || 'Customer')
@@ -42,14 +48,15 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 <head>
   <meta charset="utf-8" />
   <title>${docTitle}</title>
+  <style>@page { margin: 0; }</style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:28px;color:#111827;text-transform:uppercase;">
-  <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:middle;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:middle;">GEMS INC</span>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:48px 40px;color:#111827;text-transform:uppercase;">
+  <div style="text-align:left;">
+    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:top;" />
+    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:top;">GEMS INC</span>
   </div>
-  <div style="text-align:center;color:#374151;margin:6px 0 18px;">
-    <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${COMPANY_PHONE}</div>
+  <div style="text-align:left;color:#374151;margin:22px 0 26px;">
+    <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>
   </div>
   <h1 style="margin:0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom:6px;color:#374151;">Date: ${formatUsDate(inv.date)}</div>

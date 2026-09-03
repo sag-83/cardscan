@@ -33,6 +33,12 @@ function formatUsDate(isoDate: string): string {
   return parsed.toLocaleDateString('en-US')
 }
 
+function formatPhone(digits: string): string {
+  const d = digits.replace(/\D/g, '')
+  if (d.length !== 10) return digits
+  return `(${d.slice(0, 3)})-${d.slice(3, 6)}-${d.slice(6)}`
+}
+
 export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
@@ -114,14 +120,15 @@ export function InvoiceModal() {
 <head>
   <meta charset="utf-8" />
   <title>${docTitle}</title>
+  <style>@page { margin: 0; }</style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 28px; color: #111827; text-transform: uppercase;">
-  <div style="text-align:center;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:middle;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:middle;">GEMS INC</span>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 48px 40px; color: #111827; text-transform: uppercase;">
+  <div style="text-align:left;">
+    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:top;" />
+    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:top;">GEMS INC</span>
   </div>
-  <div style="text-align:center;color:#374151;margin:6px 0 18px;">
-    <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${COMPANY_PHONE}</div>
+  <div style="text-align:left;color:#374151;margin:22px 0 26px;">
+    <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>
   </div>
   <h1 style="margin: 0 0 8px;">${docTitle}</h1>
   <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
@@ -245,12 +252,12 @@ export function InvoiceModal() {
         ) : (
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
-              <div style={{ textAlign: 'center' }}>
-                <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'middle' }} />
-                <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'middle' }}>GEMS INC</span>
+              <div style={{ textAlign: 'left' }}>
+                <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'top' }} />
+                <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'top' }}>GEMS INC</span>
               </div>
-              <div style={{ textAlign: 'center', fontSize: 12, color: '#374151', marginTop: 4 }}>
-                <div>{COMPANY_ADDRESS} | Tel: {COMPANY_PHONE}</div>
+              <div style={{ textAlign: 'left', fontSize: 12, color: '#374151', marginTop: 16 }}>
+                <div>{COMPANY_ADDRESS} | Tel: {formatPhone(COMPANY_PHONE)}</div>
               </div>
               <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
               <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>

@@ -5,6 +5,15 @@ const COMPANY_LOGO = '/ak-monogram.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
 
+// ⚠️ Transcribed from a handwritten note — please double-check every digit
+// (account number, routing number, zip) before this goes out on a real invoice.
+const WIRE_ACCOUNT_NAME = 'AK Gems Inc'
+const WIRE_BANK_NAME = 'JP Morgan Chase'
+const WIRE_BANK_ADDRESS = '90 Hackensack St, East Rutherford, NJ 07073, US'
+const WIRE_ACCOUNT_NUMBER = '2911976566'
+const WIRE_ABA_ROUTING = '021202337'
+const WIRE_ZELLE = 'angandhi2@gmail.com'
+
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
@@ -43,6 +52,9 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(item.amount)}</td>
     </tr>`).join('')
 
+  const subtotal = inv.items.reduce((sum, item) => sum + item.amount, 0)
+  const dueLabel = inv.docKind === 'invoice' ? dueDateLabel(inv) : ''
+
   return `<!doctype html>
 <html>
 <head>
@@ -51,23 +63,56 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   <style>@page { margin: 0; }</style>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:48px 40px;color:#111827;text-transform:uppercase;">
-  <div style="text-align:left;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
-  </div>
-  <div style="text-align:left;color:#374151;margin:22px 0 26px;">
-    <div>${COMPANY_ADDRESS} &nbsp;|&nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>
-  </div>
-  <h1 style="margin:0 0 8px;">${docTitle}</h1>
-  <div style="margin-bottom:6px;color:#374151;">Date: ${formatUsDate(inv.date)}</div>
-  ${inv.docKind === 'invoice' ? `<div style="margin-bottom:6px;color:#374151;">Terms: ${esc(upper(termsLabel(inv.termsDays ?? 0)))}</div>` : ''}
-  ${inv.docKind === 'invoice' && dueDateLabel(inv) ? `<div style="margin-bottom:14px;color:#374151;">Payment due: ${esc(dueDateLabel(inv))}</div>` : ''}
-  <div style="margin-bottom:18px;">
-    <div style="font-weight:700;">Bill To</div>
-    <div>${esc(customer)}</div>
-    <div>${esc(location)}</div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">
+    <tr>
+      <td style="vertical-align:top;text-align:left;">
+        <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
+        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
+        <div style="margin-top:12px;color:#374151;font-size:12px;line-height:1.6;">
+          ${COMPANY_ADDRESS}<br />
+          Tel: ${formatPhone(COMPANY_PHONE)}
+        </div>
+      </td>
+      <td style="vertical-align:top;text-align:right;">
+        <div style="font-size:26px;font-weight:800;">${docTitle}</div>
+        <div style="margin-top:4px;color:#374151;font-size:12px;">${docTitle} #: ${esc(inv.id)}</div>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+    <tr>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:10px 12px;">
+        <div style="font-weight:700;font-size:11px;margin-bottom:5px;">${docTitle} To</div>
+        <div>${esc(customer)}</div>
+        <div>${esc(location)}</div>
+      </td>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:10px 12px;">
+        <div style="font-weight:700;font-size:11px;margin-bottom:5px;">Ship To</div>
+        <div>${esc(customer)}</div>
+        <div>${esc(location)}</div>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:11px;">
+    <thead>
+      <tr style="background:#111827;color:#fff;">
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">Terms</th>
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">${docTitle} Date</th>
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">Due Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${inv.docKind === 'invoice' ? esc(upper(termsLabel(inv.termsDays ?? 0))) : '—'}</td>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${esc(formatUsDate(inv.date))}</td>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${dueLabel ? esc(dueLabel) : '—'}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;">
     <thead>
       <tr style="background:#f9fafb;">
         <th style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Size</th>
@@ -79,12 +124,26 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <div style="margin-top:14px;text-align:right;color:#374151;">
-    Shipping: ${money(inv.shipping ?? 0)}
-  </div>
-  <div style="margin-top:6px;text-align:right;font-size:18px;font-weight:700;">
-    Total: ${money(inv.total)}
-  </div>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:28px;">
+    <tr>
+      <td style="width:56%;vertical-align:top;font-size:11px;color:#374151;line-height:1.7;">
+        <div style="font-weight:700;margin-bottom:5px;">Wire Transfer Details</div>
+        <div>Account Name: ${esc(WIRE_ACCOUNT_NAME)}</div>
+        <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
+        <div>Bank Address: ${esc(WIRE_BANK_ADDRESS)}</div>
+        <div>Account Number: ${esc(WIRE_ACCOUNT_NUMBER)}</div>
+        <div>ABA Routing No: ${esc(WIRE_ABA_ROUTING)}</div>
+        <div>Zelle: ${esc(WIRE_ZELLE)}</div>
+      </td>
+      <td style="width:44%;vertical-align:top;text-align:right;">
+        <div style="color:#374151;">Subtotal: ${money(subtotal)}</div>
+        <div style="margin-top:4px;color:#374151;">Shipping: ${money(inv.shipping ?? 0)}</div>
+        <div style="margin-top:8px;font-size:18px;font-weight:700;">Total: ${money(inv.total)}</div>
+      </td>
+    </tr>
+  </table>
+
   ${inv.notes ? `<div style="margin-top:22px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}
 </body>
 </html>`

@@ -13,6 +13,15 @@ const COMPANY_LOGO = '/ak-monogram.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
 
+// ⚠️ Transcribed from a handwritten note — please double-check every digit
+// (account number, routing number, zip) before this goes out on a real invoice.
+const WIRE_ACCOUNT_NAME = 'AK Gems Inc'
+const WIRE_BANK_NAME = 'JP Morgan Chase'
+const WIRE_BANK_ADDRESS = '90 Hackensack St, East Rutherford, NJ 07073, US'
+const WIRE_ACCOUNT_NUMBER = '2911976566'
+const WIRE_ABA_ROUTING = '021202337'
+const WIRE_ZELLE = 'angandhi2@gmail.com'
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -115,6 +124,9 @@ export function InvoiceModal() {
       .join('')
 
     const docTitle = record.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
+    const customerPhone = contact.phone_mobile || contact.phone_work || ''
+    const subtotal = record.items.reduce((sum, item) => sum + item.amount, 0)
+    const dueLabel = record.docKind === 'invoice' ? dueDateLabel(record) : ''
     const html = `<!doctype html>
 <html>
 <head>
@@ -123,24 +135,58 @@ export function InvoiceModal() {
   <style>@page { margin: 0; }</style>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 48px 40px; color: #111827; text-transform: uppercase;">
-  <div style="text-align:left;">
-    <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
-    <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
-  </div>
-  <div style="text-align:left;color:#374151;margin:22px 0 26px;">
-    <div>${COMPANY_ADDRESS} &nbsp; | &nbsp; Tel: ${formatPhone(COMPANY_PHONE)}</div>
-  </div>
-  <h1 style="margin: 0 0 8px;">${docTitle}</h1>
-  <div style="margin-bottom: 6px; color: #374151;">Date: ${formatUsDate(record.date)}</div>
-  ${record.docKind === 'invoice' ? `<div style="margin-bottom: 6px; color: #374151;">Terms: ${escapeHtml(upper(termsLabel(record.termsDays ?? 0)))}</div>` : ''}
-  ${record.docKind === 'invoice' && dueDateLabel(record) ? `<div style="margin-bottom: 14px; color: #374151;">Payment due: ${escapeHtml(dueDateLabel(record))}</div>` : ''}
-  <div style="margin-bottom: 18px;">
-    <div style="font-weight: 700;">Bill To</div>
-    <div>${escapeHtml(upper(customer))}</div>
-    <div>${escapeHtml(upper(customerAddress || '-'))}</div>
-    <div>${escapeHtml(contact.phone_mobile || contact.phone_work || '')}</div>
-  </div>
-  <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">
+    <tr>
+      <td style="vertical-align:top;text-align:left;">
+        <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
+        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
+        <div style="margin-top:12px;color:#374151;font-size:12px;line-height:1.6;">
+          ${COMPANY_ADDRESS}<br />
+          Tel: ${formatPhone(COMPANY_PHONE)}
+        </div>
+      </td>
+      <td style="vertical-align:top;text-align:right;">
+        <div style="font-size:26px;font-weight:800;">${docTitle}</div>
+        <div style="margin-top:4px;color:#374151;font-size:12px;">${docTitle} #: ${escapeHtml(record.id)}</div>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+    <tr>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:10px 12px;">
+        <div style="font-weight:700;font-size:11px;margin-bottom:5px;">${docTitle} To</div>
+        <div>${escapeHtml(upper(customer))}</div>
+        <div>${escapeHtml(upper(customerAddress || '-'))}</div>
+        ${customerPhone ? `<div>${escapeHtml(customerPhone)}</div>` : ''}
+      </td>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:10px 12px;">
+        <div style="font-weight:700;font-size:11px;margin-bottom:5px;">Ship To</div>
+        <div>${escapeHtml(upper(customer))}</div>
+        <div>${escapeHtml(upper(customerAddress || '-'))}</div>
+        ${customerPhone ? `<div>${escapeHtml(customerPhone)}</div>` : ''}
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:11px;">
+    <thead>
+      <tr style="background:#111827;color:#fff;">
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">Terms</th>
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">${docTitle} Date</th>
+        <th style="text-align:left;padding:7px 10px;border:1px solid #111827;">Due Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${record.docKind === 'invoice' ? escapeHtml(upper(termsLabel(record.termsDays ?? 0))) : '—'}</td>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${escapeHtml(formatUsDate(record.date))}</td>
+        <td style="padding:7px 10px;border:1px solid #d1d5db;">${dueLabel ? escapeHtml(dueLabel) : '—'}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table style="width:100%; border-collapse: collapse;">
     <thead>
       <tr style="background:#f9fafb;">
         <th style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Size</th>
@@ -152,13 +198,27 @@ export function InvoiceModal() {
     </thead>
     <tbody>${invoiceRows}</tbody>
   </table>
-  <div style="margin-top: 14px; text-align: right; color: #374151;">
-    Shipping: ${money(record.shipping ?? 0)}
-  </div>
-  <div style="margin-top: 6px; text-align: right; font-size: 18px; font-weight: 700;">
-    Total: ${money(record.total)}
-  </div>
-  <div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(record.notes || ''))}</div>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:28px;">
+    <tr>
+      <td style="width:56%;vertical-align:top;font-size:11px;color:#374151;line-height:1.7;">
+        <div style="font-weight:700;margin-bottom:5px;">Wire Transfer Details</div>
+        <div>Account Name: ${escapeHtml(WIRE_ACCOUNT_NAME)}</div>
+        <div>Bank: ${escapeHtml(WIRE_BANK_NAME)}</div>
+        <div>Bank Address: ${escapeHtml(WIRE_BANK_ADDRESS)}</div>
+        <div>Account Number: ${escapeHtml(WIRE_ACCOUNT_NUMBER)}</div>
+        <div>ABA Routing No: ${escapeHtml(WIRE_ABA_ROUTING)}</div>
+        <div>Zelle: ${escapeHtml(WIRE_ZELLE)}</div>
+      </td>
+      <td style="width:44%;vertical-align:top;text-align:right;">
+        <div style="color:#374151;">Subtotal: ${money(subtotal)}</div>
+        <div style="margin-top:4px;color:#374151;">Shipping: ${money(record.shipping ?? 0)}</div>
+        <div style="margin-top:8px;font-size:18px;font-weight:700;">Total: ${money(record.total)}</div>
+      </td>
+    </tr>
+  </table>
+
+  ${record.notes ? `<div style="margin-top: 22px; color: #4b5563; white-space: pre-wrap;">${escapeHtml(upper(record.notes))}</div>` : ''}
 </body>
 </html>`
 
@@ -255,25 +315,26 @@ export function InvoiceModal() {
         ) : (
           <>
             <div style={{ border: '1px solid var(--border2)', borderRadius: 12, padding: 12, background: '#fff', color: '#111827', textTransform: 'uppercase' }}>
-              <div style={{ textAlign: 'left' }}>
-                <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'bottom' }} />
-                <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'bottom' }}>GEMS INC</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'bottom' }} />
+                  <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'bottom' }}>GEMS INC</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
+                  <div style={{ fontSize: 10, color: '#374151' }}>#{draft.id}</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'left', fontSize: 12, color: '#374151', marginTop: 16 }}>
+              <div style={{ textAlign: 'left', fontSize: 12, color: '#374151', marginTop: 10 }}>
                 <div>{COMPANY_ADDRESS} | Tel: {formatPhone(COMPANY_PHONE)}</div>
               </div>
-              <div style={{ marginTop: 12, fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
-              <div style={{ fontSize: 12, color: '#374151' }}>Date: {formatUsDate(draft.date)}</div>
-              {draft.docKind === 'invoice' && (
-                <div style={{ fontSize: 12, color: '#374151' }}>
-                  Terms: {upper(termsLabel(draft.termsDays ?? 0))}
-                </div>
-              )}
-              {draft.docKind === 'invoice' && dueDateLabel(draft) && (
-                <div style={{ fontSize: 12, color: '#374151' }}>Payment due: {dueDateLabel(draft)}</div>
-              )}
-              <div style={{ marginTop: 8, fontSize: 12 }}>
-                <div style={{ fontWeight: 700 }}>Bill To</div>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#374151', display: 'flex', gap: 16 }}>
+                {draft.docKind === 'invoice' && <div>Terms: {upper(termsLabel(draft.termsDays ?? 0))}</div>}
+                <div>Date: {formatUsDate(draft.date)}</div>
+                {draft.docKind === 'invoice' && dueDateLabel(draft) && <div>Due: {dueDateLabel(draft)}</div>}
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontWeight: 700 }}>Bill To / Ship To</div>
                 <div>{upper(customer)}</div>
                 <div>{upper(customerAddress || '-')}</div>
               </div>
@@ -299,8 +360,22 @@ export function InvoiceModal() {
                   ))}
                 </tbody>
               </table>
-              <div style={{ marginTop: 10, textAlign: 'right', fontSize: 12, color: '#374151' }}>Shipping: {money(draft.shipping ?? 0)}</div>
-              <div style={{ marginTop: 4, textAlign: 'right', fontWeight: 800 }}>Total: {money(draft.total)}</div>
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ fontSize: 10.5, color: '#374151', lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 700 }}>Wire Transfer Details</div>
+                  <div>Account Name: {WIRE_ACCOUNT_NAME}</div>
+                  <div>Bank: {WIRE_BANK_NAME}</div>
+                  <div>Bank Address: {WIRE_BANK_ADDRESS}</div>
+                  <div>Account Number: {WIRE_ACCOUNT_NUMBER}</div>
+                  <div>ABA Routing No: {WIRE_ABA_ROUTING}</div>
+                  <div>Zelle: {WIRE_ZELLE}</div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: 12, color: '#374151', flexShrink: 0 }}>
+                  <div>Subtotal: {money(draft.items.reduce((sum, item) => sum + item.amount, 0))}</div>
+                  <div style={{ marginTop: 2 }}>Shipping: {money(draft.shipping ?? 0)}</div>
+                  <div style={{ marginTop: 6, fontWeight: 800, fontSize: 14, color: '#111827' }}>Total: {money(draft.total)}</div>
+                </div>
+              </div>
               {draft.notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(draft.notes)}</div>}
             </div>
 

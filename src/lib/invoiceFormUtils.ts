@@ -49,7 +49,7 @@ export function contactStubFromInvoice(inv: SavedInvoice): Contact {
 
 export type DocKind = 'invoice' | 'memo'
 export type PaidBy = 'cash' | 'check' | 'pending'
-export type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL' | 'NTRL'
+export type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL' | 'NTRL' | 'JEW' | 'LAB' | 'TNC'
 
 export type InvoiceFormItem = {
   id: string
@@ -71,6 +71,9 @@ export const SIZE_PREFIX_OPTIONS: { value: SizePrefix; label: string }[] = [
   { value: 'LDW', label: 'LDW' },
   { value: 'PRCL', label: 'PRCL' },
   { value: 'NTRL', label: 'NTRL' },
+  { value: 'JEW', label: 'JEW' },
+  { value: 'LAB', label: 'LAB' },
+  { value: 'TNC', label: 'TNC' },
 ]
 
 export function uid(): string {

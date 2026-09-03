@@ -2,7 +2,7 @@ import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 
 const COMPANY_LOGO = '/ak-monogram.png'
-const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
 
 function money(value: number): string {

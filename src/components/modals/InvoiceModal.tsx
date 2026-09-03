@@ -10,7 +10,7 @@ import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
 const COMPANY_LOGO = '/ak-monogram.png'
-const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford NJ 07073'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
 
 function escapeHtml(value: string): string {

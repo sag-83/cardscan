@@ -213,9 +213,9 @@ export function InvoiceModal() {
                   <div style={{ fontWeight: 700 }}>Payment Instruction</div>
                   <div>Account Name: {WIRE_ACCOUNT_NAME}</div>
                   <div>Bank: {WIRE_BANK_NAME}</div>
-                  <div>Account Number: {WIRE_ACCOUNT_NUMBER}</div>
-                  <div>Routing Number: {WIRE_ROUTING_NUMBER}</div>
-                  <div>Zelle: <span style={{ textTransform: 'lowercase' }}>{WIRE_ZELLE}</span></div>
+                  <div>Account Number: <strong style={{ color: '#111827' }}>{WIRE_ACCOUNT_NUMBER}</strong></div>
+                  <div>Routing Number: <strong style={{ color: '#111827' }}>{WIRE_ROUTING_NUMBER}</strong></div>
+                  <div>Zelle: <strong style={{ color: '#111827', textTransform: 'lowercase' }}>{WIRE_ZELLE}</strong></div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: '#374151', flexShrink: 0 }}>
                   <div>Subtotal: {money(draft.items.reduce((sum, item) => sum + item.amount, 0))}</div>

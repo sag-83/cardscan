@@ -139,9 +139,9 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
         <div style="font-weight:700;margin-bottom:5px;">Payment Instruction</div>
         <div>Account Name: ${esc(WIRE_ACCOUNT_NAME)}</div>
         <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
-        <div>Account Number: ${esc(WIRE_ACCOUNT_NUMBER)}</div>
-        <div>Routing Number: ${esc(WIRE_ROUTING_NUMBER)}</div>
-        <div>Zelle: <span style="text-transform:lowercase;">${esc(WIRE_ZELLE)}</span></div>
+        <div>Account Number: <strong style="color:#111827;">${esc(WIRE_ACCOUNT_NUMBER)}</strong></div>
+        <div>Routing Number: <strong style="color:#111827;">${esc(WIRE_ROUTING_NUMBER)}</strong></div>
+        <div>Zelle: <strong style="color:#111827;text-transform:lowercase;">${esc(WIRE_ZELLE)}</strong></div>
       </td>
       <td style="width:44%;vertical-align:top;text-align:right;">
         <div style="color:#374151;">Subtotal: ${money(subtotal)}</div>

@@ -13,7 +13,7 @@ function isAuthorized(req) {
 function configureWebPush() {
   const publicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
-  const subject = process.env.VAPID_SUBJECT || 'mailto:info@deltadiamondsinc.com'
+  const subject = process.env.VAPID_SUBJECT || 'mailto:info@akgemsinc.com'
   if (!publicKey || !privateKey) return false
   webpush.setVapidDetails(subject, publicKey, privateKey)
   return true

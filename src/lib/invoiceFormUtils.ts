@@ -1,6 +1,30 @@
-import type { SavedInvoice, SavedInvoiceItem } from '../types/invoice'
+import type { InvoiceDirection, SavedInvoice, SavedInvoiceItem } from '../types/invoice'
 import type { Contact, ContactAddress } from '../types/contact'
 import { normalizeTermsDays } from './invoiceTerms'
+
+export type { InvoiceDirection }
+
+/** First number in every series — Sale invoices run S1000, S1001, … and Purchases P1000, P1001, … */
+const INVOICE_NUMBER_START = 1000
+
+export const DIRECTION_PREFIX: Record<InvoiceDirection, string> = { sale: 'S', purchase: 'P' }
+
+export const DIRECTION_OPTIONS: { value: InvoiceDirection; label: string }[] = [
+  { value: 'sale', label: 'Sale (S1000, S1001…)' },
+  { value: 'purchase', label: 'Purchase (P1000, P1001…)' },
+]
+
+/** Next free number in the given direction's series, one past the highest already used. */
+export function nextInvoiceNumber(direction: InvoiceDirection, existing: SavedInvoice[]): string {
+  const prefix = DIRECTION_PREFIX[direction]
+  let highest = INVOICE_NUMBER_START - 1
+  for (const inv of existing) {
+    if (!inv.invoiceNumber || inv.invoiceNumber[0] !== prefix) continue
+    const value = parseInt(inv.invoiceNumber.slice(1), 10)
+    if (Number.isFinite(value) && value > highest) highest = value
+  }
+  return `${prefix}${highest + 1}`
+}
 
 const EMPTY_CONTACT_FIELDS = {
   title: '',
@@ -44,6 +68,9 @@ export function contactStubFromInvoice(inv: SavedInvoice): Contact {
     scanned_at: inv.saved_at || '',
     created_at: inv.saved_at || '',
     ...EMPTY_CONTACT_FIELDS,
+    address: inv.contactAddress || '',
+    zip: inv.contactZip || '',
+    phone_mobile: inv.contactPhone || '',
   }
 }
 
@@ -110,22 +137,24 @@ export function blankInvoiceItem(): InvoiceFormItem {
 
 export type InvoiceFormInput = {
   docKind: DocKind
+  direction: InvoiceDirection
   invoiceDate: string
   paidBy: PaidBy
   termsDays: number
   notes: string
   items: InvoiceFormItem[]
   shipping: string
-  grandTotalOverride: string
+  /** Signed manual adjustment (round off) added on top of subtotal + shipping. */
+  roundOff: string
 }
 
 function buildSavedInvoiceCore(
   contact: Contact,
   input: InvoiceFormInput,
-): Omit<SavedInvoice, 'id' | 'saved_at'> {
+): Omit<SavedInvoice, 'id' | 'saved_at' | 'invoiceNumber'> {
   const subtotal = input.items.reduce((sum, item) => sum + rowTotal(item), 0)
   const shippingAmount = num(input.shipping)
-  const finalTotal = input.grandTotalOverride.trim() ? num(input.grandTotalOverride) : subtotal + shippingAmount
+  const finalTotal = subtotal + shippingAmount + num(input.roundOff)
   const savedItems: SavedInvoiceItem[] = input.items
     .filter((item) => rowTotal(item) > 0 || item.size.trim() || item.prefix)
     .map((item) => ({
@@ -142,6 +171,10 @@ function buildSavedInvoiceCore(
     contactName: contact.name || '',
     state: contact.state || '',
     city: contact.city || '',
+    contactAddress: contact.address || '',
+    contactZip: contact.zip || '',
+    contactPhone: contact.phone_mobile || contact.phone_work || '',
+    direction: input.direction,
     date: input.invoiceDate,
     docKind: input.docKind,
     paidBy: input.docKind === 'invoice' ? input.paidBy : 'pending',
@@ -156,10 +189,12 @@ function buildSavedInvoiceCore(
 export function buildSavedInvoice(
   contact: Contact,
   input: InvoiceFormInput,
+  existingInvoices: SavedInvoice[] = [],
 ): SavedInvoice {
   return {
     id: uid(),
     saved_at: new Date().toISOString(),
+    invoiceNumber: nextInvoiceNumber(input.direction, existingInvoices),
     ...buildSavedInvoiceCore(contact, input),
   }
 }
@@ -172,6 +207,7 @@ export function buildSavedInvoiceUpdate(
   return {
     id: existing.id,
     saved_at: new Date().toISOString(),
+    invoiceNumber: existing.invoiceNumber,
     ...buildSavedInvoiceCore(contact, input),
   }
 }
@@ -200,8 +236,9 @@ export function savedItemToFormItem(item: SavedInvoiceItem): InvoiceFormItem {
   }
 }
 
-export function grandTotalOverrideFromInvoice(invoice: SavedInvoice): string {
+/** Reverse the stored total back into the signed round-off adjustment for editing. */
+export function roundOffFromInvoice(invoice: SavedInvoice): string {
   const lineSum = (invoice.items ?? []).reduce((s, it) => s + it.amount, 0) + (invoice.shipping ?? 0)
-  if (Math.abs(lineSum - invoice.total) < 0.01) return ''
-  return String(invoice.total)
+  const delta = Math.round((invoice.total - lineSum) * 100) / 100
+  return Math.abs(delta) < 0.005 ? '' : String(delta)
 }

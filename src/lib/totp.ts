@@ -39,7 +39,7 @@ export function getTotpSetupUri(scope: TotpScope): string | null {
   if (!secret) return null
   try {
     const totp = new TOTP({
-      issuer: 'Delta Diamonds',
+      issuer: 'AK Gems Inc',
       label: LABELS[scope],
       secret,
       digits: 6,

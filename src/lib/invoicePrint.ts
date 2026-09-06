@@ -2,15 +2,16 @@ import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 
 const COMPANY_LOGO = '/ak-monogram.png'
-const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ - 07073'
+const COMPANY_ADDRESS = '61 Hackensack Street, East Rutherford, NJ - 07073'
 const COMPANY_PHONE = '8622359224'
+const COMPANY_EMAIL = 'info@akgemsinc.com'
 
 // ⚠️ Transcribed from a handwritten note — please double-check every digit
-// (account number, zip) before this goes out on a real invoice.
+// (account number, routing number, zip) before this goes out on a real invoice.
 const WIRE_ACCOUNT_NAME = 'AK Gems Inc'
 const WIRE_BANK_NAME = 'JP Morgan Chase'
-const WIRE_BANK_ADDRESS = '90 Hackensack St, East Rutherford, NJ 07073, US'
 const WIRE_ACCOUNT_NUMBER = '2911976566'
+const WIRE_ROUTING_NUMBER = '021202337'
 const WIRE_ZELLE = 'angandhi2@gmail.com'
 
 function money(value: number): string {
@@ -39,8 +40,17 @@ function formatPhone(digits: string): string {
 
 export function buildInvoiceHtml(inv: SavedInvoice): string {
   const docTitle = inv.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
+  const docNumber = inv.invoiceNumber || inv.id
   const customer = upper(inv.company || inv.contactName || 'Customer')
-  const location = upper([inv.city, inv.state].filter(Boolean).join(', ') || '—')
+  const cityStateZip = upper(
+    [[inv.city, inv.state].filter(Boolean).join(', '), inv.contactZip].filter(Boolean).join(', ') || '—',
+  )
+  const partyLines = [
+    esc(customer),
+    inv.contactAddress ? esc(upper(inv.contactAddress)) : '',
+    esc(cityStateZip),
+    inv.contactPhone ? esc(inv.contactPhone) : '',
+  ].filter(Boolean).map((line) => `<div>${line}</div>`).join('')
 
   const rows = inv.items.map((item) => `
     <tr>
@@ -69,11 +79,13 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
         <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
         <div style="margin-top:12px;color:#374151;font-size:12px;line-height:1.6;">
           ${COMPANY_ADDRESS}<br />
-          Tel: ${formatPhone(COMPANY_PHONE)}
+          Tel: ${formatPhone(COMPANY_PHONE)}<br />
+          Email: <span style="text-transform:lowercase;">${COMPANY_EMAIL}</span>
         </div>
       </td>
       <td style="vertical-align:top;text-align:right;">
         <div style="font-size:26px;font-weight:800;">${docTitle}</div>
+        <div style="margin-top:4px;color:#374151;font-size:12px;">${docTitle} #: ${esc(docNumber)}</div>
       </td>
     </tr>
   </table>
@@ -82,13 +94,11 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     <tr>
       <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:10px 12px;">
         <div style="font-weight:700;font-size:11px;margin-bottom:5px;">${docTitle} To</div>
-        <div>${esc(customer)}</div>
-        <div>${esc(location)}</div>
+        ${partyLines}
       </td>
       <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:10px 12px;">
         <div style="font-weight:700;font-size:11px;margin-bottom:5px;">Ship To</div>
-        <div>${esc(customer)}</div>
-        <div>${esc(location)}</div>
+        ${partyLines}
       </td>
     </tr>
   </table>
@@ -126,11 +136,11 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   <table style="width:100%;border-collapse:collapse;margin-top:28px;">
     <tr>
       <td style="width:56%;vertical-align:top;font-size:11px;color:#374151;line-height:1.7;">
-        <div style="font-weight:700;margin-bottom:5px;">Wire Transfer Details</div>
+        <div style="font-weight:700;margin-bottom:5px;">Payment Instruction</div>
         <div>Account Name: ${esc(WIRE_ACCOUNT_NAME)}</div>
         <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
-        <div>Bank Address: ${esc(WIRE_BANK_ADDRESS)}</div>
         <div>Account Number: ${esc(WIRE_ACCOUNT_NUMBER)}</div>
+        <div>Routing Number: ${esc(WIRE_ROUTING_NUMBER)}</div>
         <div>Zelle: <span style="text-transform:lowercase;">${esc(WIRE_ZELLE)}</span></div>
       </td>
       <td style="width:44%;vertical-align:top;text-align:right;">

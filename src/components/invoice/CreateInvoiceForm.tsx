@@ -6,13 +6,15 @@ import {
   blankInvoiceItem,
   buildSavedInvoice,
   buildSavedInvoiceUpdate,
-  grandTotalOverrideFromInvoice,
+  DIRECTION_OPTIONS,
   money,
   num,
+  roundOffFromInvoice,
   rowTotal,
   savedItemToFormItem,
   SIZE_PREFIX_OPTIONS,
   type DocKind,
+  type InvoiceDirection,
   type InvoiceFormItem,
   type PaidBy,
 } from '../../lib/invoiceFormUtils'
@@ -26,6 +28,8 @@ const labelClass = dashboardLabelClass.replace('block ', '') + ' !mt-0'
 type Props = {
   contact: Contact
   initialInvoice?: SavedInvoice
+  /** Existing invoices, used to pick the next number in the Sale/Purchase series. */
+  existingInvoices?: SavedInvoice[]
   saving?: boolean
   submitLabel?: string
   onCancel: () => void
@@ -35,12 +39,13 @@ type Props = {
 function formStateFromInvoice(invoice: SavedInvoice) {
   return {
     docKind: invoice.docKind,
+    direction: invoice.direction ?? 'sale',
     invoiceDate: invoice.date,
     paidBy: invoice.paidBy,
     termsDays: normalizeTermsDays(invoice.termsDays),
     notes: invoice.notes || '',
     shipping: invoice.shipping ? String(invoice.shipping) : '',
-    grandTotalOverride: grandTotalOverrideFromInvoice(invoice),
+    roundOff: roundOffFromInvoice(invoice),
     items:
       invoice.items?.length > 0
         ? invoice.items.map(savedItemToFormItem)
@@ -51,12 +56,14 @@ function formStateFromInvoice(invoice: SavedInvoice) {
 export function CreateInvoiceForm({
   contact,
   initialInvoice,
+  existingInvoices = [],
   saving = false,
   submitLabel = 'Save invoice',
   onCancel,
   onSubmit,
 }: Props) {
   const [docKind, setDocKind] = useState<DocKind>(() => initialInvoice?.docKind ?? 'invoice')
+  const [direction, setDirection] = useState<InvoiceDirection>(() => initialInvoice?.direction ?? 'sale')
   const [invoiceDate, setInvoiceDate] = useState(
     () => initialInvoice?.date ?? new Date().toISOString().slice(0, 10),
   )
@@ -68,8 +75,8 @@ export function CreateInvoiceForm({
   })
   const [notes, setNotes] = useState(() => initialInvoice?.notes ?? '')
   const [shipping, setShipping] = useState(() => (initialInvoice?.shipping ? String(initialInvoice.shipping) : ''))
-  const [grandTotalOverride, setGrandTotalOverride] = useState(
-    () => (initialInvoice ? grandTotalOverrideFromInvoice(initialInvoice) : ''),
+  const [roundOff, setRoundOff] = useState(
+    () => (initialInvoice ? roundOffFromInvoice(initialInvoice) : ''),
   )
   const [items, setItems] = useState<InvoiceFormItem[]>(() =>
     initialInvoice?.items?.length
@@ -81,30 +88,32 @@ export function CreateInvoiceForm({
     if (initialInvoice) {
       const s = formStateFromInvoice(initialInvoice)
       setDocKind(s.docKind)
+      setDirection(s.direction)
       setInvoiceDate(s.invoiceDate)
       setPaidBy(s.paidBy)
       setTermsDays(s.termsDays)
       setCustomTerms(s.termsDays > 0 && !TERMS_PRESETS.includes(s.termsDays))
       setNotes(s.notes)
       setShipping(s.shipping)
-      setGrandTotalOverride(s.grandTotalOverride)
+      setRoundOff(s.roundOff)
       setItems(s.items)
       return
     }
     setDocKind('invoice')
+    setDirection('sale')
     setInvoiceDate(new Date().toISOString().slice(0, 10))
     setPaidBy('pending')
     setTermsDays(0)
     setCustomTerms(false)
     setNotes('')
     setShipping('')
-    setGrandTotalOverride('')
+    setRoundOff('')
     setItems([blankInvoiceItem()])
   }, [contact.id, initialInvoice?.id])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
   const shippingAmount = num(shipping)
-  const finalTotal = grandTotalOverride.trim() ? num(grandTotalOverride) : subtotal + shippingAmount
+  const finalTotal = subtotal + shippingAmount + num(roundOff)
 
   const customer = contact.company || contact.name || 'Customer'
   const customerAddress = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ')
@@ -124,10 +133,10 @@ export function CreateInvoiceForm({
 
   const handleSubmit = () => {
     if (finalTotal <= 0) return
-    const input = { docKind, invoiceDate, paidBy, termsDays, notes, items, shipping, grandTotalOverride }
+    const input = { docKind, direction, invoiceDate, paidBy, termsDays, notes, items, shipping, roundOff }
     const invoice = initialInvoice
       ? buildSavedInvoiceUpdate(contact, initialInvoice, input)
-      : buildSavedInvoice(contact, input)
+      : buildSavedInvoice(contact, input, existingInvoices)
     onSubmit(invoice)
   }
 
@@ -139,7 +148,7 @@ export function CreateInvoiceForm({
         <p className="text-sm text-slate-500 dark:text-slate-400">{customerAddress || 'No address'}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="block">
           <span className={labelClass}>Type</span>
           <select
@@ -159,6 +168,18 @@ export function CreateInvoiceForm({
             onChange={(e) => setInvoiceDate(e.target.value)}
             className={cn(inputClass, 'mt-1')}
           />
+        </label>
+        <label className="block col-span-2 sm:col-span-1">
+          <span className={labelClass}>Direction</span>
+          <select
+            value={direction}
+            onChange={(e) => setDirection(e.target.value as InvoiceDirection)}
+            className={cn(inputClass, 'mt-1')}
+          >
+            {DIRECTION_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -303,19 +324,33 @@ export function CreateInvoiceForm({
         </button>
       </div>
 
-      <label className="block">
-        <span className={labelClass}>Shipping</span>
-        <input
-          value={shipping}
-          onChange={(e) => setShipping(e.target.value)}
-          placeholder="0.00"
-          inputMode="decimal"
-          className={cn(inputClass, 'mt-1')}
-        />
-        <span className="mt-1 block text-xs text-slate-400">
-          Always printed on the invoice and added to the total, even when 0.
-        </span>
-      </label>
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+        <label className="block w-28">
+          <span className={labelClass}>Shipping</span>
+          <input
+            value={shipping}
+            onChange={(e) => setShipping(e.target.value)}
+            placeholder="0.00"
+            inputMode="decimal"
+            className={cn(inputClass, 'mt-1')}
+          />
+        </label>
+        <label className="block w-36">
+          <span className={labelClass}>Round off</span>
+          <input
+            value={roundOff}
+            onChange={(e) => setRoundOff(e.target.value)}
+            placeholder="+/- 0.00"
+            inputMode="decimal"
+            className={cn(inputClass, 'mt-1')}
+          />
+          <span className="mt-1 block text-xs text-slate-400">Manual adjustment</span>
+        </label>
+        <div className="ml-auto self-center text-right">
+          <span className={labelClass}>Grand total</span>
+          <p className="text-lg font-extrabold text-slate-900 dark:text-white">{money(finalTotal)}</p>
+        </div>
+      </div>
 
       <label className="block">
         <span className={labelClass}>Notes</span>
@@ -328,35 +363,14 @@ export function CreateInvoiceForm({
         />
       </label>
 
-      <p className="text-right text-lg font-extrabold text-slate-900 dark:text-white">
-        Grand total: {money(finalTotal)}
-      </p>
-
-      <label className="block">
-        <span className={labelClass}>Adjust grand total (optional)</span>
-        <div className="mt-1 flex gap-2">
-          <input
-            value={grandTotalOverride}
-            onChange={(e) => setGrandTotalOverride(e.target.value)}
-            placeholder={(subtotal + shippingAmount).toFixed(2)}
-            inputMode="decimal"
-            className={inputClass}
-          />
-          <button
-            type="button"
-            onClick={() => setGrandTotalOverride('')}
-            className="shrink-0 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            Auto
-          </button>
-        </div>
-      </label>
-
-      <div className="flex gap-2 pt-1">
+      <div className="flex items-center gap-2 pt-1">
+        <span className="mr-auto text-sm font-bold text-slate-500 dark:text-slate-400">
+          Grand total {money(finalTotal)}
+        </span>
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
@@ -364,7 +378,7 @@ export function CreateInvoiceForm({
           type="button"
           disabled={saving || finalTotal <= 0}
           onClick={handleSubmit}
-          className="flex-1 rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
+          className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
         >
           {saving ? 'Saving…' : submitLabel}
         </button>

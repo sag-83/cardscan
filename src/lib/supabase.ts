@@ -128,12 +128,22 @@ create table if not exists invoices (
   shipping numeric default 0,
   total numeric default 0,
   notes text default '',
+  invoice_number text default '',
+  direction text default 'sale',
+  contact_address text default '',
+  contact_zip text default '',
+  contact_phone text default '',
   saved_at timestamptz default now()
 );
 alter table invoices disable row level security;
 -- Existing installs: add the payment-terms and shipping columns (safe to re-run).
 alter table invoices add column if not exists terms_days integer default 0;
 alter table invoices add column if not exists shipping numeric default 0;
+alter table invoices add column if not exists invoice_number text default '';
+alter table invoices add column if not exists direction text default 'sale';
+alter table invoices add column if not exists contact_address text default '';
+alter table invoices add column if not exists contact_zip text default '';
+alter table invoices add column if not exists contact_phone text default '';
 
 -- 6. Realtime sync (run once in Supabase SQL editor if live sync does not work)
 alter table contacts replica identity full;
@@ -555,6 +565,11 @@ export async function saveInvoiceToDB(invoice: SavedInvoice): Promise<boolean> {
     shipping:     invoice.shipping ?? 0,
     total:        invoice.total,
     notes:        invoice.notes,
+    invoice_number: invoice.invoiceNumber ?? '',
+    direction:    invoice.direction ?? 'sale',
+    contact_address: invoice.contactAddress ?? '',
+    contact_zip:  invoice.contactZip ?? '',
+    contact_phone: invoice.contactPhone ?? '',
     saved_at:     invoice.saved_at,
   }
 
@@ -570,6 +585,14 @@ export async function saveInvoiceToDB(invoice: SavedInvoice): Promise<boolean> {
     delete row.terms_days
     console.warn('invoices.terms_days column missing — run the migration in the schema comment')
     ;({ error } = await sb.from('invoices').upsert(row, { onConflict: 'id' }))
+  }
+  // Older databases predate the invoice-number / direction / captured-address columns.
+  for (const col of ['invoice_number', 'direction', 'contact_address', 'contact_zip', 'contact_phone']) {
+    if (isMissingColumnError(error, col)) {
+      delete row[col]
+      console.warn(`invoices.${col} column missing — run the migration in the schema comment`)
+      ;({ error } = await sb.from('invoices').upsert(row, { onConflict: 'id' }))
+    }
   }
 
   if (error) {
@@ -596,11 +619,16 @@ export async function syncInvoicesFromDB(): Promise<SavedInvoice[]> {
 
   return (data ?? []).map((row) => ({
     id:          row.id,
+    invoiceNumber: row.invoice_number || undefined,
+    direction:   row.direction === 'purchase' ? 'purchase' : 'sale',
     contactId:   row.contact_id,
     company:     row.company,
     contactName: row.contact_name,
     state:       row.state,
     city:        row.city,
+    contactAddress: row.contact_address || '',
+    contactZip:  row.contact_zip || '',
+    contactPhone: row.contact_phone || '',
     date:        row.date,
     docKind:     row.doc_kind,
     paidBy:      normalizePaidBy(row.paid_by),

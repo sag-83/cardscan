@@ -282,8 +282,8 @@ async function showFollowupNotification(reminder: FollowupReminder): Promise<boo
   const options: NotificationOptions = {
     body: reminder.body,
     tag: `followup-${reminder.id}-${reminder.at}`,
-    icon: '/delta-logo.png',
-    badge: '/delta-logo.png',
+    icon: '/apple-touch-icon.png',
+    badge: '/apple-touch-icon.png',
     requireInteraction: true,
   }
 
@@ -353,7 +353,7 @@ export async function sendTestReminderNotification(): Promise<'ok' | 'denied' | 
     await reg.showNotification('CardHolder test reminder', {
       body: 'If you see this, follow-up alerts are working on this device.',
       tag: 'cardscan-test',
-      icon: '/delta-logo.png',
+      icon: '/apple-touch-icon.png',
       requireInteraction: true,
     })
     return 'ok'

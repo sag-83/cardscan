@@ -173,7 +173,7 @@ function exportCSV(invoices: SavedInvoice[]) {
     inv.total.toFixed(2), inv.notes,
   ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([[h.join(','), ...rows].join('\n')], { type: 'text/csv' })
-  Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `delta-${new Date().toISOString().slice(0, 10)}.csv` }).click()
+  Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `ak-gems-${new Date().toISOString().slice(0, 10)}.csv` }).click()
 }
 
 // ─── SVG icons ────────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src="/delta-logo.png" alt="Delta Diamonds" className={cn('h-10 mx-auto mb-3', dark ? 'brightness-0 invert opacity-80' : 'opacity-90')} style={{ objectFit: 'contain' }} />
+          <img src="/ak-monogram.png" alt="AK Gems Inc" className={cn('h-10 mx-auto mb-3', dark ? 'brightness-0 invert opacity-80' : 'opacity-90')} style={{ objectFit: 'contain' }} />
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-600">Revenue Analytics</p>
         </div>
 
@@ -1077,7 +1077,7 @@ function Sidebar({ active, badge, accountsBadge, showReminders, onNav, onRefresh
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-[240px] flex-col overflow-y-auto border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 lg:flex">
       {/* Logo */}
       <div className="px-5 py-6 border-b border-slate-100 dark:border-slate-800">
-        <img src="/delta-logo.png" alt="Delta Diamonds" className="h-7 object-contain dark:brightness-0 dark:invert dark:opacity-80" />
+        <img src="/ak-monogram.png" alt="AK Gems Inc" className="h-7 object-contain dark:brightness-0 dark:invert dark:opacity-80" />
         <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-600 mt-2">Revenue Analytics</p>
       </div>
 

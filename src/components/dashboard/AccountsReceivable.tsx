@@ -405,8 +405,9 @@ export function AccountsReceivable({
         <ModalShell title={`Create invoice · ${contactLabel(selectedContact)}`} onClose={() => setInvoiceOpen(false)}>
           <CreateInvoiceForm
             contact={selectedContact}
+            existingInvoices={salesInvoices}
             saving={saving}
-            submitLabel="Save invoice"
+            submitLabel="Create invoice"
             onCancel={() => setInvoiceOpen(false)}
             onSubmit={(inv) => void handleCreateInvoice(inv)}
           />

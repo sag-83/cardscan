@@ -827,7 +827,7 @@ function contactShareText(contact: Contact): string {
 
 function contactColdMessageText(contact: Contact): string {
   const company = contact.company || contact.name || 'your company'
-  return `Hi ${company},\n\nThis is Amit from Delta Diamonds — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.\nHappy to assist with any requirements.`
+  return `Hi ${company},\n\nThis is Amit from AK Gems Inc — we met before.\nWe provide matching pairs, layouts, and single stones across key shapes with quick support for your daily needs.\nHappy to assist with any requirements.`
 }
 
 function quickBtnStyle(kind: 'call' | 'message'): CSSProperties {

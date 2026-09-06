@@ -55,7 +55,7 @@ export async function registerPlatformCredential(
   const cred = (await navigator.credentials.create({
     publicKey: {
       challenge: challenge as BufferSource,
-      rp: { name: 'Delta Diamonds', id: window.location.hostname || 'localhost' },
+      rp: { name: 'AK Gems Inc', id: window.location.hostname || 'localhost' },
       user: {
         id: userId,
         name: scope,

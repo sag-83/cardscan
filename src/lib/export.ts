@@ -154,6 +154,7 @@ export async function sendInvoiceToSheets(invoice: SavedInvoice): Promise<void> 
     total:       invoice.total,
     notes:       sheetsText(invoice.notes),
     savedAt:     sheetsText(invoice.saved_at),
+    invoiceNumber: sheetsText(invoice.invoiceNumber ?? ''),
   }
   const res = await fetch('/api/invoice-sheets', {
     method: 'POST',

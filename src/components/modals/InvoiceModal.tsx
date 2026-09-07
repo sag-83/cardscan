@@ -4,14 +4,14 @@ import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceSynced } from '../../lib/invoiceSync'
 import { money } from '../../lib/invoiceFormUtils'
-import { printSavedInvoice } from '../../lib/invoicePrint'
+import { printSavedInvoice, ATTACHMENT_ONE, ATTACHMENT_TWO } from '../../lib/invoicePrint'
 import { dueDateLabel, termsLabel } from '../../lib/invoiceTerms'
 import { syncFollowupReminders } from '../../lib/reminderNotifications'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
 const COMPANY_LOGO = '/ak-monogram.png'
-const COMPANY_ADDRESS = '61 Hackensack Street, East Rutherford, NJ - 07073'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
 const COMPANY_PHONE = '8622359224'
 const COMPANY_EMAIL = 'info@akgemsinc.com'
 
@@ -162,7 +162,7 @@ export function InvoiceModal() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ textAlign: 'left' }}>
                   <img src={COMPANY_LOGO} alt="AK" style={{ display: 'inline-block', height: 50, width: 'auto', verticalAlign: 'bottom' }} />
-                  <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 5, marginLeft: 8, verticalAlign: 'bottom' }}>GEMS INC</span>
+                  <span style={{ display: 'inline-block', fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, fontWeight: 400, letterSpacing: 1, wordSpacing: 3, marginLeft: 8, verticalAlign: 'bottom' }}>GEMS INC</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 800, fontSize: 16 }}>{draft.docKind === 'invoice' ? 'INVOICE' : 'MEMO'}</div>
@@ -186,9 +186,15 @@ export function InvoiceModal() {
                 <div>{upper(customerAddress || '-')}</div>
                 {(contact.phone_mobile || contact.phone_work) && <div>{contact.phone_mobile || contact.phone_work}</div>}
               </div>
+              {draft.docKind === 'memo' && (
+                <div style={{ marginTop: 10, fontSize: 10, lineHeight: 1.55, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, textTransform: 'none' }}>
+                  {ATTACHMENT_ONE}
+                </div>
+              )}
               <table style={{ width: '100%', marginTop: 10, borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
+                    <th style={thStyleRight}>#</th>
                     <th style={thStyle}>Size</th>
                     <th style={thStyleRight}>Pcs</th>
                     <th style={thStyleRight}>Ct</th>
@@ -199,6 +205,7 @@ export function InvoiceModal() {
                 <tbody>
                   {draft.items.map((item, idx) => (
                     <tr key={idx}>
+                      <td style={tdStyleRight}>{idx + 1}</td>
                       <td style={tdStyle}>{upper(item.size || '-')}</td>
                       <td style={tdStyleRight}>{item.pcs || 0}</td>
                       <td style={tdStyleRight}>{item.ct.toFixed(2)}</td>
@@ -208,6 +215,7 @@ export function InvoiceModal() {
                   ))}
                 </tbody>
               </table>
+              <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280' }}>Total line items: {draft.items.length}</div>
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ fontSize: 10.5, color: '#374151', lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700 }}>Payment Instruction</div>
@@ -224,6 +232,10 @@ export function InvoiceModal() {
                 </div>
               </div>
               {draft.notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(draft.notes)}</div>}
+              <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12, textTransform: 'none' }}>
+                <div style={{ fontSize: 12, color: '#111827', marginBottom: 8 }}>Signature: <span style={{ display: 'inline-block', borderBottom: '1px solid #111827', width: 220 }}>&nbsp;</span></div>
+                <div style={{ fontSize: 10, lineHeight: 1.55, color: '#374151' }}>&ldquo;{ATTACHMENT_TWO}&rdquo;</div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>

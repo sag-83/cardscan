@@ -8,7 +8,7 @@ const COMPANY_EMAIL = 'info@akgemsinc.com'
 
 // Standing disclosures printed on every document (kept verbatim from the
 // firm's letterhead — trade-standard consignment + Kimberley Process wording).
-const ATTACHMENT_ONE =
+export const ATTACHMENT_ONE =
   'The goods described and valued as below are delivered to you for examination and ' +
   'inspection only and remain our property and shall be returned to us on demand and in ' +
   'any event, such merchandise, until returned to us and actually received by us, is at ' +
@@ -20,7 +20,7 @@ const ATTACHMENT_ONE =
   'held in trust for us until the full amount invoiced has been paid to us. The ' +
   'undersigned personally guarantee the below obligations on behalf of the company.'
 
-const ATTACHMENT_TWO =
+export const ATTACHMENT_TWO =
   'The diamonds herein invoiced have been purchased from legitimate sources not involved ' +
   'in funding conflict and in compliance with United Nations resolutions. The seller ' +
   'hereby guarantees that these diamonds are conflict free, based on personal knowledge ' +

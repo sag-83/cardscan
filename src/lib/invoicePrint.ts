@@ -2,9 +2,29 @@ import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 
 const COMPANY_LOGO = '/ak-monogram.png'
-const COMPANY_ADDRESS = '61 Hackensack Street, East Rutherford, NJ - 07073'
+const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
 const COMPANY_PHONE = '8622359224'
 const COMPANY_EMAIL = 'info@akgemsinc.com'
+
+// Standing disclosures printed on every document (kept verbatim from the
+// firm's letterhead — trade-standard consignment + Kimberley Process wording).
+const ATTACHMENT_ONE =
+  'The goods described and valued as below are delivered to you for examination and ' +
+  'inspection only and remain our property and shall be returned to us on demand and in ' +
+  'any event, such merchandise, until returned to us and actually received by us, is at ' +
+  'your risk from all hazards. No right or power is given to you to sell, pledge, ' +
+  'hypothecate or otherwise dispose of this merchandise regardless of prior transactions. ' +
+  'A sale of this merchandise can only be effected and title will pass only if, as and ' +
+  'when we the said owners shall agree to such sale in writing and shall have billed you ' +
+  'for the merchandise. All money received by you on the sale of the merchandise shall be ' +
+  'held in trust for us until the full amount invoiced has been paid to us. The ' +
+  'undersigned personally guarantee the below obligations on behalf of the company.'
+
+const ATTACHMENT_TWO =
+  'The diamonds herein invoiced have been purchased from legitimate sources not involved ' +
+  'in funding conflict and in compliance with United Nations resolutions. The seller ' +
+  'hereby guarantees that these diamonds are conflict free, based on personal knowledge ' +
+  'and/or written guarantees provided by the supplier of these diamonds.'
 
 // ⚠️ Transcribed from a handwritten note — please double-check every digit
 // (account number, routing number, zip) before this goes out on a real invoice.
@@ -52,14 +72,16 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     inv.contactPhone ? esc(inv.contactPhone) : '',
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join('')
 
-  const rows = inv.items.map((item) => `
+  const rows = inv.items.map((item, i) => `
     <tr>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;color:#6b7280;">${i + 1}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(upper(item.size || '—'))}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${esc(item.pcs)}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.ct.toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(item.pct)}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${money(item.amount)}</td>
     </tr>`).join('')
+  const lineItemCount = inv.items.length
 
   const subtotal = inv.items.reduce((sum, item) => sum + item.amount, 0)
   const dueLabel = inv.docKind === 'invoice' ? dueDateLabel(inv) : ''
@@ -76,7 +98,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     <tr>
       <td style="vertical-align:top;text-align:left;">
         <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:60px;width:auto;vertical-align:bottom;" />
-        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:6px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
+        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:1px;word-spacing:3px;margin-left:10px;vertical-align:bottom;">GEMS INC</span>
         <div style="margin-top:12px;color:#374151;font-size:12px;line-height:1.6;">
           ${COMPANY_ADDRESS}<br />
           Tel: ${formatPhone(COMPANY_PHONE)}<br />
@@ -120,9 +142,14 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     </tbody>
   </table>
 
+  ${inv.docKind === 'memo' ? `<div style="margin-bottom:18px;border:1px solid #d1d5db;padding:10px 12px;font-size:10px;line-height:1.6;color:#374151;text-transform:none;">
+    ${esc(ATTACHMENT_ONE)}
+  </div>` : ''}
+
   <table style="width:100%;border-collapse:collapse;">
     <thead>
       <tr style="background:#f9fafb;">
+        <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;width:34px;">#</th>
         <th style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Size</th>
         <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Pcs</th>
         <th style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;">Ct</th>
@@ -131,6 +158,11 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
       </tr>
     </thead>
     <tbody>${rows}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6" style="padding:6px 8px;font-size:10px;color:#6b7280;">Total line items: ${lineItemCount}</td>
+      </tr>
+    </tfoot>
   </table>
 
   <table style="width:100%;border-collapse:collapse;margin-top:28px;">
@@ -152,6 +184,11 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   </table>
 
   ${inv.notes ? `<div style="margin-top:22px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}
+
+  <div style="margin-top:34px;border-top:1px solid #d1d5db;padding-top:16px;text-transform:none;">
+    <div style="font-size:12px;color:#111827;margin-bottom:12px;">Signature: <span style="display:inline-block;border-bottom:1px solid #111827;width:280px;">&nbsp;</span></div>
+    <div style="font-size:10px;line-height:1.6;color:#374151;">&ldquo;${esc(ATTACHMENT_TWO)}&rdquo;</div>
+  </div>
 </body>
 </html>`
 }

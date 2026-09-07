@@ -10,17 +10,34 @@ const INVOICE_NUMBER_START = 1000
 export const DIRECTION_PREFIX: Record<InvoiceDirection, string> = { sale: 'S', purchase: 'P' }
 
 export const DIRECTION_OPTIONS: { value: InvoiceDirection; label: string }[] = [
-  { value: 'sale', label: 'Sale (S1000, S1001…)' },
-  { value: 'purchase', label: 'Purchase (P1000, P1001…)' },
+  { value: 'sale', label: 'Sale' },
+  { value: 'purchase', label: 'Purchase' },
 ]
 
-/** Next free number in the given direction's series, one past the highest already used. */
-export function nextInvoiceNumber(direction: InvoiceDirection, existing: SavedInvoice[]): string {
-  const prefix = DIRECTION_PREFIX[direction]
+/**
+ * Document-number prefix. Memos run a completely separate series from invoices
+ * so a consignment memo can never share a number with a real (billed) invoice:
+ *   sale invoice  → S…     sale memo     → M…
+ *   purchase inv. → P…     purchase memo → PM…
+ */
+export function documentPrefix(direction: InvoiceDirection, docKind: 'invoice' | 'memo'): string {
+  if (docKind === 'memo') return direction === 'purchase' ? 'PM' : 'M'
+  return DIRECTION_PREFIX[direction]
+}
+
+/** Next free number in this document's own series, one past the highest already used. */
+export function nextInvoiceNumber(
+  direction: InvoiceDirection,
+  docKind: 'invoice' | 'memo',
+  existing: SavedInvoice[],
+): string {
+  const prefix = documentPrefix(direction, docKind)
+  const pattern = new RegExp(`^${prefix}(\\d+)$`)
   let highest = INVOICE_NUMBER_START - 1
   for (const inv of existing) {
-    if (!inv.invoiceNumber || inv.invoiceNumber[0] !== prefix) continue
-    const value = parseInt(inv.invoiceNumber.slice(1), 10)
+    const match = inv.invoiceNumber?.match(pattern)
+    if (!match) continue
+    const value = parseInt(match[1], 10)
     if (Number.isFinite(value) && value > highest) highest = value
   }
   return `${prefix}${highest + 1}`
@@ -194,7 +211,7 @@ export function buildSavedInvoice(
   return {
     id: uid(),
     saved_at: new Date().toISOString(),
-    invoiceNumber: nextInvoiceNumber(input.direction, existingInvoices),
+    invoiceNumber: nextInvoiceNumber(input.direction, input.docKind, existingInvoices),
     ...buildSavedInvoiceCore(contact, input),
   }
 }

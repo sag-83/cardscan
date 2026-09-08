@@ -203,6 +203,118 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 </html>`
 }
 
+/**
+ * A blank, pre-printed MEMO the client prints in a pad and fills in by hand
+ * before handing goods to a customer. Same identity + disclosures as the
+ * digital memo, but every field is an empty ruled line and the item grid is
+ * a full page of numbered rows.
+ */
+export function buildBlankMemoHtml(rowCount = 22): string {
+  const line = (w: string): string =>
+    `<span style="display:inline-block;border-bottom:1px solid #9ca3af;width:${w};">&nbsp;</span>`
+  const blankParty = `<div style="line-height:2.1;">
+      ${line('92%')}<br />${line('92%')}<br />${line('92%')}
+    </div>`
+  const bodyRows = Array.from({ length: rowCount }, (_, i) => `
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;color:#6b7280;width:26px;">${i + 1}</td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:64px;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:64px;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:88px;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:104px;"></td>
+    </tr>`).join('')
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MEMO</title>
+  <style>@page { margin: 0; } * { box-sizing: border-box; }</style>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px 24px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;">
+  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+    <tr>
+      <td style="vertical-align:top;">
+        <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:42px;vertical-align:bottom;" />
+        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:16px;letter-spacing:1px;word-spacing:3px;margin-left:8px;vertical-align:bottom;">GEMS INC</span>
+        <div style="margin-top:6px;color:#374151;font-size:10px;line-height:1.4;">
+          ${COMPANY_ADDRESS}<br />Tel: ${formatPhone(COMPANY_PHONE)}<br />
+          Email: <span style="text-transform:lowercase;">${COMPANY_EMAIL}</span>
+        </div>
+      </td>
+      <td style="vertical-align:top;text-align:right;">
+        <div style="font-size:21px;font-weight:800;letter-spacing:1px;">MEMO</div>
+        <div style="margin-top:8px;color:#374151;font-size:10px;">Memo #: ${line('120px')}</div>
+        <div style="margin-top:6px;color:#374151;font-size:10px;">Date: ${line('120px')}</div>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:10px;">
+    <tr>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:6px 9px;">
+        <div style="font-weight:700;font-size:9px;color:#6b7280;margin-bottom:4px;">Memo To</div>${blankParty}
+      </td>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:6px 9px;">
+        <div style="font-weight:700;font-size:9px;color:#6b7280;margin-bottom:4px;">Ship To</div>${blankParty}
+      </td>
+    </tr>
+  </table>
+
+  <div style="margin-bottom:8px;border:1px solid #d1d5db;padding:6px 9px;font-size:8px;line-height:1.4;color:#4b5563;text-transform:none;">
+    ${esc(ATTACHMENT_ONE)}
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <thead>
+      <tr style="background:#111827;color:#fff;">
+        <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">#</th>
+        <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Size</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Pcs</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Ct</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">P/Ct</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${bodyRows}</tbody>
+    <tfoot>
+      <tr style="font-weight:700;">
+        <td colspan="2" style="padding:6px 8px;border:1px solid #111827;">Total</td>
+        <td style="padding:6px 8px;border:1px solid #111827;"></td>
+        <td style="padding:6px 8px;border:1px solid #111827;"></td>
+        <td style="padding:6px 8px;border:1px solid #111827;"></td>
+        <td style="padding:6px 8px;border:1px solid #111827;"></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div style="margin-top:12px;text-transform:none;">
+    <div style="font-size:11px;color:#111827;margin-bottom:8px;">Signature: ${line('260px')}</div>
+    <div style="font-size:8px;line-height:1.4;color:#4b5563;">&ldquo;${esc(ATTACHMENT_TWO)}&rdquo;</div>
+  </div>
+</body>
+</html>`
+}
+
+function printHtmlDoc(html: string): void {
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
+  frame.setAttribute('aria-hidden', 'true')
+  document.body.appendChild(frame)
+  const cleanup = () => setTimeout(() => frame.parentNode?.removeChild(frame), 250)
+  const fw = frame.contentWindow
+  if (!fw) { cleanup(); return }
+  fw.document.open(); fw.document.write(html); fw.document.close()
+  const onAfterPrint = () => { cleanup(); fw.removeEventListener('afterprint', onAfterPrint) }
+  fw.addEventListener('afterprint', onAfterPrint)
+  setTimeout(() => { try { fw.focus(); fw.print() } catch { cleanup() } }, 200)
+}
+
+export function printBlankMemo(): void {
+  printHtmlDoc(buildBlankMemoHtml())
+}
+
 export function printSavedInvoice(inv: SavedInvoice): void {
   const html = buildInvoiceHtml(inv)
   const frame = document.createElement('iframe')

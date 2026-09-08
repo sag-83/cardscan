@@ -18,7 +18,7 @@ import {
 import { SavedInvoice } from '../types/invoice'
 import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
 import { CreateInvoiceForm } from '../components/invoice/CreateInvoiceForm'
-import { printSavedInvoice } from '../lib/invoicePrint'
+import { printSavedInvoice, printBlankMemo } from '../lib/invoicePrint'
 import { contactStubFromInvoice } from '../lib/invoiceFormUtils'
 import { saveInvoiceSynced } from '../lib/invoiceSync'
 import { normalizePaidBy } from '../lib/invoiceNormalize'
@@ -1401,6 +1401,10 @@ export function RevenueDashboard() {
               <div className="ml-auto flex items-center gap-2">
                 {lastRefresh && <p className="text-[11px] text-slate-400 dark:text-slate-600 tabular-nums">{lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                 {loading && <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-indigo-500 animate-spin" />}
+                <button onClick={printBlankMemo}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150">
+                  <Icon name="print" size={13} /> Blank memo
+                </button>
                 <button onClick={toggleDark}
                   className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150 text-slate-500 dark:text-slate-400">
                   <Icon name={dark ? 'sun' : 'moon'} size={16} />

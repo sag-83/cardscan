@@ -194,11 +194,9 @@ export function InvoiceModal() {
                 <div>{upper(customerAddress || '-')}</div>
                 {(contact.phone_mobile || contact.phone_work) && <div>{contact.phone_mobile || contact.phone_work}</div>}
               </div>
-              {draft.docKind === 'memo' && (
-                <div style={{ marginTop: 10, fontSize: 10, lineHeight: 1.55, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, textTransform: 'none' }}>
-                  {ATTACHMENT_ONE}
-                </div>
-              )}
+              <div style={{ marginTop: 10, fontSize: 10, lineHeight: 1.55, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, textTransform: 'none' }}>
+                {ATTACHMENT_ONE}
+              </div>
               <table style={{ width: '100%', marginTop: 10, borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>

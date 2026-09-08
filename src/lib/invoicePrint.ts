@@ -146,9 +146,9 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     </tbody>
   </table>
 
-  ${inv.docKind === 'memo' ? `<div style="margin-bottom:8px;border:1px solid #d1d5db;padding:6px 9px;font-size:8px;line-height:1.4;color:#4b5563;text-transform:none;">
+  <div style="margin-bottom:8px;border:1px solid #d1d5db;padding:6px 9px;font-size:8px;line-height:1.4;color:#4b5563;text-transform:none;">
     ${esc(ATTACHMENT_ONE)}
-  </div>` : ''}
+  </div>
 
   <table style="width:100%;border-collapse:collapse;font-size:10px;">
     <thead>

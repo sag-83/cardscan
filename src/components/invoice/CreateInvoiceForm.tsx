@@ -32,6 +32,8 @@ type Props = {
   existingInvoices?: SavedInvoice[]
   saving?: boolean
   submitLabel?: string
+  /** Notified whenever the Invoice/Memo type changes, so the modal chrome can follow. */
+  onDocKindChange?: (kind: DocKind) => void
   onCancel: () => void
   onSubmit: (invoice: SavedInvoice) => void
 }
@@ -58,11 +60,14 @@ export function CreateInvoiceForm({
   initialInvoice,
   existingInvoices = [],
   saving = false,
-  submitLabel = 'Save invoice',
+  submitLabel,
+  onDocKindChange,
   onCancel,
   onSubmit,
 }: Props) {
   const [docKind, setDocKind] = useState<DocKind>(() => initialInvoice?.docKind ?? 'invoice')
+  const noun = docKind === 'memo' ? 'memo' : 'invoice'
+  const Noun = docKind === 'memo' ? 'Memo' : 'Invoice'
   const [direction, setDirection] = useState<InvoiceDirection>(() => initialInvoice?.direction ?? 'sale')
   const [invoiceDate, setInvoiceDate] = useState(
     () => initialInvoice?.date ?? new Date().toISOString().slice(0, 10),
@@ -83,6 +88,10 @@ export function CreateInvoiceForm({
       ? initialInvoice.items.map(savedItemToFormItem)
       : [blankInvoiceItem()],
   )
+
+  useEffect(() => {
+    onDocKindChange?.(docKind)
+  }, [docKind, onDocKindChange])
 
   useEffect(() => {
     if (initialInvoice) {
@@ -112,6 +121,8 @@ export function CreateInvoiceForm({
   }, [contact.id, initialInvoice?.id])
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + rowTotal(item), 0), [items])
+  const totalCt = useMemo(() => items.reduce((sum, item) => sum + num(item.ct), 0), [items])
+  const totalPcs = useMemo(() => items.reduce((sum, item) => sum + num(item.pcs), 0), [items])
   const shippingAmount = num(shipping)
   const finalTotal = subtotal + shippingAmount + num(roundOff)
 
@@ -349,6 +360,9 @@ export function CreateInvoiceForm({
         <div className="ml-auto self-center text-right">
           <span className={labelClass}>Grand total</span>
           <p className="text-lg font-extrabold text-slate-900 dark:text-white">{money(finalTotal)}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {totalPcs} pcs · {totalCt.toFixed(2)} ct
+          </p>
         </div>
       </div>
 

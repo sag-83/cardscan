@@ -50,6 +50,7 @@ export function InvoiceModal() {
 
   const contact = contacts.find((c) => c.id === invoiceContactId) || null
   const [isPreview, setIsPreview] = useState(false)
+  const [formKind, setFormKind] = useState<'invoice' | 'memo'>('invoice')
   const [draft, setDraft] = useState<SavedInvoice | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
   const savedIdRef = useRef<string | null>(null)
@@ -140,7 +141,13 @@ export function InvoiceModal() {
       >
         <div style={{ width: 36, height: 4, borderRadius: 4, background: 'var(--bg4)', margin: '0 auto 14px' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 19, fontWeight: 800 }}>{isPreview ? 'Invoice Preview' : 'Create Invoice'}</div>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>
+            {(() => {
+              const k = isPreview && draft ? draft.docKind : formKind
+              const N = k === 'memo' ? 'Memo' : 'Invoice'
+              return isPreview ? `${N} Preview` : `Create ${N}`
+            })()}
+          </div>
           <button type="button" onClick={close} style={{ border: 'none', background: 'none', color: 'var(--text3)', display: 'flex', padding: 4 }} aria-label="Close">
             <X size={22} strokeWidth={2} />
           </button>
@@ -149,7 +156,8 @@ export function InvoiceModal() {
           <CreateInvoiceForm
             contact={contact}
             existingInvoices={invoices}
-            submitLabel="Create invoice"
+            submitLabel={formKind === 'memo' ? 'Preview memo' : 'Preview invoice'}
+            onDocKindChange={setFormKind}
             onCancel={close}
             onSubmit={(inv) => {
               setDraft(inv)
@@ -181,7 +189,7 @@ export function InvoiceModal() {
                 {draft.docKind === 'invoice' && dueDateLabel(draft) && <div>Due: {dueDateLabel(draft)}</div>}
               </div>
               <div style={{ marginTop: 10, fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-                <div style={{ fontWeight: 700 }}>Invoice To / Ship To</div>
+                <div style={{ fontWeight: 700 }}>{draft.docKind === 'memo' ? 'Memo' : 'Invoice'} To / Ship To</div>
                 <div>{upper(customer)}</div>
                 <div>{upper(customerAddress || '-')}</div>
                 {(contact.phone_mobile || contact.phone_work) && <div>{contact.phone_mobile || contact.phone_work}</div>}
@@ -214,8 +222,16 @@ export function InvoiceModal() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr style={{ fontWeight: 800, borderTop: '2px solid #111827' }}>
+                    <td style={tdStyleRight} colSpan={2}>Total</td>
+                    <td style={tdStyleRight}>{draft.items.reduce((s, it) => s + (Number(it.pcs) || 0), 0)}</td>
+                    <td style={tdStyleRight}>{draft.items.reduce((s, it) => s + (Number(it.ct) || 0), 0).toFixed(2)} ct</td>
+                    <td style={tdStyleRight} />
+                    <td style={tdStyleRight}>{money(draft.items.reduce((s, it) => s + it.amount, 0))}</td>
+                  </tr>
+                </tfoot>
               </table>
-              <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280' }}>Total line items: {draft.items.length}</div>
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ fontSize: 10.5, color: '#374151', lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700 }}>Payment Instruction</div>
@@ -226,7 +242,9 @@ export function InvoiceModal() {
                   <div>Zelle: <strong style={{ color: '#111827', textTransform: 'lowercase' }}>{WIRE_ZELLE}</strong></div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: '#374151', flexShrink: 0 }}>
-                  <div>Subtotal: {money(draft.items.reduce((sum, item) => sum + item.amount, 0))}</div>
+                  <div>Total Pcs: {draft.items.reduce((s, it) => s + (Number(it.pcs) || 0), 0)}</div>
+                  <div style={{ marginTop: 2 }}>Total Ct: {draft.items.reduce((s, it) => s + (Number(it.ct) || 0), 0).toFixed(2)}</div>
+                  <div style={{ marginTop: 6 }}>Subtotal: {money(draft.items.reduce((sum, item) => sum + item.amount, 0))}</div>
                   <div style={{ marginTop: 2 }}>Shipping: {money(draft.shipping ?? 0)}</div>
                   <div style={{ marginTop: 6, fontWeight: 800, fontSize: 14, color: '#111827' }}>Total: {money(draft.total)}</div>
                 </div>

@@ -201,7 +201,7 @@ export function InvoiceModal() {
                 <thead>
                   <tr>
                     <th style={thStyleRight}>#</th>
-                    <th style={thStyle}>Size</th>
+                    <th style={thStyle}>Description</th>
                     <th style={thStyleRight}>Pcs</th>
                     <th style={thStyleRight}>Ct</th>
                     <th style={thStyleRight}>P/Ct</th>

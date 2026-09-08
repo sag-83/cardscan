@@ -899,7 +899,7 @@ function InvoiceRow({ inv, onMarkPaid, onDelete, onEdit }: {
       {inv.items.length > 0 && (
         <table className="w-full text-xs mt-2">
           <thead><tr className="text-slate-400 dark:text-slate-600">
-            {['Size','Pcs','Ct','P/Ct','Amount'].map((h, i) => (
+            {['Description','Pcs','Ct','P/Ct','Amount'].map((h, i) => (
               <th key={h} className={cn('py-1.5 font-bold border-b border-slate-200 dark:border-slate-700', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
             ))}
           </tr></thead>

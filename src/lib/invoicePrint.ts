@@ -154,7 +154,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     <thead>
       <tr style="background:#f3f4f6;">
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;width:26px;">#</th>
-        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Size</th>
+        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Description</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Pcs</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Ct</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">P/Ct</th>
@@ -270,7 +270,7 @@ export function buildBlankMemoHtml(rowCount = 22): string {
     <thead>
       <tr style="background:#111827;color:#fff;">
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">#</th>
-        <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Size</th>
+        <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Description</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Pcs</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Ct</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">P/Ct</th>

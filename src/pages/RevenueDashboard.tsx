@@ -19,7 +19,7 @@ import { SavedInvoice } from '../types/invoice'
 import { AccountsReceivable } from '../components/dashboard/AccountsReceivable'
 import { CreateInvoiceForm } from '../components/invoice/CreateInvoiceForm'
 import { printSavedInvoice, printBlankMemo } from '../lib/invoicePrint'
-import { contactStubFromInvoice } from '../lib/invoiceFormUtils'
+import { contactStubFromInvoice, itemDescriptionLabel } from '../lib/invoiceFormUtils'
 import { saveInvoiceSynced } from '../lib/invoiceSync'
 import { normalizePaidBy } from '../lib/invoiceNormalize'
 import { normalizeTermsDays } from '../lib/invoiceTerms'
@@ -899,14 +899,18 @@ function InvoiceRow({ inv, onMarkPaid, onDelete, onEdit }: {
       {inv.items.length > 0 && (
         <table className="w-full text-xs mt-2">
           <thead><tr className="text-slate-400 dark:text-slate-600">
-            {['Description','Pcs','Ct','P/Ct','Amount'].map((h, i) => (
-              <th key={h} className={cn('py-1.5 font-bold border-b border-slate-200 dark:border-slate-700', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
+            {['Description','Cert. No.','Remark','Pcs','Ct','P/Ct','Amount'].map((h, i) => (
+              <th key={h} className={cn('py-1.5 font-bold border-b border-slate-200 dark:border-slate-700', i === 0 || i === 1 || i === 2 ? 'text-left' : 'text-right')}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
             {inv.items.map((it, i) => (
               <tr key={i} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-                <td className="py-1.5 font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">{it.size}</td>
+                <td className="py-1.5 font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">
+                  {itemDescriptionLabel(it)}
+                </td>
+                <td className="py-1.5 text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.certNo || ''}</td>
+                <td className="py-1.5 text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.certGiven ? 'Certificate Given' : ''}</td>
                 <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.pcs}</td>
                 <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800">{it.ct.toFixed(2)}</td>
                 <td className="py-1.5 text-right text-slate-500 border-b border-slate-100 dark:border-slate-800 tabular-nums">{money(it.pct, 2)}</td>

@@ -4,6 +4,14 @@ export type SavedInvoiceItem = {
   ct: number
   pct: number
   amount: number
+  /** One of JEWELRY_TYPE_OPTIONS, e.g. "NTRL JEW"; '' if not picked. */
+  jewelryType?: string
+  /** One of GOLD_TYPE_OPTIONS, e.g. "14K WG"; '' if not picked. */
+  goldType?: string
+  /** Certificate number for this line, if any. */
+  certNo?: string
+  /** Prints "Certificate Given" in the Remark column when true. */
+  certGiven?: boolean
 }
 
 export type InvoiceDirection = 'sale' | 'purchase'

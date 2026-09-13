@@ -93,12 +93,35 @@ export function contactStubFromInvoice(inv: SavedInvoice): Contact {
 
 export type DocKind = 'invoice' | 'memo'
 export type PaidBy = 'cash' | 'check' | 'pending'
-export type SizePrefix = '' | 'DGC' | 'STD' | 'TNB' | 'TUB' | 'TUC' | 'LDW' | 'PRCL' | 'NTRL' | 'JEW' | 'LAB' | 'TNC'
+export type SizePrefix =
+  | ''
+  | 'DGC'
+  | 'STD'
+  | 'TNB'
+  | 'TUB'
+  | 'TUC'
+  | 'LDW'
+  | 'PRCL'
+  | 'NTRL'
+  | 'JEW'
+  | 'LAB'
+  | 'TNC'
+  | 'RING'
+  | 'EAR'
+  | 'PEN'
 
 export type InvoiceFormItem = {
   id: string
+  /** One of JEWELRY_TYPE_OPTIONS - a "Description" dropdown, left of Lot No. */
+  jewelryType: string
+  /** One of GOLD_TYPE_OPTIONS - a second "Description" dropdown, left of Lot No. */
+  goldType: string
   prefix: SizePrefix
   size: string
+  /** Certificate number for this line, if any. */
+  certNo: string
+  /** "Certificate given" checkbox - prints as the Remark column's text. */
+  certGiven: boolean
   pcs: string
   ct: string
   pct: string
@@ -106,7 +129,7 @@ export type InvoiceFormItem = {
 }
 
 export const SIZE_PREFIX_OPTIONS: { value: SizePrefix; label: string }[] = [
-  { value: '', label: 'Prefix' },
+  { value: '', label: 'Lot No' },
   { value: 'DGC', label: 'DGC' },
   { value: 'STD', label: 'STD' },
   { value: 'TNB', label: 'TNB' },
@@ -118,7 +141,24 @@ export const SIZE_PREFIX_OPTIONS: { value: SizePrefix; label: string }[] = [
   { value: 'JEW', label: 'JEW' },
   { value: 'LAB', label: 'LAB' },
   { value: 'TNC', label: 'TNC' },
+  { value: 'RING', label: 'RING' },
+  { value: 'EAR', label: 'EAR' },
+  { value: 'PEN', label: 'PEN' },
 ]
+
+/** Left of the Lot No dropdown - both literally labelled "Description" on
+ *  the form, matching the client's old desktop software's own field naming. */
+export const JEWELRY_TYPE_OPTIONS: string[] = [
+  'NTRL JEW',
+  'LAB JEW',
+  'SPL.ORD Jewellery',
+  'Lab Parcel',
+  'Natural Parcel',
+  'NTRL CERT',
+  'LAB CERT',
+]
+
+export const GOLD_TYPE_OPTIONS: string[] = ['14K WG', '14K YG', '18K WG', '18K YG']
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 9)
@@ -148,8 +188,35 @@ export function displaySize(item: InvoiceFormItem): string {
   return combined.toUpperCase() || '-'
 }
 
+/**
+ * Combined "what this line is" label for display/print - Description(1) +
+ * Description(2) + the stored size (which already carries the Lot No prefix,
+ * via displaySize above). displaySize() falls back to the placeholder "-"
+ * when both prefix and size are blank; that placeholder is stripped here so
+ * it's never joined in as if it were real content (e.g. "LAB PARCEL 14K WG -").
+ * Single shared implementation - every screen that shows this label
+ * (invoicePrint.ts, InvoiceModal.tsx, RevenueDashboard.tsx, DashboardScreen.tsx,
+ * chargeAccount.ts) should call this instead of re-deriving it.
+ */
+export function itemDescriptionLabel(item: SavedInvoiceItem): string {
+  const size = item.size === '-' ? '' : item.size
+  return [item.jewelryType, item.goldType, size].filter(Boolean).join(' ')
+}
+
 export function blankInvoiceItem(): InvoiceFormItem {
-  return { id: uid(), prefix: '', size: '', pcs: '1', ct: '', pct: '', amount: '' }
+  return {
+    id: uid(),
+    jewelryType: '',
+    goldType: '',
+    prefix: '',
+    size: '',
+    certNo: '',
+    certGiven: false,
+    pcs: '1',
+    ct: '',
+    pct: '',
+    amount: '',
+  }
 }
 
 export type InvoiceFormInput = {
@@ -173,13 +240,26 @@ function buildSavedInvoiceCore(
   const shippingAmount = num(input.shipping)
   const finalTotal = subtotal + shippingAmount + num(input.roundOff)
   const savedItems: SavedInvoiceItem[] = input.items
-    .filter((item) => rowTotal(item) > 0 || item.size.trim() || item.prefix)
+    .filter(
+      (item) =>
+        rowTotal(item) > 0 ||
+        item.size.trim() ||
+        item.prefix ||
+        item.jewelryType ||
+        item.goldType ||
+        item.certNo.trim() ||
+        item.certGiven,
+    )
     .map((item) => ({
       size: displaySize(item),
       pcs: num(item.pcs),
       ct: num(item.ct),
       pct: num(item.pct),
       amount: rowTotal(item),
+      jewelryType: item.jewelryType,
+      goldType: item.goldType,
+      certNo: item.certNo.trim(),
+      certGiven: item.certGiven,
     }))
 
   return {
@@ -244,8 +324,12 @@ export function savedItemToFormItem(item: SavedInvoiceItem): InvoiceFormItem {
   }
   return {
     id: uid(),
+    jewelryType: item.jewelryType || '',
+    goldType: item.goldType || '',
     prefix,
     size,
+    certNo: item.certNo || '',
+    certGiven: !!item.certGiven,
     pcs: String(item.pcs ?? 1),
     ct: item.ct ? String(item.ct) : '',
     pct: item.pct ? String(item.pct) : '',

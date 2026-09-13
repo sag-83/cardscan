@@ -1,7 +1,9 @@
 import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
+import { itemDescriptionLabel } from './invoiceFormUtils'
 
 const COMPANY_LOGO = '/ak-monogram.png'
+const ZELLE_QR = '/zelle-qr.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
 const COMPANY_PHONE = '8622359224'
 const COMPANY_EMAIL = 'info@akgemsinc.com'
@@ -72,15 +74,21 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     inv.contactPhone ? esc(inv.contactPhone) : '',
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join('')
 
-  const rows = inv.items.map((item, i) => `
+  const rows = inv.items.map((item, i) => {
+    const label = itemDescriptionLabel(item) || '—'
+    const remark = item.certGiven ? 'Certificate Given' : ''
+    return `
     <tr>
       <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;color:#6b7280;">${i + 1}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(upper(item.size || '—'))}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(upper(label))}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(item.certNo || '')}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(remark)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${esc(item.pcs)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${item.ct.toFixed(2)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${money(item.pct)}</td>
       <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${money(item.amount)}</td>
-    </tr>`).join('')
+    </tr>`
+  }).join('')
   const totalPcs = inv.items.reduce((sum, item) => sum + (Number(item.pcs) || 0), 0)
   const totalCt = inv.items.reduce((sum, item) => sum + (Number(item.ct) || 0), 0)
 
@@ -97,7 +105,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     * { box-sizing: border-box; }
   </style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;">
   <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
     <tr>
       <td style="vertical-align:top;text-align:left;">
@@ -155,6 +163,8 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
       <tr style="background:#f3f4f6;">
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;width:26px;">#</th>
         <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Description</th>
+        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Certificate No.</th>
+        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Remark</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Pcs</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Ct</th>
         <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">P/Ct</th>
@@ -164,7 +174,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     <tbody>${rows}</tbody>
     <tfoot>
       <tr style="border-top:2px solid #111827;font-weight:700;">
-        <td colspan="2" style="padding:5px 8px;">Total</td>
+        <td colspan="4" style="padding:5px 8px;">Total</td>
         <td style="padding:5px 8px;text-align:right;">${totalPcs}</td>
         <td style="padding:5px 8px;text-align:right;">${totalCt.toFixed(2)} ct</td>
         <td></td>
@@ -175,7 +185,14 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 
   <table style="width:100%;border-collapse:collapse;margin-top:12px;">
     <tr>
-      <td style="width:56%;vertical-align:top;font-size:10px;color:#374151;line-height:1.5;">
+      <td style="width:56%;"></td>
+      <td style="width:44%;vertical-align:top;text-align:right;font-size:10px;">
+        <div style="color:#374151;">Shipping: ${money(inv.shipping ?? 0)}</div>
+        <div style="margin-top:6px;font-size:15px;font-weight:700;">Total: ${money(inv.total)}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width:56%;vertical-align:top;font-size:10px;color:#374151;line-height:1.5;padding-top:8px;">
         <div style="font-weight:700;margin-bottom:3px;">Payment Instruction</div>
         <div>Account Name: ${esc(WIRE_ACCOUNT_NAME)}</div>
         <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
@@ -183,19 +200,18 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
         <div>Routing Number: <strong style="color:#111827;">${esc(WIRE_ROUTING_NUMBER)}</strong></div>
         <div>Zelle: <strong style="color:#111827;text-transform:lowercase;">${esc(WIRE_ZELLE)}</strong></div>
       </td>
-      <td style="width:44%;vertical-align:top;text-align:right;font-size:10px;">
-        <div style="color:#374151;">Total Pcs: ${totalPcs}</div>
-        <div style="margin-top:2px;color:#374151;">Total Ct: ${totalCt.toFixed(2)}</div>
-        <div style="margin-top:5px;color:#374151;">Subtotal: ${money(subtotal)}</div>
-        <div style="margin-top:2px;color:#374151;">Shipping: ${money(inv.shipping ?? 0)}</div>
-        <div style="margin-top:5px;font-size:15px;font-weight:700;">Total: ${money(inv.total)}</div>
+      <td style="width:44%;vertical-align:top;text-align:right;padding-top:8px;">
+        <img src="${ZELLE_QR}" alt="" style="width:92px;height:92px;" />
+        <div style="margin-top:4px;font-size:9px;color:#374151;text-transform:none;">Zelle QR</div>
       </td>
     </tr>
   </table>
 
   ${inv.notes ? `<div style="margin-top:10px;font-size:10px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}
 
-  <div style="margin-top:14px;border-top:1px solid #d1d5db;padding-top:10px;text-transform:none;">
+  <!-- Signature always sits at the very bottom of the page - the auto margin
+       eats any leftover space above it when the invoice is short. -->
+  <div style="margin-top:auto;padding-top:14px;border-top:1px solid #d1d5db;text-transform:none;">
     <div style="font-size:11px;color:#111827;margin-bottom:8px;">Signature: <span style="display:inline-block;border-bottom:1px solid #111827;width:260px;">&nbsp;</span></div>
     <div style="font-size:8px;line-height:1.4;color:#4b5563;">&ldquo;${esc(ATTACHMENT_TWO)}&rdquo;</div>
   </div>
@@ -219,6 +235,8 @@ export function buildBlankMemoHtml(rowCount = 22): string {
     <tr>
       <td style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;color:#6b7280;width:26px;">${i + 1}</td>
       <td style="padding:6px 8px;border:1px solid #d1d5db;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:88px;"></td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;width:72px;"></td>
       <td style="padding:6px 8px;border:1px solid #d1d5db;width:64px;"></td>
       <td style="padding:6px 8px;border:1px solid #d1d5db;width:64px;"></td>
       <td style="padding:6px 8px;border:1px solid #d1d5db;width:88px;"></td>
@@ -271,6 +289,8 @@ export function buildBlankMemoHtml(rowCount = 22): string {
       <tr style="background:#111827;color:#fff;">
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">#</th>
         <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Description</th>
+        <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Cert. No.</th>
+        <th style="text-align:left;padding:5px 8px;border:1px solid #111827;">Remark</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Pcs</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">Ct</th>
         <th style="text-align:right;padding:5px 8px;border:1px solid #111827;">P/Ct</th>
@@ -280,7 +300,7 @@ export function buildBlankMemoHtml(rowCount = 22): string {
     <tbody>${bodyRows}</tbody>
     <tfoot>
       <tr style="font-weight:700;">
-        <td colspan="2" style="padding:6px 8px;border:1px solid #111827;">Total</td>
+        <td colspan="4" style="padding:6px 8px;border:1px solid #111827;">Total</td>
         <td style="padding:6px 8px;border:1px solid #111827;"></td>
         <td style="padding:6px 8px;border:1px solid #111827;"></td>
         <td style="padding:6px 8px;border:1px solid #111827;"></td>

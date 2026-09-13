@@ -10,6 +10,7 @@ import type { Contact } from '../types/contact'
 import type { SavedInvoice, SavedInvoiceItem } from '../types/invoice'
 import { uid } from './utils'
 import { ensureSupabaseClient } from './supabase'
+import { itemDescriptionLabel } from './invoiceFormUtils'
 
 const IMPORT_INVOICE_PREFIX = 'imp-sales-'
 const IMPORT_PAYMENT_PREFIX = 'imp-sales-pay-'
@@ -262,7 +263,8 @@ function mapSalesItemLines(items: SavedInvoiceItem[]) {
   return items.map((it) => {
     const qty = it.pcs > 0 ? it.pcs : 1
     const unit = qty > 0 ? it.amount / qty : it.amount
-    const label = [it.size, it.pcs ? `${it.pcs} pcs` : '', it.ct ? `${it.ct} ct` : ''].filter(Boolean).join(' · ') || 'Line item'
+    const desc = itemDescriptionLabel(it) || it.size
+    const label = [desc, it.pcs ? `${it.pcs} pcs` : '', it.ct ? `${it.ct} ct` : ''].filter(Boolean).join(' · ') || 'Line item'
     return { label, quantity: qty, unit_price: unit, lineTotal: it.amount }
   })
 }

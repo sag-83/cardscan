@@ -7,6 +7,8 @@ import {
   buildSavedInvoice,
   buildSavedInvoiceUpdate,
   DIRECTION_OPTIONS,
+  GOLD_TYPE_OPTIONS,
+  JEWELRY_TYPE_OPTIONS,
   money,
   num,
   roundOffFromInvoice,
@@ -266,6 +268,28 @@ export function CreateInvoiceForm({
             >
               <div className="grid grid-cols-12 gap-2">
                 <select
+                  value={item.jewelryType}
+                  onChange={(e) => updateItem(item.id, { jewelryType: e.target.value })}
+                  className={cn(inputClass, 'col-span-6')}
+                >
+                  <option value="">Description</option>
+                  {JEWELRY_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <select
+                  value={item.goldType}
+                  onChange={(e) => updateItem(item.id, { goldType: e.target.value })}
+                  className={cn(inputClass, 'col-span-6')}
+                >
+                  <option value="">Description</option>
+                  {GOLD_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 grid grid-cols-12 gap-2">
+                <select
                   value={item.prefix}
                   onChange={(e) => updateItem(item.id, { prefix: e.target.value as InvoiceFormItem['prefix'] })}
                   className={cn(inputClass, 'col-span-3')}
@@ -289,6 +313,23 @@ export function CreateInvoiceForm({
                   inputMode="numeric"
                   className={cn(inputClass, 'col-span-3')}
                 />
+              </div>
+              <div className="mt-2 grid grid-cols-12 gap-2 items-center">
+                <input
+                  value={item.certNo}
+                  onChange={(e) => updateItem(item.id, { certNo: e.target.value })}
+                  placeholder="Certificate No."
+                  className={cn(inputClass, 'col-span-8')}
+                />
+                <label className="col-span-4 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={item.certGiven}
+                    onChange={(e) => updateItem(item.id, { certGiven: e.target.checked })}
+                    className="size-4 rounded border-slate-300 dark:border-slate-600"
+                  />
+                  Cert. given
+                </label>
               </div>
               <div className="mt-2 grid grid-cols-12 gap-2">
                 <input

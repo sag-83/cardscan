@@ -16,6 +16,7 @@ import { useStore } from '../../store/useStore'
 import { SavedInvoice, SavedInvoiceItem } from '../../types/invoice'
 import { deleteInvoiceSynced, saveInvoiceSynced } from '../../lib/invoiceSync'
 import { isInvoiceInCalendarMonth } from '../../lib/invoiceStats'
+import { itemDescriptionLabel } from '../../lib/invoiceFormUtils'
 import { uid } from '../../lib/utils'
 import { normalizeStateValue } from '../../lib/usStates'
 
@@ -42,7 +43,8 @@ function sumItems(items: SavedInvoiceItem[]): number {
 }
 
 function itemLabel(it: SavedInvoiceItem): string {
-  const parts = [it.size, it.pcs ? `${it.pcs} pcs` : '', it.ct ? `${it.ct} ct` : ''].filter(Boolean)
+  const desc = itemDescriptionLabel(it) || it.size
+  const parts = [desc, it.pcs ? `${it.pcs} pcs` : '', it.ct ? `${it.ct} ct` : ''].filter(Boolean)
   return parts.join(' · ') || 'Line item'
 }
 

@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceSynced } from '../../lib/invoiceSync'
-import { money } from '../../lib/invoiceFormUtils'
+import { itemDescriptionLabel, money } from '../../lib/invoiceFormUtils'
 import { printSavedInvoice, ATTACHMENT_ONE, ATTACHMENT_TWO } from '../../lib/invoicePrint'
 import { dueDateLabel, termsLabel } from '../../lib/invoiceTerms'
 import { syncFollowupReminders } from '../../lib/reminderNotifications'
@@ -11,6 +11,7 @@ import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
 
 const COMPANY_LOGO = '/ak-monogram.png'
+const ZELLE_QR = '/zelle-qr.png'
 const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
 const COMPANY_PHONE = '8622359224'
 const COMPANY_EMAIL = 'info@akgemsinc.com'
@@ -202,6 +203,8 @@ export function InvoiceModal() {
                   <tr>
                     <th style={thStyleRight}>#</th>
                     <th style={thStyle}>Description</th>
+                    <th style={thStyle}>Cert. No.</th>
+                    <th style={thStyle}>Remark</th>
                     <th style={thStyleRight}>Pcs</th>
                     <th style={thStyleRight}>Ct</th>
                     <th style={thStyleRight}>P/Ct</th>
@@ -212,7 +215,9 @@ export function InvoiceModal() {
                   {draft.items.map((item, idx) => (
                     <tr key={idx}>
                       <td style={tdStyleRight}>{idx + 1}</td>
-                      <td style={tdStyle}>{upper(item.size || '-')}</td>
+                      <td style={tdStyle}>{upper(itemDescriptionLabel(item) || '-')}</td>
+                      <td style={tdStyle}>{item.certNo || ''}</td>
+                      <td style={tdStyle}>{item.certGiven ? 'Certificate Given' : ''}</td>
                       <td style={tdStyleRight}>{item.pcs || 0}</td>
                       <td style={tdStyleRight}>{item.ct.toFixed(2)}</td>
                       <td style={tdStyleRight}>{money(item.pct)}</td>
@@ -222,7 +227,7 @@ export function InvoiceModal() {
                 </tbody>
                 <tfoot>
                   <tr style={{ fontWeight: 800, borderTop: '2px solid #111827' }}>
-                    <td style={tdStyleRight} colSpan={2}>Total</td>
+                    <td style={tdStyleRight} colSpan={4}>Total</td>
                     <td style={tdStyleRight}>{draft.items.reduce((s, it) => s + (Number(it.pcs) || 0), 0)}</td>
                     <td style={tdStyleRight}>{draft.items.reduce((s, it) => s + (Number(it.ct) || 0), 0).toFixed(2)} ct</td>
                     <td style={tdStyleRight} />
@@ -230,7 +235,11 @@ export function InvoiceModal() {
                   </tr>
                 </tfoot>
               </table>
-              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ marginTop: 16, textAlign: 'right', fontSize: 12, color: '#374151' }}>
+                <div>Shipping: {money(draft.shipping ?? 0)}</div>
+                <div style={{ marginTop: 6, fontWeight: 800, fontSize: 14, color: '#111827' }}>Total: {money(draft.total)}</div>
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                 <div style={{ fontSize: 10.5, color: '#374151', lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700 }}>Payment Instruction</div>
                   <div>Account Name: {WIRE_ACCOUNT_NAME}</div>
@@ -239,12 +248,9 @@ export function InvoiceModal() {
                   <div>Routing Number: <strong style={{ color: '#111827' }}>{WIRE_ROUTING_NUMBER}</strong></div>
                   <div>Zelle: <strong style={{ color: '#111827', textTransform: 'lowercase' }}>{WIRE_ZELLE}</strong></div>
                 </div>
-                <div style={{ textAlign: 'right', fontSize: 12, color: '#374151', flexShrink: 0 }}>
-                  <div>Total Pcs: {draft.items.reduce((s, it) => s + (Number(it.pcs) || 0), 0)}</div>
-                  <div style={{ marginTop: 2 }}>Total Ct: {draft.items.reduce((s, it) => s + (Number(it.ct) || 0), 0).toFixed(2)}</div>
-                  <div style={{ marginTop: 6 }}>Subtotal: {money(draft.items.reduce((sum, item) => sum + item.amount, 0))}</div>
-                  <div style={{ marginTop: 2 }}>Shipping: {money(draft.shipping ?? 0)}</div>
-                  <div style={{ marginTop: 6, fontWeight: 800, fontSize: 14, color: '#111827' }}>Total: {money(draft.total)}</div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <img src={ZELLE_QR} alt="" style={{ width: 72, height: 72 }} />
+                  <div style={{ marginTop: 4, fontSize: 9, color: '#374151', textTransform: 'none' }}>Zelle QR</div>
                 </div>
               </div>
               {draft.notes && <div style={{ marginTop: 10, fontSize: 12, whiteSpace: 'pre-wrap' }}>{upper(draft.notes)}</div>}

@@ -34,6 +34,7 @@ import {
 } from './geoMath'
 import { fetchDrivingMatrix } from './osrm'
 import { ORIGIN_INDEX, planRoute, type CostMatrix } from './routeOptimizer'
+import { isStateOutOfRange } from './stateBounds'
 
 export type TripPriority = 'none' | 'customers' | 'top-rated'
 
@@ -132,6 +133,10 @@ export class TripPlanError extends Error {
 const SHORTLIST_MULTIPLIER = 3
 const MIN_SHORTLIST = 24
 const MAX_SHORTLIST = 45
+
+// Slack on the coarse city-centroid filter. A town can be wide enough that its
+// centre falls outside the radius while its near edge doesn't.
+const COARSE_RADIUS_BUFFER_MILES = 15
 
 function throwIfCancelled(signal?: AbortSignal) {
   if (signal?.aborted) throw new TripCancelledError()
@@ -258,8 +263,23 @@ export async function planTrip(
     throw new TripPlanError('None of these contacts have an address saved.')
   }
 
+  // ─── Free pass: drop states that can't reach the radius, before any lookup ─
+  // Without this, a library spread over thirty states would geocode every one
+  // of its cities just to learn that most are a thousand miles away.
+  const nearby = addressable.filter((contact) => {
+    if (!isStateOutOfRange(contact.state ?? '', origin.point, options.radiusMiles)) return true
+    skipped.outOfRadius++
+    return false
+  })
+
+  if (nearby.length === 0) {
+    throw new TripPlanError(
+      `No contacts within ${Math.round(options.radiusMiles)} miles of ${origin.label}. Try a wider radius.`,
+    )
+  }
+
   // ─── Coarse pass: one lookup per city, then drop anything out of range ────
-  const groups = groupByCoarseLocation(addressable)
+  const groups = groupByCoarseLocation(nearby)
   const pending = [...groups.values()].filter(
     (group) => !(group.kind === 'city' && getCachedCityCoords(group.city, group.state)),
   )
@@ -292,7 +312,10 @@ export async function planTrip(
       continue
     }
     const coarseMiles = distanceBetween(origin.point, point)
-    if (coarseMiles > options.radiusMiles) {
+    // A city centroid can sit outside the radius while a shop on the near edge
+    // of town sits inside it, so this cut is deliberately loose. The real check
+    // happens below, once street coordinates are known.
+    if (coarseMiles > options.radiusMiles + COARSE_RADIUS_BUFFER_MILES) {
       skipped.outOfRadius += group.contacts.length
       continue
     }
@@ -316,7 +339,7 @@ export async function planTrip(
 
   const located: LocatedContact[] = []
   let locatedCount = 0
-  let unresolvedInShortlist = 0
+  let droppedFromShortlist = 0
   for (const { contact } of shortlist) {
     throwIfCancelled(signal)
     onProgress?.({
@@ -325,14 +348,24 @@ export async function planTrip(
       total: shortlist.length,
       label: contact.company || contact.name || 'Contact',
     })
-    const resolved = await geocodeContactLocation(contact)
-    if (resolved) {
-      located.push({ contact, point: resolved.point, approximate: resolved.approximate })
-    } else {
-      skipped.unresolved++
-      unresolvedInShortlist++
-    }
     locatedCount++
+
+    const resolved = await geocodeContactLocation(contact)
+    if (!resolved) {
+      skipped.unresolved++
+      droppedFromShortlist++
+      continue
+    }
+
+    // Now that the real position is known, enforce the radius the user asked
+    // for. The coarse pass intentionally let near-misses through.
+    if (distanceBetween(origin.point, resolved.point) > options.radiusMiles) {
+      skipped.outOfRadius++
+      droppedFromShortlist++
+      continue
+    }
+
+    located.push({ contact, point: resolved.point, approximate: resolved.approximate })
   }
 
   if (located.length === 0) {
@@ -342,9 +375,20 @@ export async function planTrip(
   throwIfCancelled(signal)
   onProgress?.({ phase: 'routing', done: 0, total: 1, label: 'Working out the order' })
 
-  // ─── Select the stops, using straight-line estimates ──────────────────────
-  const estimatePoints = [origin.point, ...located.map((entry) => entry.point)]
-  const estimates = buildEstimateMatrices(estimatePoints)
+  // ─── Cost the whole shortlist once, on real roads where possible ──────────
+  // Asking OSRM for the full shortlist rather than just the chosen stops costs
+  // the same single request, and it means the *selection* is made on driving
+  // time too. Straight-line distance would happily pick a shop three miles
+  // away across a river over one eight miles away down a highway.
+  const points = [origin.point, ...located.map((entry) => entry.point)]
+  const road = await fetchDrivingMatrix(points, signal)
+  throwIfCancelled(signal)
+
+  const fallback = buildEstimateMatrices(points)
+  const minutesMatrix = road
+    ? road.durations.map((row) => row.map((seconds) => seconds / 60))
+    : fallback.minutes
+  const milesMatrix = road ? road.miles : fallback.miles
 
   const weights = new Map<number, number>()
   const tieBreak = new Map<number, number>()
@@ -354,7 +398,7 @@ export async function planTrip(
     tieBreak.set(index + 1, tieBreakRank(entry.contact))
   })
 
-  const selection = planRoute(estimates.minutes, {
+  const route = planRoute(minutesMatrix, {
     candidates: located.map((_, index) => index + 1),
     limit: options.maxStops,
     roundTrip: options.roundTrip,
@@ -362,44 +406,23 @@ export async function planTrip(
     tieBreak,
   })
 
-  const selected = selection.order
-    .slice(1)
-    .map((matrixIndex) => located[matrixIndex - 1])
-
-  skipped.overCap = Math.max(0, inRange.length - selected.length - unresolvedInShortlist)
-
-  // ─── Re-order the chosen stops on real driving times when available ───────
-  const routePoints = [origin.point, ...selected.map((entry) => entry.point)]
-  const road = await fetchDrivingMatrix(routePoints, signal)
-  throwIfCancelled(signal)
-
-  const fallback = buildEstimateMatrices(routePoints)
-  const minutesMatrix = road
-    ? road.durations.map((row) => row.map((seconds) => seconds / 60))
-    : fallback.minutes
-  const milesMatrix = road ? road.miles : fallback.miles
-
-  const finalRoute = planRoute(minutesMatrix, {
-    candidates: selected.map((_, index) => index + 1),
-    limit: selected.length,
-    roundTrip: options.roundTrip,
-  })
+  skipped.overCap = Math.max(0, inRange.length - (route.order.length - 1) - droppedFromShortlist)
 
   // ─── Assemble the plan ────────────────────────────────────────────────────
   const stops: TripStop[] = []
   let cumulativeMiles = 0
   let driveMinutes = 0
 
-  for (let step = 1; step < finalRoute.order.length; step++) {
-    const from = finalRoute.order[step - 1]
-    const to = finalRoute.order[step]
+  for (let step = 1; step < route.order.length; step++) {
+    const from = route.order[step - 1]
+    const to = route.order[step]
     const legMinutes = minutesMatrix[from][to]
     const legMiles = milesMatrix[from][to]
 
     driveMinutes += legMinutes
     cumulativeMiles += legMiles
 
-    const entry = selected[to - 1]
+    const entry = located[to - 1]
     stops.push({
       contact: entry.contact,
       point: entry.point,
@@ -414,7 +437,7 @@ export async function planTrip(
   let returnMiles = 0
   let returnMinutes = 0
   if (options.roundTrip && stops.length > 0) {
-    const last = finalRoute.order[finalRoute.order.length - 1]
+    const last = route.order[route.order.length - 1]
     returnMinutes = minutesMatrix[last][ORIGIN_INDEX]
     returnMiles = milesMatrix[last][ORIGIN_INDEX]
     driveMinutes += returnMinutes

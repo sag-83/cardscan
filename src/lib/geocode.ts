@@ -7,17 +7,21 @@ export { haversineDistance }
 export type { GeoPoint }
 
 const CITY_CACHE_KEY = 'cs_geo_v1'
-const ADDRESS_CACHE_KEY = 'cs_geo_addr_v1'
+// v2 stores whether the hit was street-level; v1 entries couldn't say.
+const ADDRESS_CACHE_KEY = 'cs_geo_addr_v2'
 
-function loadCache(key: string): Map<string, GeoPoint> {
+/** A cached address keeps the precision flag alongside the coordinates. */
+type CachedPoint = GeoPoint & { exact?: boolean }
+
+function loadCache(key: string): Map<string, CachedPoint> {
   try {
     const raw = localStorage.getItem(key)
-    if (raw) return new Map(JSON.parse(raw) as [string, GeoPoint][])
+    if (raw) return new Map(JSON.parse(raw) as [string, CachedPoint][])
   } catch {}
   return new Map()
 }
 
-function saveCache(key: string, cache: Map<string, GeoPoint>) {
+function saveCache(key: string, cache: Map<string, CachedPoint>) {
   try { localStorage.setItem(key, JSON.stringify([...cache.entries()])) } catch {}
 }
 
@@ -52,7 +56,20 @@ function schedule<T>(task: () => Promise<T>): Promise<T> {
 
 const NOMINATIM_TIMEOUT_MS = 12_000
 
-async function nominatimLookup(params: Record<string, string>): Promise<GeoPoint | null> {
+interface NominatimHit {
+  point: GeoPoint
+  /**
+   * Nominatim's specificity score for the match. Roads sit at 26 and buildings
+   * at 30, while a town centroid is around 16 — so the rank is what tells us
+   * whether a lookup really found the storefront or just fell back to the city.
+   */
+  placeRank: number
+}
+
+/** Below this, a result is a neighbourhood or town rather than an address. */
+const STREET_LEVEL_RANK = 26
+
+async function nominatimLookup(params: Record<string, string>): Promise<NominatimHit | null> {
   return schedule(async () => {
     const query = new URLSearchParams({ format: 'json', limit: '1', ...params })
     const controller = new AbortController()
@@ -63,12 +80,12 @@ async function nominatimLookup(params: Record<string, string>): Promise<GeoPoint
         signal: controller.signal,
       })
       if (!res.ok) return null
-      const data = await res.json() as { lat: string; lon: string }[]
+      const data = await res.json() as { lat: string; lon: string; place_rank?: number }[]
       if (!data[0]) return null
       const lat = parseFloat(data[0].lat)
       const lng = parseFloat(data[0].lon)
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-      return { lat, lng }
+      return { point: { lat, lng }, placeRank: data[0].place_rank ?? 0 }
     } catch {
       return null
     } finally {
@@ -86,13 +103,13 @@ function cityKey(city: string, state: string): string {
 async function geocodeCity(city: string, state: string): Promise<GeoPoint | null> {
   const key = cityKey(city, state)
   if (cityCache.has(key)) return cityCache.get(key)!
-  const point = await nominatimLookup({
+  const hit = await nominatimLookup({
     q: [city, state, 'USA'].filter(Boolean).join(', '),
   })
-  if (!point) return null
-  cityCache.set(key, point)
+  if (!hit) return null
+  cityCache.set(key, hit.point)
   saveCache(CITY_CACHE_KEY, cityCache)
-  return point
+  return hit.point
 }
 
 /** City/state centroid, served from cache when it's already been looked up. */
@@ -115,41 +132,93 @@ function addressKey(street: string, city: string, state: string, zip: string): s
     .join('|')
 }
 
+// Nominatim's `street` parameter expects a house number and road name only.
+// Business cards almost always carry a suite or unit as well ("333 Washington
+// St. Suite 215"), and that extra text makes the lookup return nothing at all
+// rather than the building — which silently demotes the stop to a city
+// centroid. Geocoders can't resolve past the building anyway, so the unit is
+// dropped before the request and kept only for display.
+const UNIT_KEYWORDS = 'ste|suite|unit|apt|apartment|rm|room|fl|flr|floor|bldg|building|dept|space|spc|lot|trlr|trailer'
+const TRAILING_UNIT = new RegExp(String.raw`[\s,;]+(?:${UNIT_KEYWORDS})\b\.?\s*#?\s*[\w\-/]*$`, 'i')
+const TRAILING_ORDINAL_FLOOR = /[\s,;]+\d+(?:st|nd|rd|th)\s+(?:floor|fl|flr)\b\.?$/i
+const TRAILING_HASH_UNIT = /[\s,;]*#\s*[\w\-/]+$/
+const PO_BOX = /^\s*p\.?\s*o\.?\s*box\b/i
+
+export function streetWithoutUnit(street: string): string {
+  let cleaned = street.trim()
+
+  // Cards sometimes stack two ("Suite 400, 3rd Floor"), so strip repeatedly.
+  for (let pass = 0; pass < 3; pass++) {
+    const next = cleaned
+      .replace(TRAILING_ORDINAL_FLOOR, '')
+      .replace(TRAILING_UNIT, '')
+      .replace(TRAILING_HASH_UNIT, '')
+      .replace(/[\s,;]+$/, '')
+    if (next === cleaned) break
+    cleaned = next
+  }
+
+  return cleaned.trim()
+}
+
+interface AddressHit {
+  point: GeoPoint
+  /** False when the lookup only landed on a town rather than the address. */
+  exact: boolean
+}
+
 async function geocodeStreetAddress(
   street: string,
   city: string,
   state: string,
   zip: string,
-): Promise<GeoPoint | null> {
+): Promise<AddressHit | null> {
   const key = addressKey(street, city, state, zip)
-  if (addressCache.has(key)) return addressCache.get(key)!
+  const cached = addressCache.get(key)
+  if (cached) return { point: cached, exact: cached.exact !== false }
   if (addressMisses.has(key)) return null
 
-  // Structured parameters beat a single q= string here: scanned cards carry
-  // suite numbers and inconsistent punctuation that confuse freeform parsing.
-  const params: Record<string, string> = { street, country: 'USA' }
+  const streetLine = streetWithoutUnit(street)
+  if (!streetLine || PO_BOX.test(street)) return null
+
+  const params: Record<string, string> = { street: streetLine, country: 'USA' }
   if (city) params.city = city
   if (state) params.state = state
   if (zip) params.postalcode = zip
 
-  const point = await nominatimLookup(params)
-  if (!point) {
+  let hit = await nominatimLookup(params)
+
+  // Structured matching is strict about spelling and abbreviations, so a
+  // freeform pass rescues the messier reads that OCR produces.
+  if (!hit || hit.placeRank < STREET_LEVEL_RANK) {
+    const freeform = await nominatimLookup({
+      q: [streetLine, city, [state, zip].filter(Boolean).join(' '), 'USA'].filter(Boolean).join(', '),
+    })
+    if (freeform && (!hit || freeform.placeRank > hit.placeRank)) hit = freeform
+  }
+
+  if (!hit) {
     addressMisses.add(key)
     return null
   }
-  addressCache.set(key, point)
+
+  // A low rank means the geocoder gave up and returned the town. That's still
+  // useful for ordering, but the caller needs to know it isn't the storefront.
+  const exact = hit.placeRank >= STREET_LEVEL_RANK
+  addressCache.set(key, { ...hit.point, exact })
   saveCache(ADDRESS_CACHE_KEY, addressCache)
-  return point
+  return { point: hit.point, exact }
 }
 
 export async function geocodePostalCode(zip: string): Promise<GeoPoint | null> {
   const key = addressKey('', '', '', zip)
-  if (addressCache.has(key)) return addressCache.get(key)!
-  const point = await nominatimLookup({ postalcode: zip, country: 'USA' })
-  if (!point) return null
-  addressCache.set(key, point)
+  const cached = addressCache.get(key)
+  if (cached) return cached
+  const hit = await nominatimLookup({ postalcode: zip, country: 'USA' })
+  if (!hit) return null
+  addressCache.set(key, { ...hit.point, exact: false })
   saveCache(ADDRESS_CACHE_KEY, addressCache)
-  return point
+  return hit.point
 }
 
 export interface ResolvedLocation {
@@ -170,8 +239,8 @@ export async function geocodeContactLocation(contact: Contact): Promise<Resolved
   const zip = (contact.zip ?? '').trim()
 
   if (street && (city || zip)) {
-    const exact = await geocodeStreetAddress(street, city, state, zip)
-    if (exact) return { point: exact, approximate: false }
+    const hit = await geocodeStreetAddress(street, city, state, zip)
+    if (hit) return { point: hit.point, approximate: !hit.exact }
   }
 
   if (zip) {
@@ -192,13 +261,14 @@ export async function geocodePlace(text: string): Promise<GeoPoint | null> {
   const query = text.trim()
   if (!query) return null
   const key = addressKey(query, '', '', '')
-  if (addressCache.has(key)) return addressCache.get(key)!
+  const cached = addressCache.get(key)
+  if (cached) return cached
 
-  const point = await nominatimLookup({ q: query, countrycodes: 'us' })
-  if (!point) return null
-  addressCache.set(key, point)
+  const hit = await nominatimLookup({ q: query, countrycodes: 'us' })
+  if (!hit) return null
+  addressCache.set(key, { ...hit.point, exact: hit.placeRank >= STREET_LEVEL_RANK })
   saveCache(ADDRESS_CACHE_KEY, addressCache)
-  return point
+  return hit.point
 }
 
 // ─── Device location ────────────────────────────────────────────────────────

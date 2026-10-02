@@ -145,6 +145,21 @@ function hasAnyLocation(contact: Contact): boolean {
   )
 }
 
+/**
+ * Ranks a contact for breaking ties between stops that cost the same to visit.
+ * A whole building of tenants shares one coordinate, so without this the cap
+ * would just take whoever sorted first alphabetically. Known customers come
+ * first, then star rating, then anyone already shown goods.
+ */
+function tieBreakRank(contact: Contact): number {
+  let rank = 0
+  if (contact.is_customer) rank += 100
+  else if (contact.is_old_customer) rank += 50
+  rank += Math.max(0, Math.min(4, contact.stars)) * 5
+  if (contact.visited) rank += 1
+  return rank
+}
+
 function priorityWeight(contact: Contact, priority: TripPriority): number {
   if (priority === 'customers') {
     if (contact.is_customer) return 0.65
@@ -332,9 +347,11 @@ export async function planTrip(
   const estimates = buildEstimateMatrices(estimatePoints)
 
   const weights = new Map<number, number>()
+  const tieBreak = new Map<number, number>()
   located.forEach((entry, index) => {
     const weight = priorityWeight(entry.contact, options.priority)
     if (weight !== 1) weights.set(index + 1, weight)
+    tieBreak.set(index + 1, tieBreakRank(entry.contact))
   })
 
   const selection = planRoute(estimates.minutes, {
@@ -342,6 +359,7 @@ export async function planTrip(
     limit: options.maxStops,
     roundTrip: options.roundTrip,
     weights,
+    tieBreak,
   })
 
   const selected = selection.order

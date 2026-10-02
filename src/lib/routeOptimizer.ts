@@ -62,6 +62,13 @@ export interface BuildTourOptions {
    * always optimised on true cost afterwards, so this only affects selection.
    */
   weights?: Map<number, number>
+  /**
+   * Decides between candidates whose insertion cost is effectively identical;
+   * higher wins. Dense districts produce a lot of these ties — several shops
+   * in one building share a coordinate exactly — and without a preference the
+   * cap would fall back to whatever order the candidates arrived in.
+   */
+  tieBreak?: Map<number, number>
 }
 
 /**
@@ -71,7 +78,7 @@ export interface BuildTourOptions {
  * than picking the N closest stops scattered in every direction.
  */
 export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number[] {
-  const { candidates, limit, roundTrip, weights } = options
+  const { candidates, limit, roundTrip, weights, tieBreak } = options
   const order = [ORIGIN_INDEX]
   const remaining = new Set(candidates)
   const cap = Math.min(limit, candidates.length)
@@ -79,16 +86,21 @@ export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number
   while (order.length - 1 < cap && remaining.size > 0) {
     const baseCost = tourCost(order, matrix, roundTrip)
     let bestScore = Infinity
+    let bestRank = -Infinity
     let bestCandidate = -1
     let bestPosition = 1
 
     for (const candidate of remaining) {
       const weight = weights?.get(candidate) ?? 1
+      const rank = tieBreak?.get(candidate) ?? 0
       for (let position = 1; position <= order.length; position++) {
         const trial = [...order.slice(0, position), candidate, ...order.slice(position)]
         const score = (tourCost(trial, matrix, roundTrip) - baseCost) * weight
-        if (score < bestScore - EPSILON) {
+        const cheaper = score < bestScore - EPSILON
+        const tiedButPreferred = Math.abs(score - bestScore) <= EPSILON && rank > bestRank
+        if (cheaper || tiedButPreferred) {
           bestScore = score
+          bestRank = rank
           bestCandidate = candidate
           bestPosition = position
         }

@@ -1,4 +1,4 @@
-import { Camera, LineChart, Send, Settings, Users } from 'lucide-react'
+import { Camera, LineChart, Route, Send, Settings, Users } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { Screen } from '../types/contact'
 
@@ -11,6 +11,7 @@ export interface NavTab {
 export const NAV_TABS: NavTab[] = [
   { id: 'scan', label: 'Scan', Icon: Camera },
   { id: 'contacts', label: 'Contacts', Icon: Users },
+  { id: 'trips', label: 'Trips', Icon: Route },
   { id: 'dashboard', label: 'Stats', Icon: LineChart },
   { id: 'bulk', label: 'Bulk', Icon: Send },
   { id: 'settings', label: 'Settings', Icon: Settings },

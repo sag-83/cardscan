@@ -25,6 +25,7 @@ import { InvoiceModal } from './components/modals/InvoiceModal'
 
 import { ScanScreen } from './components/screens/ScanScreen'
 import { ContactsScreen } from './components/screens/ContactsScreen'
+import { TripScreen } from './components/screens/TripScreen'
 import { DashboardScreen } from './components/screens/DashboardScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
 import { SettingsScreen } from './components/screens/SettingsScreen'
@@ -267,6 +268,9 @@ export default function App() {
           </div>
           <div style={{ display: activeScreen === 'contacts' ? 'block' : 'none' }}>
             <ContactsScreen />
+          </div>
+          <div style={{ display: activeScreen === 'trips' ? 'block' : 'none' }}>
+            <TripScreen />
           </div>
           <div style={{ display: activeScreen === 'dashboard' ? 'block' : 'none' }}>
             <DashboardScreen />

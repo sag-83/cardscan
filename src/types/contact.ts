@@ -54,4 +54,4 @@ export interface Contact {
   updated_at?: string
 }
 
-export type Screen = 'scan' | 'contacts' | 'dashboard' | 'bulk' | 'settings'
+export type Screen = 'scan' | 'contacts' | 'trips' | 'dashboard' | 'bulk' | 'settings'

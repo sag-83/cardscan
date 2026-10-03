@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { KeyRound, ScanFace, Shield } from 'lucide-react'
+import { KeyRound, RotateCcw, ScanFace, Shield } from 'lucide-react'
 import {
   isAppLoginRequired,
   isAppPasswordRequired,
@@ -10,7 +10,7 @@ import {
 } from '../lib/appAuth'
 import { isAuthenticatorEnabled, setAuthenticatorEnabled } from '../lib/authenticatorPreference'
 import { applyDocumentTheme } from '../lib/theme'
-import { hasPlatformCredential } from '../lib/webAuthnPlatform'
+import { clearPlatformCredential, hasPlatformCredential, platformAuthLabel } from '../lib/webAuthnPlatform'
 import { Waves } from './Waves'
 import './AppLoginGate.css'
 
@@ -22,6 +22,7 @@ export function AppLoginGate({ onUnlock }: Props) {
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [authMode, setAuthMode] = useState<'authenticator' | 'pin'>(() =>
     isAuthenticatorEnabled() ? 'authenticator' : 'pin',
@@ -30,7 +31,16 @@ export function AppLoginGate({ onUnlock }: Props) {
   const usesTotp = usesAuthenticatorForAppLogin()
   const usesPin = isAppPinRequired()
   const showAuthToggle = !usesPassword
-  const faceReady = hasPlatformCredential('app')
+  const [faceReady, setFaceReady] = useState(() => hasPlatformCredential('app'))
+  const biometricLabel = platformAuthLabel()
+  const isApplePlatform = biometricLabel === 'Face ID' || biometricLabel === 'Touch ID'
+
+  const resetBiometric = () => {
+    clearPlatformCredential('app')
+    setFaceReady(false)
+    setError('')
+    setNotice(`${biometricLabel} setup cleared. Sign in again to enrol this device fresh.`)
+  }
 
   const switchAuthMode = (mode: 'authenticator' | 'pin') => {
     if (mode === authMode) return
@@ -41,6 +51,7 @@ export function AppLoginGate({ onUnlock }: Props) {
     setAuthenticatorEnabled(mode === 'authenticator')
     setAuthMode(mode)
     setError('')
+    setNotice('')
     setPassword('')
     setTotpCode('')
   }
@@ -58,6 +69,7 @@ export function AppLoginGate({ onUnlock }: Props) {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+    setNotice('')
 
     if (usesPassword && !password.trim()) {
       setError('Enter your access password.')
@@ -99,10 +111,10 @@ export function AppLoginGate({ onUnlock }: Props) {
           <h1 className="login-gate__title">Secure sign-in</h1>
           <p className="login-gate__subtitle">
             {usesTotp
-              ? 'Enter your Microsoft Authenticator code, then verify with Face ID on this device.'
+              ? `Enter your Microsoft Authenticator code, then verify with ${biometricLabel} on this device.`
               : usesPin
-                ? 'Enter your PIN, then verify with Face ID on this device.'
-                : 'Enter your access credentials, then verify with Face ID on this device.'}
+                ? `Enter your PIN, then verify with ${biometricLabel} on this device.`
+                : `Enter your access credentials, then verify with ${biometricLabel} on this device.`}
           </p>
         </div>
 
@@ -195,14 +207,28 @@ export function AppLoginGate({ onUnlock }: Props) {
         )}
 
         {error && <p className="login-gate__error" role="alert">{error}</p>}
+        {notice && <p className="login-gate__notice" role="status">{notice}</p>}
 
         <button type="submit" className="login-gate__submit" disabled={loading}>
           <ScanFace size={20} strokeWidth={2} aria-hidden />
-          {loading ? 'Verifying…' : faceReady ? 'Continue with Face ID' : 'Set up Face ID'}
+          {loading
+            ? 'Verifying…'
+            : faceReady ? `Continue with ${biometricLabel}` : `Set up ${biometricLabel}`}
         </button>
 
+        {faceReady && (
+          <button type="button" className="login-gate__reset" onClick={resetBiometric} disabled={loading}>
+            <RotateCcw size={13} strokeWidth={2} aria-hidden />
+            {biometricLabel} not recognised? Re-enrol this device
+          </button>
+        )}
+
         <p className="login-gate__footer">
-          For Face ID, open from your iPhone home screen shortcut (not the Safari tab).
+          {isApplePlatform
+            ? 'For Face ID, open from your iPhone home screen shortcut (not the Safari tab).'
+            : biometricLabel === 'Windows Hello'
+              ? 'Enrol a fingerprint first in Windows Settings → Accounts → Sign-in options.'
+              : `${biometricLabel} must be set up in your device settings first.`}
         </p>
       </form>
     </div>

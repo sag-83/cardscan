@@ -44,6 +44,40 @@ export function hasPlatformCredential(scope: WebAuthnScope): boolean {
   }
 }
 
+/**
+ * Forgets the saved credential so the next sign-in registers a fresh one.
+ *
+ * Needed because we only hold the credential *id*; the key itself lives with
+ * the operating system. Anything that wipes those keys — resetting a Windows
+ * Hello PIN, enrolling a new fingerprint set, clearing browser passkeys —
+ * leaves us pointing at a credential the device no longer has, and every
+ * verification then fails no matter how good the fingerprint read is.
+ *
+ * Safe to expose: the PIN or authenticator code is still required, and
+ * registering again demands a successful device unlock.
+ */
+export function clearPlatformCredential(scope: WebAuthnScope): void {
+  try {
+    localStorage.removeItem(CREDENTIAL_KEYS[scope])
+  } catch {
+    /* ignore */
+  }
+}
+
+/** What this device actually calls its biometric unlock, for use in copy. */
+export function platformAuthLabel(): string {
+  if (typeof navigator === 'undefined') return 'device unlock'
+  const ua = navigator.userAgent
+  // iPadOS reports itself as a Mac, so touch support disambiguates.
+  if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    return 'Face ID'
+  }
+  if (/Windows/.test(ua)) return 'Windows Hello'
+  if (/Macintosh|Mac OS X/.test(ua)) return 'Touch ID'
+  if (/Android/.test(ua)) return 'fingerprint unlock'
+  return 'device unlock'
+}
+
 export async function registerPlatformCredential(
   scope: WebAuthnScope,
   displayName: string,

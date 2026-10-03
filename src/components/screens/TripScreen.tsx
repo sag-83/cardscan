@@ -109,7 +109,6 @@ export function TripScreen() {
     if (filterState && normalizeStateValue(c.state) !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
     if (filterType === 'customer' && !c.is_customer) return false
-    if (filterType === 'old_customer' && !c.is_old_customer) return false
     if (filterType === 'goods_shown' && !c.visited) return false
     if (filterType === 'not_visited' && c.visited) return false
     if (minStars > 0 && c.stars < minStars) return false
@@ -281,7 +280,6 @@ export function TripScreen() {
                 >
                   <option value="">Everyone</option>
                   <option value="customer">Customers only</option>
-                  <option value="old_customer">Old customers only</option>
                   <option value="goods_shown">Goods shown</option>
                   <option value="not_visited">Not visited yet</option>
                 </select>

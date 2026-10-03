@@ -187,6 +187,14 @@
   line-height: 1.4;
 }
 
+.login-gate__notice {
+  color: #7ddc9a;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
 .login-gate__submit {
   width: 100%;
   border: none;
@@ -213,6 +221,34 @@
 .login-gate__submit:disabled {
   opacity: 0.65;
   cursor: wait;
+}
+
+.login-gate__reset {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(235, 235, 245, 0.62);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.login-gate__reset:hover:not(:disabled) {
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.login-gate__reset:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .login-gate__footer {

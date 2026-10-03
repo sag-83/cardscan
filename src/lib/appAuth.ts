@@ -1,5 +1,5 @@
 import { isAuthenticatorEnabled } from './authenticatorPreference'
-import { isPlatformAuthenticatorAvailable, ensurePlatformAuth } from './webAuthnPlatform'
+import { isPlatformAuthenticatorAvailable, ensurePlatformAuth, platformAuthLabel } from './webAuthnPlatform'
 import { isTotpRequired, verifyTotp } from './totp'
 
 const APP_PASSWORD = ((import.meta.env.VITE_APP_PASSWORD as string) ?? '').trim()
@@ -100,7 +100,7 @@ export async function unlockApp(
       markAppSessionUnlocked()
       return { ok: true }
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Face ID verification failed.'
+      const message = e instanceof Error ? e.message : `${platformAuthLabel()} verification failed.`
       return { ok: false, message }
     }
   }

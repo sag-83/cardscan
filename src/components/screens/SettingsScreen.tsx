@@ -63,6 +63,7 @@ import {
 import { getLocationBlockedHelp, isStandalonePwa } from '../../lib/pwa'
 import { canToggleAuthenticator, isAppPinConfigured } from '../../lib/appAuth'
 import { isAuthenticatorEnabled, setAuthenticatorEnabled } from '../../lib/authenticatorPreference'
+import { platformAuthLabel } from '../../lib/webAuthnPlatform'
 import { isTotpRequired } from '../../lib/totp'
 
 const NORMALIZE_BACKUP_KEY = 'cs_normalize_backup_v1'
@@ -815,8 +816,8 @@ function AuthenticatorTogglePanel({ showToast }: { showToast: (msg: string, dura
   const revenueAlsoUsesPin = isTotpRequired('revenue')
 
   const statusLine = enabled
-    ? 'Sign-in uses Microsoft Authenticator + Face ID'
-    : 'Sign-in uses PIN + Face ID'
+    ? `Sign-in uses Microsoft Authenticator + ${platformAuthLabel()}`
+    : `Sign-in uses PIN + ${platformAuthLabel()}`
 
   return (
     <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>

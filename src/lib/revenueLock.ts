@@ -5,6 +5,7 @@ import {
   ensurePlatformAuth,
   hasPlatformCredential,
   isPlatformAuthenticatorAvailable,
+  platformAuthLabel,
 } from './webAuthnPlatform'
 import { isTotpRequired, verifyTotp } from './totp'
 
@@ -124,7 +125,7 @@ export async function unlockRevenueTab(secondFactor: string): Promise<{ ok: bool
     sessionStorage.setItem(SESSION_KEY, '1')
     return { ok: true }
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Could not verify Face ID.'
+    const message = e instanceof Error ? e.message : `Could not verify ${platformAuthLabel()}.`
     return { ok: false, message }
   }
 }

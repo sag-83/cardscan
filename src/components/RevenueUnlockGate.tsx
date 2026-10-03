@@ -7,6 +7,7 @@ import {
   unlockRevenueTab,
   usesAuthenticatorForRevenue,
 } from '../lib/revenueLock'
+import { platformAuthLabel } from '../lib/webAuthnPlatform'
 import { AuthenticatorCodeInput } from './AuthenticatorCodeInput'
 
 type Props = {
@@ -21,6 +22,7 @@ export function RevenueUnlockGate({ onUnlocked, onCancel }: Props) {
   const needsTotp = usesAuthenticatorForRevenue()
   const needsPin = isRevenuePinRequired() && !isRevenueSecondFactorVerifiedThisSession()
   const faceReady = hasRevenueLockConfigured()
+  const biometricLabel = platformAuthLabel()
 
   const handleUnlock = async () => {
     setError('')
@@ -84,8 +86,8 @@ export function RevenueUnlockGate({ onUnlocked, onCancel }: Props) {
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.45, marginBottom: 16 }}>
           {needsTotp
-            ? 'Enter your Microsoft Authenticator code and Face ID. The app password alone is not enough.'
-            : 'Revenue needs a separate access code and Face ID on this phone.'}
+            ? `Enter your Microsoft Authenticator code and ${biometricLabel}. The app password alone is not enough.`
+            : `Revenue needs a separate access code and ${biometricLabel} on this device.`}
         </p>
 
         {needsTotp && (
@@ -147,7 +149,7 @@ export function RevenueUnlockGate({ onUnlocked, onCancel }: Props) {
             marginBottom: 8,
           }}
         >
-          {loading ? 'Verifying…' : faceReady ? 'Unlock with Face ID' : 'Set up Face ID'}
+          {loading ? 'Verifying…' : faceReady ? `Unlock with ${biometricLabel}` : `Set up ${biometricLabel}`}
         </button>
         <button
           type="button"

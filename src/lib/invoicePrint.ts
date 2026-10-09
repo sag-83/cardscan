@@ -2,11 +2,13 @@ import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 import { itemDescriptionLabel } from './invoiceFormUtils'
 
-const COMPANY_LOGO = '/ak-monogram.png'
-const ZELLE_QR = '/zelle-qr.png'
-const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
-const COMPANY_PHONE = '8622359224'
-const COMPANY_EMAIL = 'info@akgemsinc.com'
+// Letterhead details, shared with the on-screen invoice preview so the two
+// cannot drift apart.
+export const COMPANY_LOGO = '/ak-monogram.png'
+export const ZELLE_QR = '/zelle-qr.png'
+export const COMPANY_ADDRESS = '580 5th Avenue, Ste # 523, New York, NY 10036'
+export const COMPANY_PHONE = '8622359224'
+export const COMPANY_EMAIL = 'info@akgemsinc.com'
 
 // Standing disclosures printed on every document (kept verbatim from the
 // firm's letterhead — trade-standard consignment + Kimberley Process wording).

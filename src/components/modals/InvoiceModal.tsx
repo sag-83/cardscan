@@ -4,17 +4,20 @@ import { useStore } from '../../store/useStore'
 import { sendInvoiceToSheets } from '../../lib/export'
 import { saveInvoiceSynced } from '../../lib/invoiceSync'
 import { itemDescriptionLabel, money } from '../../lib/invoiceFormUtils'
-import { printSavedInvoice, ATTACHMENT_ONE, ATTACHMENT_TWO } from '../../lib/invoicePrint'
+import {
+  printSavedInvoice,
+  ATTACHMENT_ONE,
+  ATTACHMENT_TWO,
+  COMPANY_ADDRESS,
+  COMPANY_EMAIL,
+  COMPANY_LOGO,
+  COMPANY_PHONE,
+  ZELLE_QR,
+} from '../../lib/invoicePrint'
 import { dueDateLabel, termsLabel } from '../../lib/invoiceTerms'
 import { syncFollowupReminders } from '../../lib/reminderNotifications'
 import { SavedInvoice } from '../../types/invoice'
 import { CreateInvoiceForm } from '../invoice/CreateInvoiceForm'
-
-const COMPANY_LOGO = '/ak-monogram.png'
-const ZELLE_QR = '/zelle-qr.png'
-const COMPANY_ADDRESS = '61 Hackensack St, Flr 2, East Rutherford, NJ 07073'
-const COMPANY_PHONE = '8622359224'
-const COMPANY_EMAIL = 'info@akgemsinc.com'
 
 // ⚠️ Transcribed from a handwritten note — please double-check every digit
 // (account number, routing number, zip) before this goes out on a real invoice.

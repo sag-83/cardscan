@@ -451,8 +451,9 @@ function SetupPanel({
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>
+            Not customers hides anyone marked a customer or an old customer.
             Due callbacks come first, then numbers that rang out and have rested a few days,
-            then names never tried — lapsed customers and higher-rated shops first.
+            then names never tried — higher-rated shops first.
           </div>
         </div>
       )}

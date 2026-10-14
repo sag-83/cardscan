@@ -99,7 +99,7 @@ export interface ParkedEntry {
 }
 
 export interface CallFilters {
-  /** 'prospects' hides anyone already marked a customer. */
+  /** 'prospects' hides current customers and old customers — true cold calls only. */
   audience: 'prospects' | 'everyone'
   state: string
   city: string
@@ -143,8 +143,9 @@ export function contactPhone(contact: Contact): string {
  * How promising an untouched prospect looks, so the first hour of calling goes
  * to the best names rather than whatever sorted first.
  *
- * Lapsed customers lead by a distance: they already bought once, so the call
- * is a win-back rather than a true cold call.
+ * In "Everyone" mode, lapsed customers still lead — that call is a win-back.
+ * They never reach this score under "Not customers", because they are filtered
+ * out before ranking.
  */
 function freshScore(contact: Contact): number {
   let score = 0
@@ -216,7 +217,7 @@ export function buildCallQueue(
   }
 
   for (const contact of contacts) {
-    if (filters.audience === 'prospects' && contact.is_customer) continue
+    if (filters.audience === 'prospects' && (contact.is_customer || contact.is_old_customer)) continue
     if (filters.state && normalizeStateValue(contact.state) !== filters.state) continue
     if (filters.city && contact.city !== filters.city) continue
     if (filters.minStars > 0 && (contact.stars ?? 0) < filters.minStars) continue

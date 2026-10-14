@@ -198,6 +198,10 @@ export function SettingsScreen() {
         setInvoices,
         deleteContact,
         deleteInvoice,
+        getCallLogs: () => useStore.getState().callLogs,
+        mergeCallLogs: useStore.getState().mergeCallLogs,
+        markCallLogSynced: useStore.getState().markCallLogSynced,
+        deleteCallLog: useStore.getState().deleteCallLog,
       })
 
       if (!n && !inv) {

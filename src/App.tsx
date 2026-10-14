@@ -25,6 +25,7 @@ import { InvoiceModal } from './components/modals/InvoiceModal'
 
 import { ScanScreen } from './components/screens/ScanScreen'
 import { ContactsScreen } from './components/screens/ContactsScreen'
+import { CallingScreen } from './components/screens/CallingScreen'
 import { TripScreen } from './components/screens/TripScreen'
 import { DashboardScreen } from './components/screens/DashboardScreen'
 import { BulkScreen } from './components/screens/BulkScreen'
@@ -220,6 +221,10 @@ export default function App() {
       setInvoices,
       deleteContact,
       deleteInvoice,
+      getCallLogs: () => useStore.getState().callLogs,
+      mergeCallLogs: useStore.getState().mergeCallLogs,
+      markCallLogSynced: useStore.getState().markCallLogSynced,
+      deleteCallLog: useStore.getState().deleteCallLog,
     }
 
     return startCloudRealtimeSync(storeApi, (live) => {
@@ -268,6 +273,9 @@ export default function App() {
           </div>
           <div style={{ display: activeScreen === 'contacts' ? 'block' : 'none' }}>
             <ContactsScreen />
+          </div>
+          <div style={{ display: activeScreen === 'calls' ? 'block' : 'none' }}>
+            <CallingScreen />
           </div>
           <div style={{ display: activeScreen === 'trips' ? 'block' : 'none' }}>
             <TripScreen />

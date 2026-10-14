@@ -1,4 +1,4 @@
-import { Camera, LineChart, Route, Send, Settings, Users } from 'lucide-react'
+import { Camera, LineChart, PhoneCall, Route, Send, Settings, Users } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { Screen } from '../types/contact'
 
@@ -11,6 +11,7 @@ export interface NavTab {
 export const NAV_TABS: NavTab[] = [
   { id: 'scan', label: 'Scan', Icon: Camera },
   { id: 'contacts', label: 'Contacts', Icon: Users },
+  { id: 'calls', label: 'Calls', Icon: PhoneCall },
   { id: 'trips', label: 'Trips', Icon: Route },
   { id: 'dashboard', label: 'Stats', Icon: LineChart },
   { id: 'bulk', label: 'Bulk', Icon: Send },
@@ -27,7 +28,7 @@ export function NavBar() {
         position: 'fixed', bottom: 0, left: 0, right: 0,
         display: 'flex', background: 'var(--bg2)',
         borderTop: '1px solid var(--border2)',
-        zIndex: 50, padding: '8px 0 22px',
+        zIndex: 50, padding: '6px 0 20px',
       }}
     >
       {NAV_TABS.map(({ id, label, Icon }) => {
@@ -37,14 +38,14 @@ export function NavBar() {
             key={id}
             onClick={() => setActiveScreen(id)}
             style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
               gap: 2, padding: '4px 0', border: 'none', background: 'none',
               color: active ? 'var(--accent)' : 'var(--text3)',
-              fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'color 0.18s',
+              fontSize: 9.5, fontWeight: 600, cursor: 'pointer', transition: 'color 0.18s',
             }}
           >
             <Icon
-              size={22}
+              size={20}
               strokeWidth={active ? 2.25 : 1.85}
               aria-hidden
             />

@@ -7,10 +7,12 @@ import {
   Crosshair,
   ExternalLink,
   Flag,
+  House,
   Info,
   Loader2,
   MapPin,
   Navigation,
+  Pencil,
   RefreshCw,
   Route,
   SlidersHorizontal,
@@ -20,10 +22,19 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
+import { buildHistories } from '../../lib/callQueue'
 import { normalizeStateValue } from '../../lib/usStates'
-import { geocodePlace, getUserPosition, LocationError } from '../../lib/geocode'
+import {
+  geocodePlace,
+  getUserPosition,
+  LocationError,
+  type GeoPoint,
+  type PlaceSuggestion,
+} from '../../lib/geocode'
 import { formatDuration, formatMiles } from '../../lib/geoMath'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
+import { saveLastTripScope } from '../../lib/lastTripScope'
+import { AddressAutocomplete } from '../AddressAutocomplete'
 import {
   buildMapsLinks,
   buildTripText,
@@ -32,6 +43,7 @@ import {
   stopAddressText,
   TripCancelledError,
   TripPlanError,
+  type TripEnd,
   type TripOptions,
   type TripOrigin,
   type TripPlan,
@@ -39,18 +51,91 @@ import {
   type TripStop,
 } from '../../lib/tripPlanner'
 
-const OPTIONS_KEY = 'cs_trip_options_v1'
+const SETTINGS_KEY = 'cs_trip_options_v1'
 
 // A day much longer than this stops being realistic once meals and overruns
 // are accounted for, so the plan gets flagged rather than silently returned.
 const LONG_DAY_MINUTES = 9 * 60
 
-function loadOptions(): TripOptions {
+/** Where the route starts. */
+type StartMode = 'device' | 'home' | 'place'
+
+/**
+ * Where the route finishes. Keeping this as one choice rather than a round-trip
+ * switch plus an address box means the four realistic days — loop back to the
+ * office, loop back to wherever you set off from, finish at a hotel, or just
+ * stop at the last call — are all the same single decision.
+ */
+type EndMode = 'home' | 'start' | 'custom' | 'none'
+
+/** An address the user saved, with its coordinates once they've been looked up. */
+interface SavedPlace {
+  label: string
+  point?: GeoPoint
+}
+
+const DEFAULT_HOME: SavedPlace = { label: '61 Hackensack St, East Rutherford, NJ 07073' }
+
+interface TripSettings {
+  options: TripOptions
+  startMode: StartMode
+  endMode: EndMode
+  home: SavedPlace
+  customEnd: SavedPlace
+}
+
+const DEFAULT_SETTINGS: TripSettings = {
+  options: DEFAULT_TRIP_OPTIONS,
+  startMode: 'home',
+  endMode: 'home',
+  home: DEFAULT_HOME,
+  customEnd: { label: '' },
+}
+
+function loadSettings(): TripSettings {
   try {
-    const raw = localStorage.getItem(OPTIONS_KEY)
-    if (raw) return { ...DEFAULT_TRIP_OPTIONS, ...(JSON.parse(raw) as Partial<TripOptions>) }
-  } catch {}
-  return DEFAULT_TRIP_OPTIONS
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return DEFAULT_SETTINGS
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+
+    // The key used to hold a flat TripOptions with a `roundTrip` boolean.
+    // Reading that as the new shape would silently reset every slider, so the
+    // old fields are mapped across instead.
+    if (typeof parsed.radiusMiles === 'number') {
+      const legacy = parsed as unknown as TripOptions & { roundTrip?: boolean }
+      return {
+        ...DEFAULT_SETTINGS,
+        options: { ...DEFAULT_TRIP_OPTIONS, ...legacy },
+        startMode: 'device',
+        endMode: legacy.roundTrip === false ? 'none' : 'start',
+      }
+    }
+
+    const saved = parsed as unknown as Partial<TripSettings>
+    return {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      options: { ...DEFAULT_TRIP_OPTIONS, ...(saved.options ?? {}) },
+      home: saved.home?.label ? saved.home : DEFAULT_HOME,
+      customEnd: saved.customEnd ?? { label: '' },
+    }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
+}
+
+const END_SUMMARY: Record<EndMode, string> = {
+  home: 'ends home',
+  start: 'ends at start',
+  custom: 'ends elsewhere',
+  none: 'one way',
+}
+
+/** Trims a long address to something that fits a heading. */
+function shortPlace(label: string): string {
+  const parts = label.split(',').map((part) => part.trim()).filter(Boolean)
+  if (parts.length <= 2) return label
+  return parts.slice(0, 2).join(', ')
 }
 
 function describeError(err: unknown): string {
@@ -66,18 +151,24 @@ function describeError(err: unknown): string {
 
 export function TripScreen() {
   const contacts = useStore((s) => s.contacts)
+  const callLogs = useStore((s) => s.callLogs)
   const showToast = useStore((s) => s.showToast)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
 
-  const [originMode, setOriginMode] = useState<'device' | 'place'>('device')
-  const [placeText, setPlaceText] = useState('')
+  const [settings, setSettings] = useState<TripSettings>(loadSettings)
+  const { options, startMode, endMode, home, customEnd } = settings
+  const patch = (next: Partial<TripSettings>) => setSettings((s) => ({ ...s, ...next }))
+  const setOptions = (update: (o: TripOptions) => TripOptions) =>
+    setSettings((s) => ({ ...s, options: update(s.options) }))
+
+  const [startPlace, setStartPlace] = useState<SavedPlace>({ label: '' })
+  const [editingHome, setEditingHome] = useState(false)
 
   const [filterState, setFilterState] = useState('')
   const [filterCity, setFilterCity] = useState('')
   const [filterType, setFilterType] = useState('')
   const [minStars, setMinStars] = useState(0)
 
-  const [options, setOptions] = useState<TripOptions>(loadOptions)
   const [setupOpen, setSetupOpen] = useState(true)
 
   const [working, setWorking] = useState(false)
@@ -85,12 +176,12 @@ export function TripScreen() {
   const [plan, setPlan] = useState<TripPlan | null>(null)
   const [error, setError] = useState('')
   const [excluded, setExcluded] = useState<string[]>([])
-  const [lastOrigin, setLastOrigin] = useState<TripOrigin | null>(null)
+  const [lastRun, setLastRun] = useState<{ origin: TripOrigin; end: TripEnd | null } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    try { localStorage.setItem(OPTIONS_KEY, JSON.stringify(options)) } catch {}
-  }, [options])
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch {}
+  }, [settings])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -105,31 +196,86 @@ export function TripScreen() {
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filterState])
 
+  // Anyone whose most recent call ended in interest. The point of the calling
+  // screen is to turn cold names into visits, so those names need to be
+  // routable in one step rather than hunted for by hand.
+  const interestedIds = useMemo(() => {
+    const ids = new Set<string>()
+    buildHistories(callLogs).forEach((history, contactId) => {
+      if (history.lastOutcome === 'interested') ids.add(contactId)
+    })
+    return ids
+  }, [callLogs])
+
   const scoped = useMemo(() => contacts.filter((c) => {
     if (filterState && normalizeStateValue(c.state) !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
     if (filterType === 'customer' && !c.is_customer) return false
     if (filterType === 'goods_shown' && !c.visited) return false
     if (filterType === 'not_visited' && c.visited) return false
+    if (filterType === 'call_interested' && !interestedIds.has(c.id)) return false
     if (minStars > 0 && c.stars < minStars) return false
     return true
-  }), [contacts, filterState, filterCity, filterType, minStars])
+  }), [contacts, filterState, filterCity, filterType, minStars, interestedIds])
+
+  /**
+   * Coordinates for a saved address. The lookup result is written back so the
+   * same address isn't re-geocoded on every plan, and so a point picked from
+   * the suggestions is used as-is.
+   */
+  const resolveSaved = async (
+    place: SavedPlace,
+    missingMessage: string,
+    cache: (next: SavedPlace) => void,
+  ): Promise<GeoPoint> => {
+    const label = place.label.trim()
+    if (!label) throw new TripPlanError(missingMessage)
+    if (place.point) return place.point
+    const point = await geocodePlace(label)
+    if (!point) {
+      throw new TripPlanError(`Could not find "${label}". Try picking it from the suggestions.`)
+    }
+    cache({ label, point })
+    return point
+  }
+
+  const cacheHome = (next: SavedPlace) => patch({ home: next })
 
   const resolveOrigin = async (): Promise<TripOrigin> => {
-    if (originMode === 'device') {
+    if (startMode === 'device') {
       if (!isLocationAccessEnabled()) {
-        throw new TripPlanError('Turn on Settings → Near Me (Location) first, or enter a place instead.')
+        throw new TripPlanError('Turn on Settings → Near Me (Location) first, or start from Home instead.')
       }
       return { label: 'My location', point: await getUserPosition() }
     }
-    const typed = placeText.trim()
-    if (!typed) throw new TripPlanError('Type a city, ZIP or address to start from.')
-    const point = await geocodePlace(typed)
-    if (!point) throw new TripPlanError(`Could not find "${typed}". Try adding the state.`)
-    return { label: typed, point }
+    if (startMode === 'home') {
+      const point = await resolveSaved(home, 'Add your home address first.', cacheHome)
+      return { label: home.label.trim(), point }
+    }
+    const point = await resolveSaved(
+      startPlace,
+      'Type a city, ZIP or address to start from.',
+      setStartPlace,
+    )
+    return { label: startPlace.label.trim(), point }
   }
 
-  const run = async (overrides?: { origin?: TripOrigin; excluded?: string[] }) => {
+  const resolveEnd = async (origin: TripOrigin): Promise<TripEnd | null> => {
+    if (endMode === 'none') return null
+    if (endMode === 'start') return { label: origin.label, point: origin.point }
+    if (endMode === 'home') {
+      const point = await resolveSaved(home, 'Add your home address first.', cacheHome)
+      return { label: home.label.trim(), point }
+    }
+    const point = await resolveSaved(
+      customEnd,
+      'Type where you want to finish, or pick another ending.',
+      (next) => patch({ customEnd: next }),
+    )
+    return { label: customEnd.label.trim(), point }
+  }
+
+  const run = async (overrides?: { reuseLast?: boolean; excluded?: string[] }) => {
     if (working) return
     const excludedNow = overrides?.excluded ?? excluded
 
@@ -141,15 +287,24 @@ export function TripScreen() {
     abortRef.current = controller
 
     try {
-      const origin = overrides?.origin ?? (await resolveOrigin())
-      setLastOrigin(origin)
+      // Re-planning after dropping a stop must not ask for the device's
+      // position again, or re-order the day around a slightly different fix.
+      const reuse = overrides?.reuseLast ? lastRun : null
+      const origin = reuse?.origin ?? (await resolveOrigin())
+      const end = reuse ? reuse.end : await resolveEnd(origin)
+      setLastRun({ origin, end })
 
       const pool = scoped.filter((c) => !excludedNow.includes(c.id))
       if (pool.length === 0) throw new TripPlanError('No contacts match these filters.')
 
-      const result = await planTrip(pool, origin, options, setProgress, controller.signal)
+      const result = await planTrip(pool, origin, end, options, setProgress, controller.signal)
       setPlan(result)
       setSetupOpen(false)
+      saveLastTripScope({
+        state: filterState,
+        city: filterCity,
+        originLabel: origin.label,
+      })
     } catch (err) {
       if (err instanceof TripCancelledError) return
       setError(describeError(err))
@@ -163,12 +318,12 @@ export function TripScreen() {
   const removeStop = (id: string) => {
     const next = [...excluded, id]
     setExcluded(next)
-    void run({ origin: lastOrigin ?? undefined, excluded: next })
+    void run({ reuseLast: true, excluded: next })
   }
 
   const restoreRemoved = () => {
     setExcluded([])
-    void run({ origin: lastOrigin ?? undefined, excluded: [] })
+    void run({ reuseLast: true, excluded: [] })
   }
 
   const copyPlan = async () => {
@@ -204,7 +359,7 @@ export function TripScreen() {
             <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Trip setup</div>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
               {scoped.length} contact{scoped.length === 1 ? '' : 's'} in scope · up to {options.maxStops} stops
-              {' · '}{options.radiusMiles} mi
+              {' · '}{options.radiusMiles} mi · {END_SUMMARY[endMode]}
             </div>
           </div>
           <ChevronDown
@@ -223,29 +378,79 @@ export function TripScreen() {
             <Group label="Start from">
               <div style={{ display: 'flex', gap: 6 }}>
                 <SegButton
-                  active={originMode === 'device'}
-                  onClick={() => setOriginMode('device')}
-                  icon={<Crosshair className="size-3.5 shrink-0" aria-hidden />}
-                  label="My location"
+                  active={startMode === 'home'}
+                  onClick={() => patch({ startMode: 'home' })}
+                  icon={<House className="size-3.5 shrink-0" aria-hidden />}
+                  label="Home"
                 />
                 <SegButton
-                  active={originMode === 'place'}
-                  onClick={() => setOriginMode('place')}
+                  active={startMode === 'device'}
+                  onClick={() => patch({ startMode: 'device' })}
+                  icon={<Crosshair className="size-3.5 shrink-0" aria-hidden />}
+                  label="Where I am"
+                />
+                <SegButton
+                  active={startMode === 'place'}
+                  onClick={() => patch({ startMode: 'place' })}
                   icon={<MapPin className="size-3.5 shrink-0" aria-hidden />}
                   label="A place"
                 />
               </div>
-              {originMode === 'place' && (
-                <input
-                  value={placeText}
-                  onChange={(e) => setPlaceText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') void run() }}
-                  placeholder="Lancaster, PA  ·  19106  ·  hotel address"
-                  style={{
-                    width: '100%', padding: '10px 12px', marginTop: 8,
-                    background: 'var(--bg3)', border: '1.5px solid var(--border)',
-                    borderRadius: 10, fontSize: 15, color: 'var(--text)',
-                  }}
+              {startMode === 'home' && (
+                <HomeRow
+                  home={home}
+                  editing={editingHome}
+                  onEdit={() => setEditingHome(true)}
+                  onDone={() => setEditingHome(false)}
+                  onChange={(next) => patch({ home: next })}
+                />
+              )}
+              {startMode === 'place' && (
+                <AddressAutocomplete
+                  value={startPlace.label}
+                  onChange={(label) => setStartPlace((p) => ({ ...p, label }))}
+                  onResolve={(hit) => setStartPlace((p) => (
+                    hit ? { label: hit.label, point: hit.point } : { label: p.label }
+                  ))}
+                  onSubmit={() => void run()}
+                  placeholder="Lancaster, PA · 19106 · hotel address"
+                  ariaLabel="Starting place"
+                />
+              )}
+            </Group>
+
+            <Group label="Ends at">
+              <select
+                value={endMode}
+                onChange={(e) => patch({ endMode: e.target.value as EndMode })}
+                style={{ ...dropdownStyle(endMode !== 'none'), width: '100%' }}
+                aria-label="Where the trip ends"
+              >
+                <option value="home">Back to home</option>
+                <option value="start">Back to where I started</option>
+                <option value="custom">A different place</option>
+                <option value="none">Nowhere — stop at the last call</option>
+              </select>
+              {endMode === 'home' && startMode !== 'home' && (
+                <HomeRow
+                  home={home}
+                  editing={editingHome}
+                  onEdit={() => setEditingHome(true)}
+                  onDone={() => setEditingHome(false)}
+                  onChange={(next) => patch({ home: next })}
+                />
+              )}
+              {endMode === 'custom' && (
+                <AddressAutocomplete
+                  value={customEnd.label}
+                  onChange={(label) => setSettings((s) => ({ ...s, customEnd: { ...s.customEnd, label } }))}
+                  onResolve={(hit) => setSettings((s) => ({
+                    ...s,
+                    customEnd: hit ? { label: hit.label, point: hit.point } : { label: s.customEnd.label },
+                  }))}
+                  onSubmit={() => void run()}
+                  placeholder="Where you're finishing the day"
+                  ariaLabel="Finishing place"
                 />
               )}
             </Group>
@@ -280,6 +485,7 @@ export function TripScreen() {
                 >
                   <option value="">Everyone</option>
                   <option value="customer">Customers only</option>
+                  <option value="call_interested">Interested on the phone</option>
                   <option value="goods_shown">Goods shown</option>
                   <option value="not_visited">Not visited yet</option>
                 </select>
@@ -310,7 +516,7 @@ export function TripScreen() {
                 label="Stops to visit"
                 value={options.maxStops}
                 min={2}
-                max={20}
+                max={30}
                 step={1}
                 format={(v) => `${v}`}
                 onChange={(maxStops) => setOptions((o) => ({ ...o, maxStops }))}
@@ -324,25 +530,16 @@ export function TripScreen() {
                 format={(v) => (v === 0 ? 'none' : `${v} min`)}
                 onChange={(minutesPerStop) => setOptions((o) => ({ ...o, minutesPerStop }))}
               />
-              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                <select
-                  value={options.priority}
-                  onChange={(e) => setOptions((o) => ({ ...o, priority: e.target.value as TripOptions['priority'] }))}
-                  style={{ ...dropdownStyle(options.priority !== 'none'), flex: 1.4, minWidth: 0 }}
-                >
-                  <option value="none">No preference</option>
-                  <option value="customers">Favour customers</option>
-                  <option value="top-rated">Favour top-rated</option>
-                </select>
-                <SegButton
-                  active={options.roundTrip}
-                  onClick={() => setOptions((o) => ({ ...o, roundTrip: !o.roundTrip }))}
-                  icon={options.roundTrip
-                    ? <Check className="size-3.5 shrink-0" aria-hidden />
-                    : <Flag className="size-3.5 shrink-0" aria-hidden />}
-                  label="Round trip"
-                />
-              </div>
+              <select
+                value={options.priority}
+                onChange={(e) => setOptions((o) => ({ ...o, priority: e.target.value as TripOptions['priority'] }))}
+                style={{ ...dropdownStyle(options.priority !== 'none'), width: '100%', marginTop: 4 }}
+                aria-label="Which stops to favour"
+              >
+                <option value="none">No preference</option>
+                <option value="customers">Favour customers</option>
+                <option value="top-rated">Favour top-rated</option>
+              </select>
             </Group>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -404,7 +601,7 @@ export function TripScreen() {
           onOpenContact={setDetailContactId}
           onRemoveStop={removeStop}
           onRestoreRemoved={restoreRemoved}
-          onReplan={() => void run({ origin: lastOrigin ?? undefined })}
+          onReplan={() => void run({ reuseLast: true })}
           onCopy={() => void copyPlan()}
         />
       )}
@@ -500,7 +697,7 @@ function PlanView({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <Navigation className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', flex: 1, minWidth: 0 }}>
-              {plan.stops.length} stop{plan.stops.length === 1 ? '' : 's'} from {plan.origin.label}
+              {plan.stops.length} stop{plan.stops.length === 1 ? '' : 's'} from {shortPlace(plan.origin.label)}
             </div>
           </div>
 
@@ -518,8 +715,14 @@ function PlanView({
                 : <Info className="size-3 shrink-0" aria-hidden />}
               text={plan.costSource === 'road' ? 'Real driving times' : 'Estimated times'}
             />
-            {plan.roundTrip && (
-              <Chip tone="info" icon={<RefreshCw className="size-3 shrink-0" aria-hidden />} text="Returns to start" />
+            {plan.end && (
+              <Chip
+                tone="info"
+                icon={plan.endsAtStart
+                  ? <RefreshCw className="size-3 shrink-0" aria-hidden />
+                  : <House className="size-3 shrink-0" aria-hidden />}
+                text={plan.endsAtStart ? 'Returns to start' : `Ends at ${shortPlace(plan.end.label)}`}
+              />
             )}
             {approximateCount > 0 && (
               <Chip
@@ -561,7 +764,7 @@ function PlanView({
 
       <SectionLabel>The route</SectionLabel>
 
-      <OriginRow label={plan.origin.label} />
+      <OriginRow label={shortPlace(plan.origin.label)} />
 
       {plan.stops.map((stop, index) => (
         <StopRow
@@ -574,7 +777,7 @@ function PlanView({
         />
       ))}
 
-      {plan.roundTrip && (
+      {plan.end && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
           background: 'var(--bg2)', borderBottom: '1px solid var(--border2)',
@@ -584,11 +787,13 @@ function PlanView({
             background: 'var(--action-neutral-bg)', color: 'var(--action-neutral-fg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Flag className="size-3.5" aria-hidden />
+            {plan.endsAtStart
+              ? <Flag className="size-3.5" aria-hidden />
+              : <House className="size-3.5" aria-hidden />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text2)' }}>
-              Back to {plan.origin.label}
+              {plan.endsAtStart ? 'Back to' : 'Finish at'} {plan.end.label}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
               {formatMiles(plan.returnMiles)} · {formatDuration(plan.returnMinutes)}
@@ -757,6 +962,73 @@ function SkippedNote({ plan }: { plan: TripPlan }) {
 }
 
 // ─── Small building blocks ──────────────────────────────────────────────────
+
+/** Shows the saved home base, and swaps to an address box when editing. */
+function HomeRow({ home, editing, onEdit, onDone, onChange }: {
+  home: SavedPlace
+  editing: boolean
+  onEdit: () => void
+  onDone: () => void
+  onChange: (next: SavedPlace) => void
+}) {
+  if (editing) {
+    return (
+      <div>
+        <AddressAutocomplete
+          value={home.label}
+          onChange={(label) => onChange({ label })}
+          onResolve={(hit) => { if (hit) onChange({ label: hit.label, point: hit.point }) }}
+          onSubmit={onDone}
+          placeholder="Your office or home address"
+          ariaLabel="Home address"
+        />
+        <button
+          type="button"
+          onClick={onDone}
+          style={{
+            marginTop: 8, padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
+            border: '1.5px solid var(--accent)', background: 'var(--chip-accent-bg)',
+            color: 'var(--accent)', fontSize: 12.5, fontWeight: 800,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <Check className="size-3.5 shrink-0" aria-hidden />
+          Save home
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 9, marginTop: 8,
+      padding: '9px 11px', borderRadius: 10,
+      background: 'var(--bg3)', border: '1px solid var(--border2)',
+    }}>
+      <House className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+      <div style={{
+        flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--text2)',
+        lineHeight: 1.4,
+      }}>
+        {home.label || 'No home address saved yet'}
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label="Change home address"
+        style={{
+          flexShrink: 0, padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
+          border: '1px solid var(--border)', background: 'var(--bg2)',
+          color: 'var(--text3)', fontSize: 11.5, fontWeight: 800,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+        }}
+      >
+        <Pencil className="size-3 shrink-0" aria-hidden />
+        Change
+      </button>
+    </div>
+  )
+}
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (

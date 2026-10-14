@@ -1,8 +1,11 @@
+import type { CallLog } from '../types/call'
 import type { Contact } from '../types/contact'
 import type { SavedInvoice } from '../types/invoice'
 import { normalizeTermsDays } from './invoiceTerms'
+import { syncCallLogs } from './callSync'
 import {
   ensureSupabaseClient,
+  mapCallLogRow,
   mapContactRow,
   syncContactsFromDB,
   syncInvoicesFromDB,
@@ -79,6 +82,10 @@ export type CloudSyncStore = {
   setInvoices: (invoices: SavedInvoice[]) => void
   deleteContact: (id: string) => void
   deleteInvoice: (id: string) => void
+  getCallLogs: () => CallLog[]
+  mergeCallLogs: (logs: CallLog[]) => void
+  markCallLogSynced: (id: string) => void
+  deleteCallLog: (id: string) => void
 }
 
 export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
@@ -97,6 +104,11 @@ export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
 
   store.setContacts(mergedContacts)
   store.setInvoices(mergedInvoices)
+
+  await syncCallLogs(store.getCallLogs(), {
+    merge: store.mergeCallLogs,
+    markSynced: store.markCallLogSynced,
+  })
 
   return { contacts: cloudContacts.length, invoices: cloudInvoices.length }
 }
@@ -199,6 +211,21 @@ export function startCloudRealtimeSync(
       (payload: { new: Record<string, unknown> | null; old: Record<string, unknown> | null; eventType: string }) => {
         const row = (payload.new ?? payload.old) as Record<string, unknown>
         if (row) applyInvoiceRow(store, row, payload.eventType)
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'call_logs' },
+      (payload: { new: Record<string, unknown> | null; old: Record<string, unknown> | null; eventType: string }) => {
+        const row = (payload.new ?? payload.old) as Record<string, unknown>
+        if (!row) return
+        const id = String(row.id ?? '')
+        if (!id) return
+        if (payload.eventType === 'DELETE') {
+          store.deleteCallLog(id)
+          return
+        }
+        store.mergeCallLogs([mapCallLogRow(row)])
       }
     )
     .subscribe((status: string) => {

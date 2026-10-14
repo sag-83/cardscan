@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Contact, ContactAddress } from '../types/contact'
+import { CALL_OUTCOMES, type CallLog, type CallOutcome } from '../types/call'
 import { SavedInvoice } from '../types/invoice'
 import { normalizePaidBy } from './invoiceNormalize'
 import { normalizeTermsDays } from './invoiceTerms'
@@ -183,7 +184,20 @@ create table if not exists charge_payments (
 );
 alter table charge_invoices disable row level security;
 alter table charge_invoice_items disable row level security;
-alter table charge_payments disable row level security;`
+alter table charge_payments disable row level security;
+
+-- 8. Cold-call log — append-only, one row per call attempt
+create table if not exists call_logs (
+  id text primary key,
+  contact_id text not null,
+  called_at timestamptz not null default now(),
+  outcome text not null default 'no-answer',
+  note text default '',
+  callback_at timestamptz,
+  created_at timestamptz default now()
+);
+create index if not exists call_logs_contact_idx on call_logs (contact_id);
+alter table call_logs disable row level security;`
 
 let client: SupabaseClient | null = null
 let lastError = ''
@@ -688,6 +702,74 @@ export async function deleteInvoiceFromDB(id: string): Promise<boolean> {
   if (error) {
     rememberSupabaseError('Invoice delete failed', error)
     console.warn('Supabase invoice delete error:', error)
+    return false
+  }
+  return true
+}
+
+// ─── Cold-call log ──────────────────────────────────────────────────────────
+
+export function mapCallLogRow(row: Record<string, unknown>): CallLog {
+  const outcome = String(row.outcome ?? 'no-answer') as CallOutcome
+  return {
+    id: String(row.id ?? ''),
+    contact_id: String(row.contact_id ?? ''),
+    called_at: String(row.called_at ?? new Date().toISOString()),
+    outcome: outcome in CALL_OUTCOMES ? outcome : 'no-answer',
+    note: String(row.note ?? ''),
+    callback_at: row.callback_at ? String(row.callback_at) : undefined,
+    created_at: String(row.created_at ?? row.called_at ?? new Date().toISOString()),
+    synced: true,
+  }
+}
+
+export async function saveCallLogToDB(log: CallLog): Promise<boolean> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+
+  const { error } = await sb.from('call_logs').upsert({
+    id: log.id,
+    contact_id: log.contact_id,
+    called_at: log.called_at,
+    outcome: log.outcome,
+    note: log.note,
+    callback_at: log.callback_at ?? null,
+    created_at: log.created_at,
+  }, { onConflict: 'id' })
+
+  if (error) {
+    rememberSupabaseError('Call log save failed', error)
+    console.warn('Supabase call log save error:', error)
+    return false
+  }
+  return true
+}
+
+export async function syncCallLogsFromDB(): Promise<CallLog[]> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return []
+
+  const { data, error } = await sb
+    .from('call_logs')
+    .select('*')
+    .order('called_at', { ascending: false })
+
+  if (error) {
+    rememberSupabaseError('Call log fetch failed', error)
+    console.warn('Supabase call log fetch error:', error)
+    return []
+  }
+  return (data ?? []).map((row) => mapCallLogRow(row as Record<string, unknown>))
+}
+
+export async function deleteCallLogFromDB(id: string): Promise<boolean> {
+  const sb = ensureSupabaseClient()
+  if (!sb) return false
+
+  const { error } = await sb.from('call_logs').delete().eq('id', id)
+  if (error) {
+    rememberSupabaseError('Call log delete failed', error)
+    console.warn('Supabase call log delete error:', error)
     return false
   }
   return true

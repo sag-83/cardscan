@@ -1,6 +1,7 @@
 import type { Contact } from '../types/contact'
 import { getCachedUserPosition, isLocationAccessEnabled } from './locationAccess'
 import { isStandalonePwa } from './pwa'
+import { normalizeStateValue } from './usStates'
 import { haversineDistance, type GeoPoint } from './geoMath'
 
 export { haversineDistance }
@@ -69,29 +70,71 @@ interface NominatimHit {
 /** Below this, a result is a neighbourhood or town rather than an address. */
 const STREET_LEVEL_RANK = 26
 
-async function nominatimLookup(params: Record<string, string>): Promise<NominatimHit | null> {
+interface NominatimAddress {
+  house_number?: string
+  road?: string
+  city?: string
+  town?: string
+  village?: string
+  hamlet?: string
+  municipality?: string
+  suburb?: string
+  state?: string
+  postcode?: string
+}
+
+interface NominatimRow {
+  lat: string
+  lon: string
+  place_rank?: number
+  display_name?: string
+  name?: string
+  address?: NominatimAddress
+}
+
+async function nominatimRequest(
+  params: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<NominatimRow[]> {
   return schedule(async () => {
-    const query = new URLSearchParams({ format: 'json', limit: '1', ...params })
+    // The queue serialises every lookup, so a request can sit here while the
+    // user keeps typing. Checking on the way out of the queue avoids spending
+    // a rate-limited slot on a query nobody is waiting for any more.
+    if (signal?.aborted) return []
+
+    const query = new URLSearchParams({ format: 'json', ...params })
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS)
+    const abort = () => controller.abort()
+    signal?.addEventListener('abort', abort)
+    const timer = setTimeout(abort, NOMINATIM_TIMEOUT_MS)
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?${query}`, {
         headers: { 'User-Agent': 'CardScanApp/1.0' },
         signal: controller.signal,
       })
-      if (!res.ok) return null
-      const data = await res.json() as { lat: string; lon: string; place_rank?: number }[]
-      if (!data[0]) return null
-      const lat = parseFloat(data[0].lat)
-      const lng = parseFloat(data[0].lon)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-      return { point: { lat, lng }, placeRank: data[0].place_rank ?? 0 }
+      if (!res.ok) return []
+      const data = await res.json() as NominatimRow[]
+      return Array.isArray(data) ? data : []
     } catch {
-      return null
+      return []
     } finally {
       clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
     }
   })
+}
+
+function rowToHit(row: NominatimRow | undefined): NominatimHit | null {
+  if (!row) return null
+  const lat = parseFloat(row.lat)
+  const lng = parseFloat(row.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return { point: { lat, lng }, placeRank: row.place_rank ?? 0 }
+}
+
+async function nominatimLookup(params: Record<string, string>): Promise<NominatimHit | null> {
+  const rows = await nominatimRequest({ limit: '1', ...params })
+  return rowToHit(rows[0])
 }
 
 // ─── City-level lookups (used by Near Me sorting) ───────────────────────────
@@ -143,6 +186,27 @@ const TRAILING_UNIT = new RegExp(String.raw`[\s,;]+(?:${UNIT_KEYWORDS})\b\.?\s*#
 const TRAILING_ORDINAL_FLOOR = /[\s,;]+\d+(?:st|nd|rd|th)\s+(?:floor|fl|flr)\b\.?$/i
 const TRAILING_HASH_UNIT = /[\s,;]*#\s*[\w\-/]+$/
 const PO_BOX = /^\s*p\.?\s*o\.?\s*box\b/i
+
+// The same problem one level up: in a full typed address the unit is usually
+// its own comma-separated part ("580 5th Avenue, Ste # 523, New York, NY"),
+// where the trailing-unit patterns above can't see it. Nominatim returns
+// nothing at all for those, so the part is dropped entirely.
+const UNIT_ONLY = new RegExp(String.raw`^(?:${UNIT_KEYWORDS})\b\.?\s*#?\s*[\w\-/]*$`, 'i')
+const HASH_ONLY = /^#\s*[\w\-/]+$/
+// "3rd Floor" puts the number first, so the keyword patterns miss it.
+const ORDINAL_FLOOR_ONLY = /^\d+(?:st|nd|rd|th)\s+(?:floor|fl|flr)\b\.?$/i
+
+function isUnitPart(part: string): boolean {
+  return UNIT_ONLY.test(part) || HASH_ONLY.test(part) || ORDINAL_FLOOR_ONLY.test(part)
+}
+
+export function addressWithoutUnit(text: string): string {
+  const parts = text.split(',').map((part) => part.trim()).filter(Boolean)
+  const kept = parts.filter((part) => !isUnitPart(part))
+  if (kept.length === 0) return text.trim()
+  kept[0] = streetWithoutUnit(kept[0]) || kept[0]
+  return kept.join(', ')
+}
 
 export function streetWithoutUnit(street: string): string {
   let cleaned = street.trim()
@@ -256,6 +320,110 @@ export async function geocodeContactLocation(contact: Contact): Promise<Resolved
   return null
 }
 
+// ─── Type-ahead suggestions ─────────────────────────────────────────────────
+
+export interface PlaceSuggestion {
+  /** Tidied one-line address, short enough to read in a dropdown. */
+  label: string
+  point: GeoPoint
+  /** True when the match is a building or road rather than a whole town. */
+  exact: boolean
+}
+
+const SUGGESTION_LIMIT = 6
+const SUGGESTION_CACHE_LIMIT = 120
+const suggestionCache = new Map<string, PlaceSuggestion[]>()
+
+/**
+ * Nominatim's `display_name` is far too long to show in a list — a single
+ * address arrives as nine comma-separated parts ending in the county, state
+ * and country. This rebuilds the line the way a US address is normally
+ * written, and falls back to trimming the long form when the structured
+ * fields aren't there (POIs and ZIP-only matches).
+ */
+function suggestionLabel(row: NominatimRow): string {
+  const a = row.address
+  if (a) {
+    const street = [a.house_number, a.road].filter(Boolean).join(' ')
+    const town = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || ''
+    // Nominatim spells states out in full, which is most of the line's length.
+    const state = a.state ? normalizeStateValue(a.state) || a.state : ''
+    const region = [state, a.postcode].filter(Boolean).join(' ')
+    const parts = [street || row.name || '', town, region].filter(Boolean)
+    if (parts.length > 0) return parts.join(', ')
+  }
+
+  const display = (row.display_name ?? '').split(',').map((part) => part.trim())
+  return display
+    .filter((part) => part && part !== 'United States' && !/\bCounty$/i.test(part))
+    .slice(0, 4)
+    .join(', ')
+}
+
+/**
+ * Address suggestions for a part-typed query.
+ *
+ * Cards are typed by hand often enough that a wrong ZIP or a misspelled town
+ * silently sends a whole trip to the wrong place, so the planner lets the user
+ * pick a confirmed match instead of guessing. Picking one also hands back its
+ * coordinates, which skips a second lookup when the trip is planned.
+ */
+export async function searchPlaces(
+  text: string,
+  signal?: AbortSignal,
+): Promise<PlaceSuggestion[]> {
+  const query = text.trim()
+  if (query.length < 3) return []
+
+  const key = query.toUpperCase().replace(/\s+/g, ' ')
+  const cached = suggestionCache.get(key)
+  if (cached) return cached
+
+  const ask = (q: string) => nominatimRequest(
+    { q, limit: String(SUGGESTION_LIMIT), countrycodes: 'us', addressdetails: '1' },
+    signal,
+  )
+
+  let rows: NominatimRow[] = []
+  if (/^\d{5}(-\d{4})?$/.test(query)) {
+    rows = await nominatimRequest(
+      { postalcode: query.slice(0, 5), country: 'USA', limit: String(SUGGESTION_LIMIT), addressdetails: '1' },
+      signal,
+    )
+  }
+  if (rows.length === 0 && !signal?.aborted) rows = await ask(query)
+  if (rows.length === 0 && !signal?.aborted) {
+    const trimmed = addressWithoutUnit(query)
+    if (trimmed && trimmed !== query) rows = await ask(trimmed)
+  }
+
+  const seen = new Set<string>()
+  const suggestions: PlaceSuggestion[] = []
+  for (const row of rows) {
+    const hit = rowToHit(row)
+    if (!hit) continue
+    const label = suggestionLabel(row)
+    if (!label || seen.has(label)) continue
+    seen.add(label)
+    suggestions.push({
+      label,
+      point: hit.point,
+      exact: hit.placeRank >= STREET_LEVEL_RANK,
+    })
+  }
+
+  // An aborted request comes back empty; caching that would poison the query
+  // for the rest of the session.
+  if (!signal?.aborted) {
+    if (suggestionCache.size >= SUGGESTION_CACHE_LIMIT) {
+      suggestionCache.delete(suggestionCache.keys().next().value as string)
+    }
+    suggestionCache.set(key, suggestions)
+  }
+
+  return suggestions
+}
+
 /** Resolves whatever the user typed as a starting point — city, ZIP or address. */
 export async function geocodePlace(text: string): Promise<GeoPoint | null> {
   const query = text.trim()
@@ -264,7 +432,17 @@ export async function geocodePlace(text: string): Promise<GeoPoint | null> {
   const cached = addressCache.get(key)
   if (cached) return cached
 
-  const hit = await nominatimLookup({ q: query, countrycodes: 'us' })
+  let hit = await nominatimLookup({ q: query, countrycodes: 'us' })
+
+  // A suite or unit mid-address makes Nominatim return nothing rather than
+  // the building, which would read to the user as "we can't find your office".
+  if (!hit) {
+    const trimmed = addressWithoutUnit(query)
+    if (trimmed && trimmed !== query) {
+      hit = await nominatimLookup({ q: trimmed, countrycodes: 'us' })
+    }
+  }
+
   if (!hit) return null
   addressCache.set(key, { ...hit.point, exact: hit.placeRank >= STREET_LEVEL_RANK })
   saveCache(ADDRESS_CACHE_KEY, addressCache)

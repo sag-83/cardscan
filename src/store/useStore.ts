@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
+import type { CallLog } from '../types/call'
 import { SavedInvoice } from '../types/invoice'
 import type { ChargeInvoice, ChargePayment } from '../types/chargeAccount'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
@@ -26,6 +27,14 @@ interface AppState {
   updateContact: (id: string, updates: Partial<Contact>) => void
   deleteContact: (id: string) => void
   setContacts: (contacts: Contact[]) => void
+
+  // ─── Cold-call log ───────────────────────────────────────────────
+  callLogs: CallLog[]
+  addCallLog: (log: CallLog) => void
+  /** Union-merges by id; cloud rows win on conflict. */
+  mergeCallLogs: (logs: CallLog[]) => void
+  markCallLogSynced: (id: string) => void
+  deleteCallLog: (id: string) => void
 
   // ─── Invoices ────────────────────────────────────────────────────
   invoices: SavedInvoice[]
@@ -144,6 +153,28 @@ export const useStore = create<AppState>()(
         })),
 
       setContacts: (contacts) => set({ contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }),
+
+      callLogs: [],
+
+      addCallLog: (log) => set((s) => ({ callLogs: [log, ...s.callLogs] })),
+
+      mergeCallLogs: (incoming) =>
+        set((s) => {
+          // Call rows are never edited after the fact, so a union by id is a
+          // complete merge — no field-level conflict to resolve.
+          const merged = new Map(s.callLogs.map((log) => [log.id, log]))
+          for (const log of incoming) merged.set(log.id, log)
+          return {
+            callLogs: [...merged.values()].sort((a, b) => b.called_at.localeCompare(a.called_at)),
+          }
+        }),
+
+      markCallLogSynced: (id) =>
+        set((s) => ({
+          callLogs: s.callLogs.map((log) => (log.id === id ? { ...log, synced: true } : log)),
+        })),
+
+      deleteCallLog: (id) => set((s) => ({ callLogs: s.callLogs.filter((log) => log.id !== id) })),
 
       // ─── Invoices ──────────────────────────────────────────────
       invoices: [],
@@ -266,6 +297,7 @@ export const useStore = create<AppState>()(
       // Only persist data that should survive a page refresh
       partialize: (s) => ({
         contacts: s.contacts.map(stripImages),
+        callLogs: s.callLogs,
         invoices: s.invoices,
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,

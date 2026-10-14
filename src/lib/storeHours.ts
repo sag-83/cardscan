@@ -16,11 +16,30 @@ type GooglePlacesStatus = 'OK' | 'ZERO_RESULTS' | 'OVER_QUERY_LIMIT' | 'REQUEST_
 interface GooglePlaceResult {
   name?: string
   place_id?: string
+  formatted_address?: string
   business_status?: string
+  geometry?: { location?: { lat: () => number; lng: () => number } }
   opening_hours?: {
     isOpen?: () => boolean
     open_now?: boolean
   }
+}
+
+export interface GoogleAutocompletePrediction {
+  description: string
+  place_id: string
+  structured_formatting?: { main_text?: string; secondary_text?: string }
+}
+
+export interface GoogleAutocompleteService {
+  getPlacePredictions(
+    request: {
+      input: string
+      componentRestrictions?: { country: string | string[] }
+      types?: string[]
+    },
+    callback: (predictions: GoogleAutocompletePrediction[] | null, status: GooglePlacesStatus) => void,
+  ): void
 }
 
 interface GooglePlacesService {
@@ -45,6 +64,7 @@ declare global {
         places?: {
           PlacesService: new (element: HTMLElement) => GooglePlacesService
           PlacesServiceStatus: Record<string, GooglePlacesStatus>
+          AutocompleteService: new () => GoogleAutocompleteService
         }
       }
     }
@@ -79,6 +99,20 @@ function getMapsKey(): string {
 function hasMapsKey(): boolean {
   const key = getMapsKey()
   return Boolean(key && !key.includes('your-'))
+}
+
+export function mapsKeyAvailable(): boolean {
+  return hasMapsKey()
+}
+
+/** Loads the shared Maps JS library (Places). Safe to call from several screens. */
+export async function loadGooglePlacesLibrary(): Promise<boolean> {
+  try {
+    await loadPlacesService()
+    return Boolean(window.google?.maps?.places)
+  } catch {
+    return false
+  }
 }
 
 function loadPlacesService(): Promise<GooglePlacesService> {

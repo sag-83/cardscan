@@ -35,27 +35,39 @@ export interface RouteResult {
 /** The origin is pinned to matrix index 0 by every caller. */
 export const ORIGIN_INDEX = 0
 
+/**
+ * Where the route finishes.
+ *
+ * `null` leaves the driver at the last stop. `ORIGIN_INDEX` closes the loop
+ * back to the start. Any other index is a separate place — his office, a
+ * hotel — that is costed as the final leg but never visited as a stop.
+ */
+export type EndIndex = number | null
+
 const EPSILON = 1e-9
 const MAX_PASSES = 50
 const MAX_SEGMENT_LENGTH = 3
 
-export function tourCost(order: number[], matrix: CostMatrix, roundTrip: boolean): number {
+export function tourCost(order: number[], matrix: CostMatrix, endIndex: EndIndex): number {
   let total = 0
   for (let i = 0; i < order.length - 1; i++) {
     total += matrix[order[i]][order[i + 1]]
   }
-  if (roundTrip && order.length > 1) {
-    total += matrix[order[order.length - 1]][order[0]]
+  if (endIndex !== null && order.length > 1) {
+    total += matrix[order[order.length - 1]][endIndex]
   }
   return total
 }
 
 export interface BuildTourOptions {
-  /** Matrix indices eligible to be visited. Must not include the origin. */
+  /**
+   * Matrix indices eligible to be visited. Must exclude the origin, and the
+   * end node too when the route finishes somewhere that isn't a stop.
+   */
   candidates: number[]
   /** Hard cap on stops. When candidates exceed it, the extras are dropped. */
   limit: number
-  roundTrip: boolean
+  endIndex: EndIndex
   /**
    * Per-candidate multiplier applied to insertion cost during construction.
    * Below 1 makes a stop more attractive, so it survives the cap. Ordering is
@@ -78,13 +90,13 @@ export interface BuildTourOptions {
  * than picking the N closest stops scattered in every direction.
  */
 export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number[] {
-  const { candidates, limit, roundTrip, weights, tieBreak } = options
+  const { candidates, limit, endIndex, weights, tieBreak } = options
   const order = [ORIGIN_INDEX]
   const remaining = new Set(candidates)
   const cap = Math.min(limit, candidates.length)
 
   while (order.length - 1 < cap && remaining.size > 0) {
-    const baseCost = tourCost(order, matrix, roundTrip)
+    const baseCost = tourCost(order, matrix, endIndex)
     let bestScore = Infinity
     let bestRank = -Infinity
     let bestCandidate = -1
@@ -95,7 +107,7 @@ export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number
       const rank = tieBreak?.get(candidate) ?? 0
       for (let position = 1; position <= order.length; position++) {
         const trial = [...order.slice(0, position), candidate, ...order.slice(position)]
-        const score = (tourCost(trial, matrix, roundTrip) - baseCost) * weight
+        const score = (tourCost(trial, matrix, endIndex) - baseCost) * weight
         const cheaper = score < bestScore - EPSILON
         const tiedButPreferred = Math.abs(score - bestScore) <= EPSILON && rank > bestRank
         if (cheaper || tiedButPreferred) {
@@ -116,9 +128,9 @@ export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number
 }
 
 /** Reverses every run of stops and keeps any reversal that shortens the tour. */
-function twoOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): RouteResult {
+function twoOptPass(order: number[], matrix: CostMatrix, endIndex: EndIndex): RouteResult {
   let best = order
-  let bestCost = tourCost(best, matrix, roundTrip)
+  let bestCost = tourCost(best, matrix, endIndex)
 
   for (let i = 1; i < best.length - 1; i++) {
     for (let j = i + 1; j < best.length; j++) {
@@ -127,7 +139,7 @@ function twoOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): Ro
         ...best.slice(i, j + 1).reverse(),
         ...best.slice(j + 1),
       ]
-      const cost = tourCost(trial, matrix, roundTrip)
+      const cost = tourCost(trial, matrix, endIndex)
       if (cost < bestCost - EPSILON) {
         best = trial
         bestCost = cost
@@ -139,9 +151,9 @@ function twoOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): Ro
 }
 
 /** Lifts runs of 1-3 stops and reinserts them elsewhere, forwards or reversed. */
-function orOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): RouteResult {
+function orOptPass(order: number[], matrix: CostMatrix, endIndex: EndIndex): RouteResult {
   let best = order
-  let bestCost = tourCost(best, matrix, roundTrip)
+  let bestCost = tourCost(best, matrix, endIndex)
 
   for (let length = 1; length <= MAX_SEGMENT_LENGTH; length++) {
     for (let start = 1; start + length <= best.length; start++) {
@@ -152,7 +164,7 @@ function orOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): Rou
         if (position === start) continue
         for (const piece of [segment, [...segment].reverse()]) {
           const trial = [...rest.slice(0, position), ...piece, ...rest.slice(position)]
-          const cost = tourCost(trial, matrix, roundTrip)
+          const cost = tourCost(trial, matrix, endIndex)
           if (cost < bestCost - EPSILON) {
             best = trial
             bestCost = cost
@@ -166,13 +178,13 @@ function orOptPass(order: number[], matrix: CostMatrix, roundTrip: boolean): Rou
 }
 
 /** Alternates 2-opt and Or-opt until neither finds an improvement. */
-export function improveTour(order: number[], matrix: CostMatrix, roundTrip: boolean): RouteResult {
+export function improveTour(order: number[], matrix: CostMatrix, endIndex: EndIndex): RouteResult {
   let current = order
-  let currentCost = tourCost(current, matrix, roundTrip)
+  let currentCost = tourCost(current, matrix, endIndex)
 
   for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const afterTwoOpt = twoOptPass(current, matrix, roundTrip)
-    const afterOrOpt = orOptPass(afterTwoOpt.order, matrix, roundTrip)
+    const afterTwoOpt = twoOptPass(current, matrix, endIndex)
+    const afterOrOpt = orOptPass(afterTwoOpt.order, matrix, endIndex)
 
     if (afterOrOpt.cost >= currentCost - EPSILON) {
       return { order: afterOrOpt.order, cost: afterOrOpt.cost }
@@ -188,7 +200,7 @@ export function improveTour(order: number[], matrix: CostMatrix, roundTrip: bool
 export function planRoute(matrix: CostMatrix, options: BuildTourOptions): RouteResult {
   const built = buildTour(matrix, options)
   if (built.length <= 2) {
-    return { order: built, cost: tourCost(built, matrix, options.roundTrip) }
+    return { order: built, cost: tourCost(built, matrix, options.endIndex) }
   }
-  return improveTour(built, matrix, options.roundTrip)
+  return improveTour(built, matrix, options.endIndex)
 }

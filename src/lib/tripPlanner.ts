@@ -42,8 +42,6 @@ export interface TripOptions {
   /** Only consider contacts within this many miles of the start. */
   radiusMiles: number
   maxStops: number
-  /** Whether the last stop should route back to the start. */
-  roundTrip: boolean
   /** Time spent at each stop, used for the day-length total. */
   minutesPerStop: number
   priority: TripPriority
@@ -52,12 +50,21 @@ export interface TripOptions {
 export const DEFAULT_TRIP_OPTIONS: TripOptions = {
   radiusMiles: 50,
   maxStops: 8,
-  roundTrip: true,
   minutesPerStop: 30,
   priority: 'none',
 }
 
 export interface TripOrigin {
+  label: string
+  point: GeoPoint
+}
+
+/**
+ * Where the day finishes. `null` ends at the last stop; passing the origin's
+ * own coordinates closes the loop; anywhere else is costed as a final leg
+ * without being visited as a stop.
+ */
+export interface TripEnd {
   label: string
   point: GeoPoint
 }
@@ -88,8 +95,12 @@ export interface TripSkipped {
 
 export interface TripPlan {
   origin: TripOrigin
+  /** Null when the day simply ends at the last stop. */
+  end: TripEnd | null
+  /** True when the finish is the starting point itself. */
+  endsAtStart: boolean
   stops: TripStop[]
-  roundTrip: boolean
+  /** Travel on the final leg from the last stop to `end`. */
   returnMiles: number
   returnMinutes: number
   totalMiles: number
@@ -132,7 +143,8 @@ export class TripPlanError extends Error {
 // cluster from, without making the user wait on lookups that can't be used.
 const SHORTLIST_MULTIPLIER = 3
 const MIN_SHORTLIST = 24
-const MAX_SHORTLIST = 45
+// Origin + shortlist + optional finish still has to fit OSRM's 60-point table.
+const MAX_SHORTLIST = 54
 
 // Slack on the coarse city-centroid filter. A town can be wide enough that its
 // centre falls outside the radius while its near edge doesn't.
@@ -247,6 +259,7 @@ function buildEstimateMatrices(points: GeoPoint[]): { minutes: CostMatrix; miles
 export async function planTrip(
   contacts: Contact[],
   origin: TripOrigin,
+  end: TripEnd | null,
   options: TripOptions,
   onProgress?: (progress: TripProgress) => void,
   signal?: AbortSignal,
@@ -380,7 +393,17 @@ export async function planTrip(
   // the same single request, and it means the *selection* is made on driving
   // time too. Straight-line distance would happily pick a shop three miles
   // away across a river over one eight miles away down a highway.
+  // A finish that isn't the start needs its own node in the matrix so the
+  // final leg is costed, but it must stay out of `candidates` — the driver
+  // ends there, he doesn't call on it.
+  const endsAtStart = end !== null
+    && end.point.lat === origin.point.lat
+    && end.point.lng === origin.point.lng
+
   const points = [origin.point, ...located.map((entry) => entry.point)]
+  if (end && !endsAtStart) points.push(end.point)
+  const endIndex = end === null ? null : endsAtStart ? ORIGIN_INDEX : points.length - 1
+
   const road = await fetchDrivingMatrix(points, signal)
   throwIfCancelled(signal)
 
@@ -401,7 +424,7 @@ export async function planTrip(
   const route = planRoute(minutesMatrix, {
     candidates: located.map((_, index) => index + 1),
     limit: options.maxStops,
-    roundTrip: options.roundTrip,
+    endIndex,
     weights,
     tieBreak,
   })
@@ -436,17 +459,18 @@ export async function planTrip(
 
   let returnMiles = 0
   let returnMinutes = 0
-  if (options.roundTrip && stops.length > 0) {
+  if (endIndex !== null && stops.length > 0) {
     const last = route.order[route.order.length - 1]
-    returnMinutes = minutesMatrix[last][ORIGIN_INDEX]
-    returnMiles = milesMatrix[last][ORIGIN_INDEX]
+    returnMinutes = minutesMatrix[last][endIndex]
+    returnMiles = milesMatrix[last][endIndex]
     driveMinutes += returnMinutes
   }
 
   return {
     origin,
+    end,
+    endsAtStart,
     stops,
-    roundTrip: options.roundTrip,
     returnMiles,
     returnMinutes,
     totalMiles: cumulativeMiles + returnMiles,
@@ -494,16 +518,18 @@ export interface MapsLink {
 export function buildMapsLinks(plan: TripPlan): MapsLink[] {
   if (plan.stops.length === 0) return []
 
-  const originQuery = `${plan.origin.point.lat},${plan.origin.point.lng}`
   const places = [
-    { label: plan.origin.label, query: originQuery },
+    { label: plan.origin.label, query: `${plan.origin.point.lat},${plan.origin.point.lng}` },
     ...plan.stops.map((stop, index) => ({
       label: `${index + 1}. ${stop.contact.company || stop.contact.name || 'Stop'}`,
       query: mapsQuery(stop),
     })),
   ]
-  if (plan.roundTrip) {
-    places.push({ label: `Back to ${plan.origin.label}`, query: originQuery })
+  if (plan.end) {
+    places.push({
+      label: plan.endsAtStart ? `Back to ${plan.end.label}` : plan.end.label,
+      query: `${plan.end.point.lat},${plan.end.point.lng}`,
+    })
   }
 
   const links: MapsLink[] = []
@@ -553,9 +579,10 @@ export function buildTripText(plan: TripPlan): string {
     lines.push('')
   })
 
-  if (plan.roundTrip) {
+  if (plan.end) {
+    const prefix = plan.endsAtStart ? 'Back to' : 'Finish at'
     lines.push(
-      `Return to ${plan.origin.label}: ${formatMiles(plan.returnMiles)} · ${formatDuration(plan.returnMinutes)}`,
+      `${prefix} ${plan.end.label}: ${formatMiles(plan.returnMiles)} · ${formatDuration(plan.returnMinutes)}`,
     )
     lines.push('')
   }

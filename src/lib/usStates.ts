@@ -30,3 +30,7 @@ export function normalizeStateValue(raw: string | undefined | null): string {
   if (VALID_CODES.has(cleaned)) return cleaned
   return STATE_NAME_TO_CODE[cleaned] ?? cleaned
 }
+
+export function isUsStateCode(value: string): boolean {
+  return VALID_CODES.has(value)
+}

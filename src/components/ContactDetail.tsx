@@ -45,7 +45,9 @@ export function ContactDetail() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
   const [addingField, setAddingField] = useState<'email' | 'phone' | null>(null)
   const detailContactId = useStore((s) => s.detailContactId)
-  const contacts = useStore((s) => s.contacts)
+  const contact = useStore((s) => (
+    s.detailContactId ? s.contacts.find((c) => c.id === s.detailContactId) ?? null : null
+  ))
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setEditModal = useStore((s) => s.setEditModal)
   const setMenuContactId = useStore((s) => s.setMenuContactId)
@@ -54,13 +56,11 @@ export function ContactDetail() {
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
 
-  const contact = contacts.find((c) => c.id === detailContactId)
-
   useEffect(() => {
-    if (detailContactId && !contacts.find((c) => c.id === detailContactId)) {
+    if (detailContactId && !contact) {
       setDetailContactId(null)
     }
-  }, [contacts, detailContactId, setDetailContactId])
+  }, [contact, detailContactId, setDetailContactId])
 
   if (!contact) return null
   const c = contact

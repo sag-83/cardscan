@@ -20,6 +20,7 @@ import {
   Undo2,
   Upload,
 } from 'lucide-react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store/useStore'
 import { useTheme } from '../../hooks/useTheme'
 import {
@@ -118,7 +119,7 @@ export function SettingsScreen() {
     deleteContact: s.deleteContact,
     deleteInvoice: s.deleteInvoice,
     showToast: s.showToast,
-  }))
+  }), shallow)
 
   const handleSBChange = (url: string, key: string) => {
     setSbUrl(url); setSbKey(key); initSupabase(url, key)

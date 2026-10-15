@@ -119,45 +119,25 @@ export function ScanScreen() {
   const [addressPickerCardId, setAddressPickerCardId] = useState<string | null>(null)
   const seenAddressPickerIds = useRef<Set<string>>(new Set())
 
-  const {
-    contacts,
-    apiKey,
-    apiKey2,
-    apiKey3,
-    isScanning,
-    setIsScanning,
-    previewCards,
-    setPreviewCards,
-    addContacts,
-    updateContact,
-    pendingBackId,
-    setPendingBackId,
-    triggerBackScan,
-    setTriggerBackScan,
-    setActiveScreen,
-    setDetailContactId,
-    showToast,
-    theme,
-  } = useStore((s) => ({
-    contacts: s.contacts,
-    apiKey: s.apiKey,
-    apiKey2: s.apiKey2,
-    apiKey3: s.apiKey3,
-    isScanning: s.isScanning,
-    setIsScanning: s.setIsScanning,
-    previewCards: s.previewCards,
-    setPreviewCards: s.setPreviewCards,
-    addContacts: s.addContacts,
-    updateContact: s.updateContact,
-    pendingBackId: s.pendingBackId,
-    setPendingBackId: s.setPendingBackId,
-    triggerBackScan: s.triggerBackScan,
-    setTriggerBackScan: s.setTriggerBackScan,
-    setActiveScreen: s.setActiveScreen,
-    setDetailContactId: s.setDetailContactId,
-    showToast: s.showToast,
-    theme: s.theme,
-  }))
+  const contactCount = useStore((s) => s.contacts.length)
+  const apiKey = useStore((s) => s.apiKey)
+  const apiKey2 = useStore((s) => s.apiKey2)
+  const apiKey3 = useStore((s) => s.apiKey3)
+  const isScanning = useStore((s) => s.isScanning)
+  const setIsScanning = useStore((s) => s.setIsScanning)
+  const previewCards = useStore((s) => s.previewCards)
+  const setPreviewCards = useStore((s) => s.setPreviewCards)
+  const addContacts = useStore((s) => s.addContacts)
+  const updateContact = useStore((s) => s.updateContact)
+  const pendingBackId = useStore((s) => s.pendingBackId)
+  const setPendingBackId = useStore((s) => s.setPendingBackId)
+  const triggerBackScan = useStore((s) => s.triggerBackScan)
+  const setTriggerBackScan = useStore((s) => s.setTriggerBackScan)
+  const setActiveScreen = useStore((s) => s.setActiveScreen)
+  const setDetailContactId = useStore((s) => s.setDetailContactId)
+  const showToast = useStore((s) => s.showToast)
+  const theme = useStore((s) => s.theme)
+  const liveContacts = () => useStore.getState().contacts
 
   const geminiKeys = [apiKey, apiKey2, apiKey3, ...ENV_GEMINI_KEYS]
     .map((key) => key?.trim())
@@ -198,8 +178,8 @@ export function ScanScreen() {
 
   const startScan = (side: 'front' | 'back', source: 'camera' | 'files' = 'camera') => {
     if (IS_DEMO_MODE) {
-      if (side === 'back' && contacts.length) {
-        const lastContact = mostRecentlyAddedContact(contacts)
+      if (side === 'back' && liveContacts().length) {
+        const lastContact = mostRecentlyAddedContact(liveContacts())
         if (lastContact) {
           updateContact(lastContact.id, {
             back_notes: 'Demo back-side scan: booth number, extra phone, and follow-up notes.',
@@ -221,13 +201,13 @@ export function ScanScreen() {
     }
 
     if (side === 'back') {
-      if (!contacts.length) {
+      if (!liveContacts().length) {
         showToast('Scan a front side first')
         return
       }
 
       if (!pendingBackId) {
-        const lastContact = mostRecentlyAddedContact(contacts)
+        const lastContact = mostRecentlyAddedContact(liveContacts())
         if (!lastContact) {
           showToast('Scan a front side first')
           return
@@ -292,7 +272,7 @@ export function ScanScreen() {
       }
 
       if (side === 'back' && pendingBackId) {
-        const target = contacts.find((c) => c.id === pendingBackId)
+        const target = liveContacts().find((c) => c.id === pendingBackId)
 
         if (!target) {
           showToast('Original contact not found — try again')
@@ -406,7 +386,7 @@ export function ScanScreen() {
         restoredFromCloud,
       } = await filterUniqueAgainstLocalAndCloud(
         newCards,
-        contacts
+        liveContacts()
       )
 
       setIsScanning(false)
@@ -461,7 +441,7 @@ export function ScanScreen() {
         restoredFromCloud,
       } = await filterUniqueAgainstLocalAndCloud(
         previewCards,
-        contacts
+        liveContacts()
       )
 
       if (restoredFromCloud.length) {
@@ -703,7 +683,7 @@ export function ScanScreen() {
             Choose Better Scan / Files
           </Button>
 
-          {contacts.length > 0 && (
+          {contactCount > 0 && (
             <Button
               type="button"
               variant="outline"
@@ -715,7 +695,7 @@ export function ScanScreen() {
             </Button>
           )}
 
-          {contacts.length > 0 && (
+          {contactCount > 0 && (
             <Button
               type="button"
               variant="outline"
@@ -731,10 +711,10 @@ export function ScanScreen() {
           </p>
         </CardContent>
 
-        {contacts.length > 0 && (
+        {contactCount > 0 && (
           <CardFooter className="flex flex-col gap-0 border-t-0 bg-transparent px-[22px] pb-[22px] pt-0">
             <div className="w-full rounded-xl border border-b1 bg-bg3 py-3.5 text-center">
-              <div className="text-2xl font-extrabold">{contacts.length}</div>
+              <div className="text-2xl font-extrabold">{contactCount}</div>
               <div className="text-[13px] text-tx3">Total Contacts</div>
             </div>
           </CardFooter>

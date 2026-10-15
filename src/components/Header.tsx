@@ -8,7 +8,7 @@ export function Header() {
   const [showQr, setShowQr] = useState(false)
   const [qrPressed, setQrPressed] = useState(false)
   const { theme, toggle } = useTheme()
-  const contacts = useStore((s) => s.contacts)
+  const contactCount = useStore((s) => s.contacts.length)
 
   useEffect(() => {
     if (!showQr) return
@@ -76,14 +76,14 @@ export function Header() {
         >
           QR
         </button>
-        {contacts.length > 0 && (
+        {contactCount > 0 && (
           <span
             style={{
               background: 'var(--accent)', color: '#fff',
               borderRadius: 99, padding: '2px 9px', fontSize: 12, fontWeight: 700,
             }}
           >
-            {contacts.length}
+            {contactCount}
           </span>
         )}
       </div>

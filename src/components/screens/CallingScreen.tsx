@@ -17,6 +17,7 @@ import {
   PhoneCall,
   PhoneOff,
   RefreshCw,
+  Search,
   SkipForward,
   SlidersHorizontal,
   Star,
@@ -28,22 +29,36 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { uid } from '../../lib/utils'
+import { phoneKey, uid } from '../../lib/utils'
 import { normalizeStateValue } from '../../lib/usStates'
 import { deleteCallLogFromDB, saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { pushCallLog, syncCallLogs } from '../../lib/callSync'
 import { LAST_TRIP_SCOPE_EVENT, loadLastTripScope, scopeLabel, type LastTripScope } from '../../lib/lastTripScope'
+import { readSkippedCalls, writeSkippedCalls } from '../../lib/callSession'
 import {
   buildCallQueue,
+  buildHistories,
   contactPhone,
   DEFAULT_CALL_FILTERS,
   describeWhen,
   parkedReasonLabel,
   reasonLabel,
   type CallFilters,
+  type ParkedEntry,
   type QueueEntry,
 } from '../../lib/callQueue'
+
+/** Parked shops can still be opened from search so a rep can note and clear them. */
+function parkedToQueueEntry(entry: ParkedEntry): QueueEntry {
+  return {
+    contact: entry.contact,
+    history: entry.history,
+    reason: entry.reason === 'callback-later' ? 'callback-due' : entry.reason === 'resting' ? 'retry' : 'fresh',
+    score: 0,
+    overdueDays: 0,
+  }
+}
 import {
   CALL_OUTCOMES,
   CALL_OUTCOME_ORDER,
@@ -92,7 +107,11 @@ export function CallingScreen() {
   const [syncing, setSyncing] = useState(false)
 
   // Passed over for now, not logged. Session-only: tomorrow they come back.
-  const [skipped, setSkipped] = useState<string[]>([])
+  const [skipped, setSkipped] = useState<string[]>(readSkippedCalls)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  /** Jump to a specific shop (after a dial, or to clear someone mid-list). */
+  const [focusedId, setFocusedId] = useState<string | null>(null)
 
   const [note, setNote] = useState('')
   const [pendingOutcome, setPendingOutcome] = useState<CallOutcome | null>(null)
@@ -100,17 +119,13 @@ export function CallingScreen() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [tripHint, setTripHint] = useState<LastTripScope | null>(() => loadLastTripScope())
   const [hintDismissed, setHintDismissed] = useState(false)
-  const activeScreen = useStore((s) => s.activeScreen)
 
   useEffect(() => {
+    setTripHint(loadLastTripScope())
     const refresh = () => setTripHint(loadLastTripScope())
     window.addEventListener(LAST_TRIP_SCOPE_EVENT, refresh)
     return () => window.removeEventListener(LAST_TRIP_SCOPE_EVENT, refresh)
   }, [])
-
-  useEffect(() => {
-    if (activeScreen === 'calls') setTripHint(loadLastTripScope())
-  }, [activeScreen])
 
   const syncHandles = useRef({ merge: mergeCallLogs, markSynced: markCallLogSynced })
   syncHandles.current = { merge: mergeCallLogs, markSynced: markCallLogSynced }
@@ -118,6 +133,10 @@ export function CallingScreen() {
   useEffect(() => {
     try { localStorage.setItem(FILTERS_KEY, JSON.stringify(filters)) } catch {}
   }, [filters])
+
+  useEffect(() => {
+    writeSkippedCalls(skipped)
+  }, [skipped])
 
   // One reconcile on arrival: push anything stranded offline, then pull.
   const synced = useRef(false)
@@ -148,7 +167,50 @@ export function CallingScreen() {
     () => queue.due.filter((entry) => !skipped.includes(entry.contact.id)),
     [queue.due, skipped],
   )
-  const active: QueueEntry | undefined = upNext[0]
+
+  const searchHits = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (q.length < 2) return [] as QueueEntry[]
+    const digits = phoneKey(searchQuery)
+    const pool = [...queue.due, ...queue.parked.map(parkedToQueueEntry)]
+    const hits: QueueEntry[] = []
+    for (const entry of pool) {
+      if (hits.length >= 12) break
+      const c = entry.contact
+      const hay = [c.name, c.company, c.city, c.email, c.phone_mobile, c.phone_work]
+        .join(' ')
+        .toLowerCase()
+      const textMatch = hay.includes(q)
+      const phoneMatch = digits.length >= 3 && (
+        phoneKey(c.phone_mobile).includes(digits) ||
+        phoneKey(c.phone_work).includes(digits)
+      )
+      if (textMatch || phoneMatch) hits.push(entry)
+    }
+    return hits
+  }, [searchQuery, queue.due, queue.parked])
+
+  const histories = useMemo(() => buildHistories(callLogs), [callLogs])
+
+  const focusedEntry = useMemo(() => {
+    if (!focusedId) return undefined
+    const fromDue = queue.due.find((entry) => entry.contact.id === focusedId)
+    if (fromDue) return fromDue
+    const parked = queue.parked.find((entry) => entry.contact.id === focusedId)
+    if (parked) return parkedToQueueEntry(parked)
+    const contact = contacts.find((c) => c.id === focusedId)
+    if (!contact || !contactPhone(contact)) return undefined
+    return {
+      contact,
+      history: histories.get(focusedId) ?? { logs: [], attempts: 0 },
+      reason: 'fresh' as const,
+      score: 0,
+      overdueDays: 0,
+    }
+  }, [focusedId, queue.due, queue.parked, contacts, histories])
+
+  const active: QueueEntry | undefined = focusedEntry ?? upNext[0]
+  const workingFromSearch = Boolean(focusedEntry)
 
   const loggedToday = useMemo(() => {
     const start = new Date()
@@ -158,7 +220,10 @@ export function CallingScreen() {
       .slice(0, 40)
   }, [callLogs])
 
-  const unsyncedCount = callLogs.filter((log) => !log.synced).length
+  const unsyncedCount = useMemo(
+    () => callLogs.reduce((n, log) => (log.synced ? n : n + 1), 0),
+    [callLogs],
+  )
 
   // A new card means a clean slate for the note and outcome.
   const activeId = active?.contact.id
@@ -170,6 +235,17 @@ export function CallingScreen() {
   }, [activeId])
 
   const patchFilters = (next: Partial<CallFilters>) => setFilters((f) => ({ ...f, ...next }))
+
+  const clearSearchFocus = () => {
+    setFocusedId(null)
+    setSearchQuery('')
+  }
+
+  const pickSearchHit = (entry: QueueEntry) => {
+    setFocusedId(entry.contact.id)
+    setSearchQuery('')
+    setSkipped((list) => list.filter((id) => id !== entry.contact.id))
+  }
 
   const logCall = (outcome: CallOutcome) => {
     if (!active) return
@@ -192,6 +268,7 @@ export function CallingScreen() {
 
     addCallLog(log)
     void pushCallLog(log, syncHandles.current)
+    clearSearchFocus()
 
     // A promised callback is also a reminder the client wants on his phone,
     // and the app already pushes notifications for contact follow-ups — so the
@@ -287,6 +364,15 @@ export function CallingScreen() {
 
       <TallyBar stats={queue.stats} remaining={upNext.length} />
 
+      <CallSearchBar
+        query={searchQuery}
+        onQuery={setSearchQuery}
+        hits={searchHits}
+        onPick={pickSearchHit}
+        focused={workingFromSearch ? active?.contact ?? null : null}
+        onClearFocus={clearSearchFocus}
+      />
+
       {unsyncedCount > 0 && (
         <button
           type="button"
@@ -320,7 +406,12 @@ export function CallingScreen() {
           historyOpen={historyOpen}
           onToggleHistory={() => setHistoryOpen((v) => !v)}
           onLog={logCall}
-          onSkip={() => setSkipped((list) => [...list, active.contact.id])}
+          onSkip={() => {
+            setSkipped((list) => (
+              list.includes(active.contact.id) ? list : [...list, active.contact.id]
+            ))
+            clearSearchFocus()
+          }}
           onOpenContact={() => setDetailContactId(active.contact.id)}
         />
       ) : (
@@ -346,6 +437,132 @@ export function CallingScreen() {
     </div>
   )
 }
+
+// ─── Search ─────────────────────────────────────────────────────────────────
+
+function CallSearchBar({
+  query, onQuery, hits, onPick, focused, onClearFocus,
+}: {
+  query: string
+  onQuery: (value: string) => void
+  hits: QueueEntry[]
+  onPick: (entry: QueueEntry) => void
+  focused: ContactLike | null
+  onClearFocus: () => void
+}) {
+  const showHits = query.trim().length >= 2
+
+  return (
+    <div style={{ padding: '0 16px 4px' }}>
+      <div style={{ position: 'relative' }}>
+        <Search
+          className="size-4"
+          style={{
+            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--text3)', pointerEvents: 'none',
+          }}
+          aria-hidden
+        />
+        <input
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          placeholder="Search who you just called…"
+          aria-label="Search call list"
+          style={{
+            width: '100%', padding: '11px 40px 11px 38px', borderRadius: 12,
+            background: 'var(--bg2)', border: '1px solid var(--border2)',
+            fontSize: 15, color: 'var(--text)',
+          }}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => onQuery('')}
+            aria-label="Clear search"
+            style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              width: 26, height: 26, borderRadius: '50%', border: 'none',
+              background: 'var(--bg4)', color: 'var(--text3)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        )}
+      </div>
+
+      {focused && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
+          padding: '8px 11px', borderRadius: 10,
+          background: 'var(--chip-accent-bg)', border: '1px solid var(--accent)',
+        }}>
+          <Search className="size-3.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+          <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--text2)' }}>
+            Working on {focused.company || focused.name || 'this contact'} — add notes, then save to clear them
+          </div>
+          <button
+            type="button"
+            onClick={onClearFocus}
+            style={{
+              flexShrink: 0, padding: '5px 9px', borderRadius: 8, border: 'none',
+              background: 'var(--bg2)', color: 'var(--text2)', fontSize: 11.5,
+              fontWeight: 800, cursor: 'pointer',
+            }}
+          >
+            Back to queue
+          </button>
+        </div>
+      )}
+
+      {showHits && (
+        <div style={{
+          marginTop: 8, borderRadius: 12, overflow: 'hidden',
+          border: '1px solid var(--border2)', background: 'var(--bg2)',
+          maxHeight: 280, overflowY: 'auto',
+        }}>
+          {hits.length === 0 ? (
+            <div style={{ padding: '14px 14px', fontSize: 13, color: 'var(--text3)' }}>
+              No matches in this call list
+            </div>
+          ) : hits.map((entry) => {
+            const c = entry.contact
+            const title = c.company || c.name || 'Unknown'
+            const subtitle = [c.name && c.company ? c.name : '', c.city, normalizeStateValue(c.state)]
+              .filter(Boolean)
+              .join(' · ')
+            const phone = contactPhone(c)
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onPick(entry)}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 2, width: '100%',
+                  padding: '11px 13px', border: 'none', borderBottom: '1px solid var(--border2)',
+                  background: 'transparent', textAlign: 'left', cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{title}</div>
+                {(subtitle || phone) && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+                    {[subtitle, phone].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginTop: 2 }}>
+                  {reasonLabel(entry)}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type ContactLike = { name?: string; company?: string }
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 

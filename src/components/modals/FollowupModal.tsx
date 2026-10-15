@@ -35,15 +35,14 @@ function presetDatetimeLocal(days: number): string {
 export function FollowupModal() {
   const followupContactId = useStore((s) => s.followupContactId)
   const setFollowupContactId = useStore((s) => s.setFollowupContactId)
-  const contacts = useStore((s) => s.contacts)
-  const invoices = useStore((s) => s.invoices)
+  const contact = useStore((s) => (
+    s.followupContactId ? s.contacts.find((c) => c.id === s.followupContactId) ?? null : null
+  ))
   const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
 
   const [dateValue, setDateValue] = useState('')
   const [noteValue, setNoteValue] = useState('')
-
-  const contact = contacts.find((c) => c.id === followupContactId)
 
   useEffect(() => {
     if (contact) {
@@ -61,6 +60,7 @@ export function FollowupModal() {
     const followup_at = new Date(dateValue).toISOString()
     const followup_note = noteValue.trim()
     updateContact(contact.id, { followup_at, followup_note })
+    const { contacts, invoices } = useStore.getState()
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at, followup_note } : c))
     await onFollowupScheduleChanged(contact.id, nextContacts, invoices)
     const saved = IS_DEMO_MODE ? true : await saveContactToDB({ ...contact, followup_at, followup_note })
@@ -78,6 +78,7 @@ export function FollowupModal() {
       await saveContactToDB({ ...contact, followup_at: '', followup_note: '' })
     }
     updateContact(contact.id, { followup_at: '', followup_note: '' })
+    const { contacts, invoices } = useStore.getState()
     const nextContacts = contacts.map((c) => (c.id === contact.id ? { ...c, followup_at: '', followup_note: '' } : c))
     await onFollowupScheduleChanged(contact.id, nextContacts, invoices)
     showToast('Follow-up cleared')

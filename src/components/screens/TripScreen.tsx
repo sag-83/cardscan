@@ -34,6 +34,7 @@ import {
 import { formatDuration, formatMiles } from '../../lib/geoMath'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 import { saveLastTripScope } from '../../lib/lastTripScope'
+import { readTripSession, writeTripSession } from '../../lib/tripSession'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import {
   buildMapsLinks,
@@ -161,27 +162,43 @@ export function TripScreen() {
   const setOptions = (update: (o: TripOptions) => TripOptions) =>
     setSettings((s) => ({ ...s, options: update(s.options) }))
 
-  const [startPlace, setStartPlace] = useState<SavedPlace>({ label: '' })
+  const restored = readTripSession()
+  const [startPlace, setStartPlace] = useState<SavedPlace>({ label: restored?.startPlaceLabel ?? '' })
   const [editingHome, setEditingHome] = useState(false)
 
-  const [filterState, setFilterState] = useState('')
-  const [filterCity, setFilterCity] = useState('')
-  const [filterType, setFilterType] = useState('')
-  const [minStars, setMinStars] = useState(0)
+  const [filterState, setFilterState] = useState(restored?.filterState ?? '')
+  const [filterCity, setFilterCity] = useState(restored?.filterCity ?? '')
+  const [filterType, setFilterType] = useState(restored?.filterType ?? '')
+  const [minStars, setMinStars] = useState(restored?.minStars ?? 0)
 
-  const [setupOpen, setSetupOpen] = useState(true)
+  const [setupOpen, setSetupOpen] = useState(restored?.setupOpen ?? true)
 
   const [working, setWorking] = useState(false)
   const [progress, setProgress] = useState<TripProgress | null>(null)
-  const [plan, setPlan] = useState<TripPlan | null>(null)
-  const [error, setError] = useState('')
-  const [excluded, setExcluded] = useState<string[]>([])
-  const [lastRun, setLastRun] = useState<{ origin: TripOrigin; end: TripEnd | null } | null>(null)
+  const [plan, setPlan] = useState<TripPlan | null>(restored?.plan ?? null)
+  const [error, setError] = useState(restored?.error ?? '')
+  const [excluded, setExcluded] = useState<string[]>(restored?.excluded ?? [])
+  const [lastRun, setLastRun] = useState<{ origin: TripOrigin; end: TripEnd | null } | null>(restored?.lastRun ?? null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch {}
   }, [settings])
+
+  useEffect(() => {
+    writeTripSession({
+      plan,
+      excluded,
+      lastRun,
+      startPlaceLabel: startPlace.label,
+      filterState,
+      filterCity,
+      filterType,
+      minStars,
+      setupOpen,
+      error,
+    })
+  }, [plan, excluded, lastRun, startPlace.label, filterState, filterCity, filterType, minStars, setupOpen, error])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 

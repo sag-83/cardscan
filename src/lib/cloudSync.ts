@@ -58,6 +58,30 @@ function invoiceTime(inv: SavedInvoice): number {
   return Number.isFinite(t) ? t : 0
 }
 
+function sameContactLibrary(prev: Contact[], next: Contact[]): boolean {
+  if (prev === next) return true
+  if (prev.length !== next.length) return false
+  const prevById = new Map(prev.map((c) => [c.id, c]))
+  for (const contact of next) {
+    const existing = prevById.get(contact.id)
+    if (!existing) return false
+    if ((existing.updated_at || '') !== (contact.updated_at || '')) return false
+  }
+  return true
+}
+
+function sameInvoiceLibrary(prev: SavedInvoice[], next: SavedInvoice[]): boolean {
+  if (prev === next) return true
+  if (prev.length !== next.length) return false
+  const prevById = new Map(prev.map((inv) => [inv.id, inv]))
+  for (const invoice of next) {
+    const existing = prevById.get(invoice.id)
+    if (!existing) return false
+    if (existing.saved_at !== invoice.saved_at) return false
+  }
+  return true
+}
+
 export function mergeCloudAndLocalInvoices(local: SavedInvoice[], cloud: SavedInvoice[]): SavedInvoice[] {
   const deleted = getDeletedInvoiceIds()
   const cloudFiltered = cloud.filter((inv) => !deleted.has(inv.id))
@@ -99,11 +123,20 @@ export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
 
   await reconcileInvoiceDeletions(cloudInvoices.map((i) => i.id))
 
-  const mergedContacts = mergeCloudAndLocalContacts(store.getContacts(), cloudContacts)
-  const mergedInvoices = mergeCloudAndLocalInvoices(store.getInvoices(), cloudInvoices)
+  const localContacts = store.getContacts()
+  const localInvoices = store.getInvoices()
+  const mergedContacts = mergeCloudAndLocalContacts(localContacts, cloudContacts)
+  const mergedInvoices = mergeCloudAndLocalInvoices(localInvoices, cloudInvoices)
 
-  store.setContacts(mergedContacts)
-  store.setInvoices(mergedInvoices)
+  // Polling every 30s used to replace the whole library even when nothing
+  // changed — that stringify + 700-row reconcile is what froze the nav
+  // after a call or text.
+  if (!sameContactLibrary(localContacts, mergedContacts)) {
+    store.setContacts(mergedContacts)
+  }
+  if (!sameInvoiceLibrary(localInvoices, mergedInvoices)) {
+    store.setInvoices(mergedInvoices)
+  }
 
   await syncCallLogs(store.getCallLogs(), {
     merge: store.mergeCallLogs,

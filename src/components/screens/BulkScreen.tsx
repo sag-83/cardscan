@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Trash2,
 } from 'lucide-react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store/useStore'
 import {
   exportToCSV,
@@ -34,7 +35,7 @@ export function BulkScreen() {
     setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
     showToast: s.showToast,
-  }))
+  }), shallow)
 
   const targetContacts = selectedIds.length
     ? contacts.filter((c) => selectedIds.includes(c.id))

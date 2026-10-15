@@ -4,7 +4,9 @@ import { deleteImages } from '../../lib/imageStore'
 
 export function ContactMenuModal() {
   const menuContactId = useStore((s) => s.menuContactId)
-  const contacts = useStore((s) => s.contacts)
+  const contact = useStore((s) => (
+    s.menuContactId ? s.contacts.find((c) => c.id === s.menuContactId) ?? null : null
+  ))
   const setMenuContactId = useStore((s) => s.setMenuContactId)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const setEditModal = useStore((s) => s.setEditModal)
@@ -14,7 +16,6 @@ export function ContactMenuModal() {
   const setActiveScreen = useStore((s) => s.setActiveScreen)
   const showToast = useStore((s) => s.showToast)
 
-  const contact = contacts.find((c) => c.id === menuContactId)
   if (!contact) return null
 
   const close = () => setMenuContactId(null)
@@ -34,7 +35,7 @@ export function ContactMenuModal() {
     setPendingBackId(contact.id)
     setActiveScreen('scan')
     // Small delay so ScanScreen mounts before trigger fires
-    setTimeout(() => setTriggerBackScan(true), 80)
+    setTimeout(() => setTriggerBackScan(true), 160)
   }
 
   const handleDelete = () => {

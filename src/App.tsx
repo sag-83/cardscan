@@ -44,8 +44,6 @@ export default function App() {
   const detailContactId = useStore((s) => s.detailContactId)
   const sbUrl = useStore((s) => s.sbUrl)
   const sbKey = useStore((s) => s.sbKey)
-  const contacts = useStore((s) => s.contacts)
-  const invoices = useStore((s) => s.invoices)
   const setContacts = useStore((s) => s.setContacts)
   const setInvoices = useStore((s) => s.setInvoices)
   const deleteContact = useStore((s) => s.deleteContact)
@@ -118,7 +116,7 @@ export default function App() {
       lockTimer = setTimeout(lock, INACTIVITY_LOCK_MS)
     }
 
-    const activityEvents = ['click', 'keydown', 'touchstart', 'pointermove', 'scroll']
+    const activityEvents = ['click', 'keydown', 'touchstart', 'scroll']
 
     resetTimer()
     activityEvents.forEach((eventName) => {
@@ -147,20 +145,21 @@ export default function App() {
     if (!isUnlocked) return
     void (async () => {
       await registerReminderServiceWorker()
-      await syncFollowupReminders(contacts, invoices)
+      const state = useStore.getState()
+      await syncFollowupReminders(state.contacts, state.invoices)
     })()
     return startFollowupReminderPolling(
       () => useStore.getState().contacts,
       () => useStore.getState().invoices,
     )
-  }, [isUnlocked, contacts, invoices])
+  }, [isUnlocked])
 
   useEffect(() => {
     if (!isUnlocked) return
 
     async function init() {
       if (IS_DEMO_MODE) {
-        if (contacts.length === 0) setContacts(DEMO_CONTACTS)
+        if (useStore.getState().contacts.length === 0) setContacts(DEMO_CONTACTS)
         return
       }
 
@@ -168,7 +167,7 @@ export default function App() {
       const envWebhook = import.meta.env.VITE_SHEETS_WEBHOOK as string
       if (envWebhook && !sheetsWebhook) setSheetsWebhook(envWebhook)
 
-      let finalContacts = contacts
+      let finalContacts = useStore.getState().contacts
 
       // Prefer env vars — persisted Zustand values may be stale/empty
       const effectiveUrl = (import.meta.env.VITE_SUPABASE_URL as string) || sbUrl
@@ -267,28 +266,17 @@ export default function App() {
         >
           <Header />
 
-          {/* Screens — all mounted, only active one visible */}
-          <div style={{ display: activeScreen === 'scan' ? 'block' : 'none' }}>
-            <ScanScreen />
-          </div>
-          <div style={{ display: activeScreen === 'contacts' ? 'block' : 'none' }}>
-            <ContactsScreen />
-          </div>
-          <div style={{ display: activeScreen === 'calls' ? 'block' : 'none' }}>
-            <CallingScreen />
-          </div>
-          <div style={{ display: activeScreen === 'trips' ? 'block' : 'none' }}>
-            <TripScreen />
-          </div>
-          <div style={{ display: activeScreen === 'dashboard' ? 'block' : 'none' }}>
-            <DashboardScreen />
-          </div>
-          <div style={{ display: activeScreen === 'bulk' ? 'block' : 'none' }}>
-            <BulkScreen />
-          </div>
-          <div style={{ display: activeScreen === 'settings' ? 'block' : 'none' }}>
-            <SettingsScreen />
-          </div>
+          {/* One screen at a time. Keeping all seven mounted meant a 700-card
+              Contacts list (and the Stats/Scan/Trips trees) still reconciled
+              on every call log, toast, and star tap — which is what made the
+              nav feel stuck after a phone or text action. */}
+          {activeScreen === 'scan' && <ScanScreen />}
+          {activeScreen === 'contacts' && <ContactsScreen />}
+          {activeScreen === 'calls' && <CallingScreen />}
+          {activeScreen === 'trips' && <TripScreen />}
+          {activeScreen === 'dashboard' && <DashboardScreen />}
+          {activeScreen === 'bulk' && <BulkScreen />}
+          {activeScreen === 'settings' && <SettingsScreen />}
 
           {!isDesktop && <NavBar />}
         </div>

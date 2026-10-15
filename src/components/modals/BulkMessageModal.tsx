@@ -9,15 +9,15 @@ export function BulkMessageModal() {
 
   const bulkMessageType = useStore((s) => s.bulkMessageType)
   const setBulkMessageType = useStore((s) => s.setBulkMessageType)
-  const contacts = useStore((s) => s.contacts)
-  const selectedIds = useStore((s) => s.selectedIds)
+  const contacts = useStore((s) => (s.bulkMessageType ? s.contacts : null))
+  const selectedIds = useStore((s) => (s.bulkMessageType ? s.selectedIds : null))
   const showToast = useStore((s) => s.showToast)
+
+  if (!bulkMessageType || !contacts || !selectedIds) return null
 
   const targetContacts = selectedIds.length
     ? contacts.filter((c) => selectedIds.includes(c.id))
     : contacts
-
-  if (!bulkMessageType) return null
 
   const close = () => setBulkMessageType(null)
 

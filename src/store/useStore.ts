@@ -1,19 +1,12 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { Contact, Screen } from '../types/contact'
 import type { CallLog } from '../types/call'
 import { SavedInvoice } from '../types/invoice'
 import type { ChargeInvoice, ChargePayment } from '../types/chargeAccount'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
-
-function stripImages(contact: Contact): Contact {
-  return {
-    ...contact,
-    front_image: '',
-    back_image: '',
-  }
-}
+import { debouncedPersistStorage } from '../lib/debouncedStorage'
 
 interface EditModalState {
   contact: Contact
@@ -152,7 +145,11 @@ export const useStore = create<AppState>()(
           selectedIds: s.selectedIds.filter((x) => x !== id),
         })),
 
-      setContacts: (contacts) => set({ contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }),
+      setContacts: (contacts) =>
+        set((s) => {
+          if (s.contacts === contacts) return s
+          return { contacts: sortContactsAlphabetically(dedupeContacts(contacts)) }
+        }),
 
       callLogs: [],
 
@@ -160,19 +157,41 @@ export const useStore = create<AppState>()(
 
       mergeCallLogs: (incoming) =>
         set((s) => {
+          if (!incoming.length) return s
           // Call rows are never edited after the fact, so a union by id is a
           // complete merge — no field-level conflict to resolve.
           const merged = new Map(s.callLogs.map((log) => [log.id, log]))
-          for (const log of incoming) merged.set(log.id, log)
+          let changed = false
+          for (const log of incoming) {
+            const prev = merged.get(log.id)
+            if (
+              prev &&
+              prev.synced === log.synced &&
+              prev.called_at === log.called_at &&
+              prev.outcome === log.outcome &&
+              prev.note === log.note &&
+              prev.contact_id === log.contact_id &&
+              prev.callback_at === log.callback_at
+            ) {
+              continue
+            }
+            merged.set(log.id, log)
+            changed = true
+          }
+          if (!changed) return s
           return {
             callLogs: [...merged.values()].sort((a, b) => b.called_at.localeCompare(a.called_at)),
           }
         }),
 
       markCallLogSynced: (id) =>
-        set((s) => ({
-          callLogs: s.callLogs.map((log) => (log.id === id ? { ...log, synced: true } : log)),
-        })),
+        set((s) => {
+          const current = s.callLogs.find((log) => log.id === id)
+          if (!current || current.synced) return s
+          return {
+            callLogs: s.callLogs.map((log) => (log.id === id ? { ...log, synced: true } : log)),
+          }
+        }),
 
       deleteCallLog: (id) => set((s) => ({ callLogs: s.callLogs.filter((log) => log.id !== id) })),
 
@@ -180,7 +199,7 @@ export const useStore = create<AppState>()(
       invoices: [],
       addInvoice: (invoice) =>
         set((s) => ({ invoices: [invoice, ...s.invoices] })),
-      setInvoices: (invoices) => set({ invoices }),
+      setInvoices: (invoices) => set((s) => (s.invoices === invoices ? s : { invoices })),
       updateInvoice: (id, patch) =>
         set((s) => ({ invoices: s.invoices.map((inv) => inv.id === id ? { ...inv, ...patch } : inv) })),
       deleteInvoice: (id) =>
@@ -283,7 +302,7 @@ export const useStore = create<AppState>()(
     {
       name: IS_DEMO_MODE ? 'cs_store_demo_v2' : 'cs_store_v2',
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: debouncedPersistStorage,
       migrate: (persistedState: unknown) => {
         if (!persistedState || typeof persistedState !== 'object') return persistedState as AppState
         const state = persistedState as Partial<AppState>
@@ -295,8 +314,10 @@ export const useStore = create<AppState>()(
       },
 
       // Only persist data that should survive a page refresh
+      // Keep array refs so persist can skip toast/nav writes. Images are
+      // stripped later, only when a real persist flush runs.
       partialize: (s) => ({
-        contacts: s.contacts.map(stripImages),
+        contacts: s.contacts,
         callLogs: s.callLogs,
         invoices: s.invoices,
         apiKey: s.apiKey,

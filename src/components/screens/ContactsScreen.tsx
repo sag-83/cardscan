@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, type CSSProperties } from 'react'
+import { memo, useRef, useState, useMemo, useEffect, type CSSProperties } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -412,9 +412,9 @@ export function ContactsScreen() {
           isLastAdded={c.id === lastAddedId}
           selected={c.id === detailContactId}
           distance={nearMeActive ? distances.get(c.id) : undefined}
-          onClick={() => setDetailContactId(c.id)}
-          onMenu={() => setMenuContactId(c.id)}
-          onShareError={(message) => showToast(message)} />
+          onClick={setDetailContactId}
+          onMenu={setMenuContactId}
+          onShareError={showToast} />
       ))}
     </div>
   )
@@ -433,13 +433,13 @@ function dropdownStyle(active: boolean): CSSProperties {
   }
 }
 
-function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMenu, onShareError }: {
+const ContactRow = memo(function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMenu, onShareError }: {
   contact: Contact
   isLastAdded: boolean
   selected: boolean
   distance?: number
-  onClick: () => void
-  onMenu: () => void
+  onClick: (id: string) => void
+  onMenu: (id: string) => void
   onShareError: (message: string) => void
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0)
@@ -520,6 +520,8 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
         background: selected ? 'var(--chip-accent-bg)' : 'var(--bg2)',
         borderBottom: '1px solid var(--border2)',
         touchAction: 'pan-y',
+        contentVisibility: 'auto',
+        containIntrinsicSize: '0 88px',
       }}
     >
       <div
@@ -586,7 +588,7 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
             if (openSide !== 'none') closeSwipe()
             return
           }
-          onClick()
+          onClick(c.id)
         }}
         onPointerDown={(e) => {
           const baseOffset = openSide === 'left' ? 82 : openSide === 'right' ? -90 : 0
@@ -794,7 +796,7 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
             ><MessageSquare size={16} strokeWidth={2.25} aria-hidden /></button>
           </>
         )}
-        <div onClick={(e) => { e.stopPropagation(); onMenu() }}
+        <div onClick={(e) => { e.stopPropagation(); onMenu(c.id) }}
           style={{ color: 'var(--text3)', fontSize: 20, padding: '4px 2px', lineHeight: 1, cursor: 'pointer' }}>
           ···
         </div>
@@ -802,7 +804,7 @@ function ContactRow({ contact: c, isLastAdded, selected, distance, onClick, onMe
       </div>
     </div>
   )
-}
+})
 
 function contactShareText(contact: Contact): string {
   const person = (contact.name ?? '').trim()

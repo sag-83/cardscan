@@ -47,12 +47,12 @@ function formatPhone(digits: string): string {
 export function InvoiceModal() {
   const invoiceContactId = useStore((s) => s.invoiceContactId)
   const setInvoiceContactId = useStore((s) => s.setInvoiceContactId)
-  const contacts = useStore((s) => s.contacts)
-  const invoices = useStore((s) => s.invoices)
+  const contact = useStore((s) => (
+    s.invoiceContactId ? s.contacts.find((c) => c.id === s.invoiceContactId) ?? null : null
+  ))
+  const invoices = useStore((s) => (s.invoiceContactId ? s.invoices : null))
   const addInvoice = useStore((s) => s.addInvoice)
   const showToast = useStore((s) => s.showToast)
-
-  const contact = contacts.find((c) => c.id === invoiceContactId) || null
   const [isPreview, setIsPreview] = useState(false)
   const [formKind, setFormKind] = useState<'invoice' | 'memo'>('invoice')
   const [draft, setDraft] = useState<SavedInvoice | null>(null)
@@ -159,7 +159,7 @@ export function InvoiceModal() {
         {!isPreview || !draft ? (
           <CreateInvoiceForm
             contact={contact}
-            existingInvoices={invoices}
+            existingInvoices={invoices ?? []}
             submitLabel={formKind === 'memo' ? 'Preview memo' : 'Preview invoice'}
             onDocKindChange={setFormKind}
             onCancel={close}

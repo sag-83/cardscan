@@ -74,7 +74,9 @@ function formatPhone(digits: string): string {
 
 const DOC_CSS = `
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: #fff; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  table { border-collapse: collapse; }
+  img { display: block; max-width: 100%; }
 `
 
 export function buildInvoiceHtml(inv: SavedInvoice): string {
@@ -96,19 +98,18 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
     const remark = item.certGiven ? 'Certificate Given' : ''
     return `
     <tr>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;color:#6b7280;">${i + 1}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(upper(label))}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(item.certNo || '')}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;">${esc(remark)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${esc(item.pcs)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${item.ct.toFixed(2)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${money(item.pct)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ececec;text-align:right;">${money(item.amount)}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;text-align:right;color:#6b7280;width:28px;">${i + 1}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;">${esc(upper(label))}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;width:92px;">${esc(item.certNo || '')}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;width:88px;">${esc(remark)}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;text-align:right;width:42px;">${esc(item.pcs)}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;text-align:right;width:52px;">${item.ct.toFixed(2)}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;text-align:right;width:64px;">${money(item.pct)}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid #e5e7eb;text-align:right;width:78px;">${money(item.amount)}</td>
     </tr>`
   }).join('')
   const totalPcs = inv.items.reduce((sum, item) => sum + (Number(item.pcs) || 0), 0)
   const totalCt = inv.items.reduce((sum, item) => sum + (Number(item.ct) || 0), 0)
-
   const subtotal = inv.items.reduce((sum, item) => sum + item.amount, 0)
   const dueLabel = inv.docKind === 'invoice' ? dueDateLabel(inv) : ''
 
@@ -119,115 +120,113 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
   <title>${docTitle} ${esc(docNumber)}</title>
   <style>${DOC_CSS}</style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;display:flex;flex-direction:column;box-sizing:border-box;">
-  <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;margin:0;padding:28px 32px 36px;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;">
+  <table style="width:100%;margin-bottom:14px;">
     <tr>
-      <td style="vertical-align:top;text-align:left;">
-        <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="display:inline-block;height:42px;width:auto;vertical-align:bottom;" />
-        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:400;letter-spacing:1px;word-spacing:3px;margin-left:8px;vertical-align:bottom;">GEMS INC</span>
-        <div style="margin-top:6px;color:#374151;font-size:10px;line-height:1.4;">
-          ${COMPANY_ADDRESS}<br />
-          Tel: ${formatPhone(COMPANY_PHONE)}<br />
-          Email: <span style="text-transform:lowercase;">${COMPANY_EMAIL}</span>
+      <td style="vertical-align:top;width:62%;">
+        <div style="display:flex;align-items:flex-end;gap:10px;">
+          <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="height:46px;width:auto;" />
+          <span style="font-family:Georgia,'Times New Roman',serif;font-size:17px;font-weight:400;letter-spacing:1.2px;word-spacing:4px;line-height:1;padding-bottom:4px;">GEMS INC</span>
+        </div>
+        <div style="margin-top:8px;color:#374151;font-size:10px;line-height:1.45;">
+          ${esc(upper(COMPANY_ADDRESS))}<br />
+          TEL: ${formatPhone(COMPANY_PHONE)}<br />
+          EMAIL: <span style="text-transform:lowercase;">${COMPANY_EMAIL}</span>
         </div>
       </td>
-      <td style="vertical-align:top;text-align:right;">
-        <div style="font-size:21px;font-weight:800;letter-spacing:1px;">${docTitle}</div>
-        <div style="margin-top:3px;color:#374151;font-size:10px;">${docTitle} #: ${esc(docNumber)}</div>
+      <td style="vertical-align:top;text-align:right;width:38%;">
+        <div style="font-size:26px;font-weight:800;letter-spacing:1.5px;color:#0f172a;line-height:1;">${docTitle}</div>
+        <div style="margin-top:6px;color:#4b5563;font-size:11px;font-weight:600;">${docTitle} #: ${esc(docNumber)}</div>
       </td>
     </tr>
   </table>
 
-  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:10.5px;line-height:1.4;">
+  <table style="width:100%;margin-bottom:10px;font-size:10.5px;line-height:1.45;">
     <tr>
-      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:6px 9px;">
-        <div style="font-weight:700;font-size:9px;margin-bottom:3px;color:#6b7280;">${docTitle} To</div>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;padding:8px 10px;">
+        <div style="font-weight:700;font-size:9px;margin-bottom:4px;color:#334155;letter-spacing:0.4px;">${docTitle} TO</div>
         ${partyLines}
       </td>
-      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:6px 9px;">
-        <div style="font-weight:700;font-size:9px;margin-bottom:3px;color:#6b7280;">Ship To</div>
+      <td style="width:50%;vertical-align:top;border:1px solid #d1d5db;border-left:none;padding:8px 10px;">
+        <div style="font-weight:700;font-size:9px;margin-bottom:4px;color:#334155;letter-spacing:0.4px;">SHIP TO</div>
         ${partyLines}
       </td>
     </tr>
   </table>
 
-  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:10px;">
+  <table style="width:100%;margin-bottom:10px;font-size:10px;">
     <thead>
-      <tr style="background:#111827;color:#fff;">
-        <th style="text-align:left;padding:4px 8px;border:1px solid #111827;">Terms</th>
-        <th style="text-align:left;padding:4px 8px;border:1px solid #111827;">${docTitle} Date</th>
-        <th style="text-align:left;padding:4px 8px;border:1px solid #111827;">Due Date</th>
+      <tr style="background:#0f172a;color:#fff;">
+        <th style="text-align:left;padding:6px 10px;font-weight:700;letter-spacing:0.4px;">TERMS</th>
+        <th style="text-align:left;padding:6px 10px;font-weight:700;letter-spacing:0.4px;">${docTitle} DATE</th>
+        <th style="text-align:left;padding:6px 10px;font-weight:700;letter-spacing:0.4px;">DUE DATE</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td style="padding:4px 8px;border:1px solid #d1d5db;">${inv.docKind === 'invoice' ? esc(upper(termsLabel(inv.termsDays ?? 0))) : '—'}</td>
-        <td style="padding:4px 8px;border:1px solid #d1d5db;">${esc(formatUsDate(inv.date))}</td>
-        <td style="padding:4px 8px;border:1px solid #d1d5db;">${dueLabel ? esc(dueLabel) : '—'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${inv.docKind === 'invoice' ? esc(upper(termsLabel(inv.termsDays ?? 0))) : '—'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${esc(formatUsDate(inv.date))}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${dueLabel ? esc(dueLabel) : '—'}</td>
       </tr>
     </tbody>
   </table>
 
-  <div style="margin-bottom:8px;border:1px solid #d1d5db;padding:6px 9px;font-size:8px;line-height:1.4;color:#4b5563;text-transform:none;">
+  <div style="margin-bottom:10px;border:1px solid #d1d5db;padding:8px 10px;font-size:7.5px;line-height:1.45;color:#4b5563;text-transform:none;">
     ${esc(ATTACHMENT_ONE)}
   </div>
 
-  <table style="width:100%;border-collapse:collapse;font-size:10px;">
+  <table style="width:100%;font-size:10px;table-layout:fixed;">
     <thead>
       <tr style="background:#f3f4f6;">
-        <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;width:26px;">#</th>
-        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Description</th>
-        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Certificate No.</th>
-        <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #d1d5db;">Remark</th>
-        <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Pcs</th>
-        <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Ct</th>
-        <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">P/Ct</th>
-        <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #d1d5db;">Amount</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #d1d5db;width:28px;font-weight:700;">#</th>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #d1d5db;font-weight:700;">DESCRIPTION</th>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #d1d5db;width:92px;font-weight:700;">CERTIFICATE NO.</th>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #d1d5db;width:88px;font-weight:700;">REMARK</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #d1d5db;width:42px;font-weight:700;">PCS</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #d1d5db;width:52px;font-weight:700;">CT</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #d1d5db;width:64px;font-weight:700;">P/CT</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #d1d5db;width:78px;font-weight:700;">AMOUNT</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
     <tfoot>
-      <tr style="border-top:2px solid #111827;font-weight:700;">
-        <td colspan="4" style="padding:5px 8px;">Total</td>
-        <td style="padding:5px 8px;text-align:right;">${totalPcs}</td>
-        <td style="padding:5px 8px;text-align:right;">${totalCt.toFixed(2)} ct</td>
+      <tr style="border-top:2px solid #0f172a;font-weight:800;">
+        <td colspan="4" style="padding:7px 6px;">TOTAL</td>
+        <td style="padding:7px 6px;text-align:right;">${totalPcs}</td>
+        <td style="padding:7px 6px;text-align:right;">${totalCt.toFixed(2)} CT</td>
         <td></td>
-        <td style="padding:5px 8px;text-align:right;">${money(subtotal)}</td>
+        <td style="padding:7px 6px;text-align:right;">${money(subtotal)}</td>
       </tr>
     </tfoot>
   </table>
 
-  <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+  <div style="margin-top:12px;text-align:right;font-size:10px;color:#374151;">
+    <div>SHIPPING: ${money(inv.shipping ?? 0)}</div>
+    <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;">TOTAL: ${money(inv.total)}</div>
+  </div>
+
+  <table style="width:100%;margin-top:14px;">
     <tr>
-      <td style="width:56%;"></td>
-      <td style="width:44%;vertical-align:top;text-align:right;font-size:10px;">
-        <div style="color:#374151;">Shipping: ${money(inv.shipping ?? 0)}</div>
-        <div style="margin-top:6px;font-size:15px;font-weight:700;">Total: ${money(inv.total)}</div>
+      <td style="width:62%;vertical-align:top;font-size:10px;color:#374151;line-height:1.55;">
+        <div style="font-weight:800;margin-bottom:4px;color:#0f172a;letter-spacing:0.3px;">PAYMENT INSTRUCTION</div>
+        <div>ACCOUNT NAME: <strong style="color:#111827;">${esc(upper(WIRE_ACCOUNT_NAME))}</strong></div>
+        <div>BANK: <strong style="color:#111827;">${esc(upper(WIRE_BANK_NAME))}</strong></div>
+        <div>ACCOUNT NUMBER: <strong style="color:#111827;">${esc(WIRE_ACCOUNT_NUMBER)}</strong></div>
+        <div>ROUTING NUMBER: <strong style="color:#111827;">${esc(WIRE_ROUTING_NUMBER)}</strong></div>
+        <div>ZELLE: <strong style="color:#111827;text-transform:lowercase;">${esc(WIRE_ZELLE)}</strong></div>
       </td>
-    </tr>
-    <tr>
-      <td style="width:56%;vertical-align:top;font-size:10px;color:#374151;line-height:1.5;padding-top:8px;">
-        <div style="font-weight:700;margin-bottom:3px;">Payment Instruction</div>
-        <div>Account Name: ${esc(WIRE_ACCOUNT_NAME)}</div>
-        <div>Bank: ${esc(WIRE_BANK_NAME)}</div>
-        <div>Account Number: <strong style="color:#111827;">${esc(WIRE_ACCOUNT_NUMBER)}</strong></div>
-        <div>Routing Number: <strong style="color:#111827;">${esc(WIRE_ROUTING_NUMBER)}</strong></div>
-        <div>Zelle: <strong style="color:#111827;text-transform:lowercase;">${esc(WIRE_ZELLE)}</strong></div>
-      </td>
-      <td style="width:44%;vertical-align:top;text-align:right;padding-top:8px;">
-        <img src="${assetUrl(ZELLE_QR)}" alt="" style="width:92px;height:92px;" />
-        <div style="margin-top:4px;font-size:9px;color:#374151;text-transform:none;">Zelle QR</div>
+      <td style="width:38%;vertical-align:top;text-align:right;">
+        <img src="${assetUrl(ZELLE_QR)}" alt="Zelle QR" style="width:96px;height:96px;margin-left:auto;" />
+        <div style="margin-top:4px;font-size:9px;color:#6b7280;text-transform:none;">Zelle QR</div>
       </td>
     </tr>
   </table>
 
-  ${inv.notes ? `<div style="margin-top:10px;font-size:10px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}
+  ${inv.notes ? `<div style="margin-top:12px;font-size:10px;color:#4b5563;white-space:pre-wrap;">${esc(upper(inv.notes))}</div>` : ''}
 
-  <!-- Signature always sits at the very bottom of the page - the auto margin
-       eats any leftover space above it when the invoice is short. -->
-  <div style="margin-top:auto;padding-top:14px;border-top:1px solid #d1d5db;text-transform:none;">
-    <div style="font-size:11px;color:#111827;margin-bottom:8px;">Signature: <span style="display:inline-block;border-bottom:1px solid #111827;width:260px;">&nbsp;</span></div>
-    <div style="font-size:8px;line-height:1.4;color:#4b5563;">&ldquo;${esc(ATTACHMENT_TWO)}&rdquo;</div>
+  <div style="margin-top:22px;text-transform:none;">
+    <div style="font-size:11px;color:#111827;margin-bottom:10px;">Signature: <span style="display:inline-block;border-bottom:1px solid #111827;width:280px;height:14px;vertical-align:bottom;"></span></div>
+    <div style="font-size:7.5px;line-height:1.45;color:#4b5563;">&ldquo;${esc(ATTACHMENT_TWO)}&rdquo;</div>
   </div>
 </body>
 </html>`
@@ -264,12 +263,14 @@ export function buildBlankMemoHtml(rowCount = 22): string {
   <title>MEMO</title>
   <style>${DOC_CSS}</style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px 24px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;">
-  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:28px 32px 36px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;">
+  <table style="width:100%;margin-bottom:8px;">
     <tr>
       <td style="vertical-align:top;">
-        <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="display:inline-block;height:42px;vertical-align:bottom;" />
-        <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:16px;letter-spacing:1px;word-spacing:3px;margin-left:8px;vertical-align:bottom;">GEMS INC</span>
+        <div style="display:flex;align-items:flex-end;gap:10px;">
+          <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="height:46px;width:auto;" />
+          <span style="font-family:Georgia,'Times New Roman',serif;font-size:17px;letter-spacing:1.2px;word-spacing:4px;padding-bottom:4px;">GEMS INC</span>
+        </div>
         <div style="margin-top:6px;color:#374151;font-size:10px;line-height:1.4;">
           ${COMPANY_ADDRESS}<br />Tel: ${formatPhone(COMPANY_PHONE)}<br />
           Email: <span style="text-transform:lowercase;">${COMPANY_EMAIL}</span>
@@ -362,7 +363,7 @@ async function downloadPdfFromHtml(html: string, filename: string): Promise<void
     'left:-10000px',
     'top:0',
     'width:816px',
-    'height:1100px',
+    'height:2000px',
     'border:0',
     'opacity:0',
     'pointer-events:none',
@@ -380,35 +381,55 @@ async function downloadPdfFromHtml(html: string, filename: string): Promise<void
     fw.document.write(html)
     fw.document.close()
     await waitForImages(fw.document)
-    // Let layout settle after images load.
-    await new Promise((resolve) => setTimeout(resolve, 80))
+    await new Promise((resolve) => setTimeout(resolve, 120))
 
-    const canvas = await html2canvas(fw.document.body, {
+    const body = fw.document.body
+    const captureWidth = Math.max(816, body.scrollWidth)
+    const captureHeight = Math.max(body.scrollHeight, body.offsetHeight)
+    // Grow the frame so html2canvas does not clip the right edge or footer.
+    frame.style.height = `${captureHeight + 40}px`
+
+    const canvas = await html2canvas(body, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      width: 816,
-      windowWidth: 816,
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
+      scrollX: 0,
+      scrollY: 0,
       logging: false,
     })
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
     const pageWidth = 8.5
     const pageHeight = 11
-    const imgWidth = pageWidth
-    const imgHeight = (canvas.height * pageWidth) / canvas.width
-    const imgData = canvas.toDataURL('image/jpeg', 0.92)
+    const imgData = canvas.toDataURL('image/png')
+    let imgWidth = pageWidth
+    let imgHeight = (canvas.height * pageWidth) / canvas.width
+
+    // Prefer a single clean letter page when the invoice is only slightly tall.
+    if (imgHeight > pageHeight && imgHeight <= pageHeight * 1.12) {
+      const fit = pageHeight / imgHeight
+      imgWidth *= fit
+      imgHeight = pageHeight
+      const x = (pageWidth - imgWidth) / 2
+      pdf.addImage(imgData, 'PNG', x, 0, imgWidth, imgHeight)
+      pdf.save(filename)
+      return
+    }
 
     let heightLeft = imgHeight
     let position = 0
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
     heightLeft -= pageHeight
 
     while (heightLeft > 0.02) {
       position -= pageHeight
       pdf.addPage()
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
       heightLeft -= pageHeight
     }
 

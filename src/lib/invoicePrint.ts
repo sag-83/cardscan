@@ -332,6 +332,328 @@ export function buildBlankMemoHtml(rowCount = 22): string {
 </html>`
 }
 
+async function loadImageDataUrl(path: string): Promise<string | null> {
+  try {
+    const res = await fetch(assetUrl(path), { cache: 'force-cache' })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+function drawWrappedText(
+  pdf: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+): number {
+  const lines = pdf.splitTextToSize(text, maxWidth) as string[]
+  pdf.text(lines, x, y)
+  return y + lines.length * lineHeight
+}
+
+/**
+ * Draw the invoice as a real vector PDF (no html2canvas).
+ * Screenshotting HTML was clipping AMOUNT / QR / disclaimer — this matches
+ * the AK Gems letterhead layout on a clean letter page with no browser chrome.
+ */
+async function buildInvoicePdf(inv: SavedInvoice): Promise<jsPDF> {
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
+  const pageW = 8.5
+  const marginX = 0.48
+  const contentW = pageW - marginX * 2
+  let y = 0.42
+
+  const docTitle = inv.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
+  const docNumber = inv.invoiceNumber || inv.id
+  const customer = upper(inv.company || inv.contactName || 'Customer')
+  const street = inv.contactAddress ? upper(inv.contactAddress) : ''
+  const cityStateZip = upper(
+    [[inv.city, inv.state].filter(Boolean).join(', '), inv.contactZip].filter(Boolean).join(', '),
+  )
+  const phone = inv.contactPhone || ''
+  const dueLabel = inv.docKind === 'invoice' ? dueDateLabel(inv) : ''
+  const terms = inv.docKind === 'invoice' ? upper(termsLabel(inv.termsDays ?? 0)) : '—'
+
+  const [logoData, qrData] = await Promise.all([
+    loadImageDataUrl(COMPANY_LOGO),
+    loadImageDataUrl(ZELLE_QR),
+  ])
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  if (logoData) {
+    try { pdf.addImage(logoData, 'PNG', marginX, y, 0.55, 0.55) } catch { /* ignore */ }
+  }
+  pdf.setFont('times', 'normal')
+  pdf.setFontSize(15)
+  pdf.setTextColor(17, 24, 39)
+  pdf.text('GEMS INC', marginX + 0.68, y + 0.38)
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(22)
+  pdf.text(docTitle, pageW - marginX, y + 0.28, { align: 'right' })
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(75, 85, 99)
+  pdf.text(`${docTitle} #: ${docNumber}`, pageW - marginX, y + 0.52, { align: 'right' })
+
+  y += 0.68
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8.5)
+  pdf.setTextColor(55, 65, 81)
+  pdf.text(upper(COMPANY_ADDRESS), marginX, y)
+  y += 0.15
+  pdf.text(`TEL: ${formatPhone(COMPANY_PHONE)}`, marginX, y)
+  y += 0.15
+  pdf.text(`EMAIL: ${COMPANY_EMAIL}`, marginX, y)
+
+  // ── Invoice To / Ship To ────────────────────────────────────────────────
+  y += 0.22
+  const partyLines = [customer, street, cityStateZip, phone].filter(Boolean)
+  const boxH = Math.max(0.88, 0.34 + partyLines.length * 0.15)
+  const half = contentW / 2
+  pdf.setDrawColor(209, 213, 219)
+  pdf.setLineWidth(0.012)
+  pdf.rect(marginX, y, half, boxH)
+  pdf.rect(marginX + half, y, half, boxH)
+
+  const partyY = y + 0.18
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8)
+  pdf.setTextColor(51, 65, 85)
+  pdf.text(`${docTitle} TO`, marginX + 0.12, partyY)
+  pdf.text('SHIP TO', marginX + half + 0.12, partyY)
+
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(17, 24, 39)
+  let py = partyY + 0.18
+  for (const line of partyLines) {
+    pdf.text(line, marginX + 0.12, py)
+    pdf.text(line, marginX + half + 0.12, py)
+    py += 0.15
+  }
+  y += boxH + 0.14
+
+  // ── Terms bar ───────────────────────────────────────────────────────────
+  const termsH = 0.28
+  pdf.setFillColor(15, 23, 42)
+  pdf.rect(marginX, y, contentW, termsH, 'F')
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8.5)
+  pdf.setTextColor(255, 255, 255)
+  const colW = contentW / 3
+  pdf.text('TERMS', marginX + 0.12, y + 0.18)
+  pdf.text(`${docTitle} DATE`, marginX + colW + 0.12, y + 0.18)
+  pdf.text('DUE DATE', marginX + colW * 2 + 0.12, y + 0.18)
+  y += termsH
+
+  const valH = 0.3
+  pdf.setDrawColor(209, 213, 219)
+  pdf.setLineWidth(0.012)
+  pdf.rect(marginX, y, contentW, valH)
+  pdf.line(marginX + colW, y, marginX + colW, y + valH)
+  pdf.line(marginX + colW * 2, y, marginX + colW * 2, y + valH)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(17, 24, 39)
+  pdf.text(terms, marginX + 0.12, y + 0.2)
+  pdf.text(formatUsDate(inv.date), marginX + colW + 0.12, y + 0.2)
+  pdf.text(dueLabel || '—', marginX + colW * 2 + 0.12, y + 0.2)
+  y += valH + 0.12
+
+  // ── Disclaimer 1 ────────────────────────────────────────────────────────
+  pdf.setDrawColor(209, 213, 219)
+  pdf.rect(marginX, y, contentW, 0.02, 'S')
+  const discPad = 0.1
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(6.6)
+  pdf.setTextColor(75, 85, 99)
+  const discLines = pdf.splitTextToSize(ATTACHMENT_ONE, contentW - discPad * 2) as string[]
+  const discH = discLines.length * 0.11 + discPad * 2
+  pdf.rect(marginX, y, contentW, discH)
+  pdf.text(discLines, marginX + discPad, y + discPad + 0.1)
+  y += discH + 0.14
+
+  // ── Items table ─────────────────────────────────────────────────────────
+  const cols = [
+    { key: '#', w: 0.28, align: 'right' as const },
+    { key: 'DESCRIPTION', w: 1.85, align: 'left' as const },
+    { key: 'CERTIFICATE NO.', w: 1.15, align: 'left' as const },
+    { key: 'REMARK', w: 1.05, align: 'left' as const },
+    { key: 'PCS', w: 0.45, align: 'right' as const },
+    { key: 'CT', w: 0.55, align: 'right' as const },
+    { key: 'P/CT', w: 0.7, align: 'right' as const },
+    { key: 'AMOUNT', w: 0.85, align: 'right' as const },
+  ]
+  // Normalize widths to contentW
+  const colSum = cols.reduce((s, c) => s + c.w, 0)
+  const scale = contentW / colSum
+  const widths = cols.map((c) => c.w * scale)
+
+  const headerH = 0.28
+  pdf.setFillColor(243, 244, 246)
+  pdf.rect(marginX, y, contentW, headerH, 'F')
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(7.5)
+  pdf.setTextColor(17, 24, 39)
+  let cx = marginX
+  cols.forEach((col, i) => {
+    const w = widths[i]
+    const tx = col.align === 'right' ? cx + w - 0.06 : cx + 0.06
+    pdf.text(col.key, tx, y + 0.18, { align: col.align })
+    cx += w
+  })
+  y += headerH
+  pdf.setDrawColor(209, 213, 219)
+  pdf.setLineWidth(0.01)
+  pdf.line(marginX, y, marginX + contentW, y)
+
+  const totalPcs = inv.items.reduce((sum, item) => sum + (Number(item.pcs) || 0), 0)
+  const totalCt = inv.items.reduce((sum, item) => sum + (Number(item.ct) || 0), 0)
+  const subtotal = inv.items.reduce((sum, item) => sum + item.amount, 0)
+
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8.5)
+  for (let idx = 0; idx < inv.items.length; idx++) {
+    const item = inv.items[idx]
+    const rowH = 0.26
+    const values = [
+      String(idx + 1),
+      upper(itemDescriptionLabel(item) || '—'),
+      item.certNo || '',
+      item.certGiven ? 'Certificate Given' : '',
+      String(item.pcs ?? ''),
+      Number(item.ct || 0).toFixed(2),
+      money(item.pct),
+      money(item.amount),
+    ]
+    cx = marginX
+    values.forEach((val, i) => {
+      const w = widths[i]
+      const align = cols[i].align
+      const tx = align === 'right' ? cx + w - 0.06 : cx + 0.06
+      const clipped = pdf.splitTextToSize(val, w - 0.1)[0] || ''
+      pdf.setTextColor(i === 0 ? 107 : 17, i === 0 ? 114 : 24, i === 0 ? 128 : 39)
+      pdf.text(clipped, tx, y + 0.17, { align })
+      cx += w
+    })
+    y += rowH
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(marginX, y, marginX + contentW, y)
+  }
+
+  // Totals row
+  y += 0.02
+  pdf.setDrawColor(15, 23, 42)
+  pdf.setLineWidth(0.025)
+  pdf.line(marginX, y, marginX + contentW, y)
+  y += 0.08
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.setTextColor(17, 24, 39)
+  const totalVals = ['', 'TOTAL', '', '', String(totalPcs), `${totalCt.toFixed(2)} CT`, '', money(subtotal)]
+  cx = marginX
+  totalVals.forEach((val, i) => {
+    const w = widths[i]
+    if (!val) { cx += w; return }
+    const align = cols[i].align
+    const tx = align === 'right' ? cx + w - 0.06 : cx + 0.06
+    pdf.text(val, tx, y + 0.14, { align })
+    cx += w
+  })
+  y += 0.32
+
+  // Shipping + grand total
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(55, 65, 81)
+  pdf.text(`SHIPPING: ${money(inv.shipping ?? 0)}`, pageW - marginX, y, { align: 'right' })
+  y += 0.22
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(13)
+  pdf.setTextColor(15, 23, 42)
+  pdf.text(`TOTAL: ${money(inv.total)}`, pageW - marginX, y, { align: 'right' })
+  y += 0.28
+
+  // ── Payment + QR ────────────────────────────────────────────────────────
+  const payX = marginX
+  const payY = y
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.setTextColor(15, 23, 42)
+  pdf.text('PAYMENT INSTRUCTION', payX, payY)
+
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8.5)
+  pdf.setTextColor(55, 65, 81)
+  const payLines: Array<[string, string, boolean]> = [
+    ['ACCOUNT NAME:', upper(WIRE_ACCOUNT_NAME), true],
+    ['BANK:', upper(WIRE_BANK_NAME), true],
+    ['ACCOUNT NUMBER:', WIRE_ACCOUNT_NUMBER, true],
+    ['ROUTING NUMBER:', WIRE_ROUTING_NUMBER, true],
+    ['ZELLE:', WIRE_ZELLE, true],
+  ]
+  let ly = payY + 0.2
+  for (const [label, value, boldValue] of payLines) {
+    pdf.setFont('helvetica', 'normal')
+    pdf.setTextColor(55, 65, 81)
+    pdf.text(label, payX, ly)
+    const labelW = pdf.getTextWidth(label) + 0.08
+    pdf.setFont('helvetica', boldValue ? 'bold' : 'normal')
+    pdf.setTextColor(17, 24, 39)
+    pdf.text(value, payX + labelW, ly)
+    ly += 0.17
+  }
+
+  if (qrData) {
+    const qrSize = 1.05
+    const qrX = pageW - marginX - qrSize
+    try {
+      pdf.addImage(qrData, 'PNG', qrX, payY, qrSize, qrSize)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      pdf.setTextColor(107, 114, 128)
+      pdf.text('Zelle QR', qrX + qrSize / 2, payY + qrSize + 0.14, { align: 'center' })
+    } catch { /* ignore */ }
+  }
+
+  y = Math.max(ly, payY + 1.25) + 0.18
+
+  if (inv.notes?.trim()) {
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8.5)
+    pdf.setTextColor(75, 85, 99)
+    y = drawWrappedText(pdf, upper(inv.notes.trim()), marginX, y, contentW, 0.14) + 0.12
+  }
+
+  // ── Signature + disclaimer 2 ────────────────────────────────────────────
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(10)
+  pdf.setTextColor(17, 24, 39)
+  pdf.text('Signature:', marginX, y)
+  pdf.setDrawColor(17, 24, 39)
+  pdf.setLineWidth(0.012)
+  pdf.line(marginX + 0.85, y + 0.02, marginX + 3.6, y + 0.02)
+  y += 0.28
+
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(6.6)
+  pdf.setTextColor(75, 85, 99)
+  drawWrappedText(pdf, `"${ATTACHMENT_TWO}"`, marginX, y, contentW, 0.11)
+
+  return pdf
+}
+
 function waitForImages(doc: Document): Promise<void> {
   const images = [...doc.images]
   if (!images.length) return Promise.resolve()
@@ -350,89 +672,28 @@ function waitForImages(doc: Document): Promise<void> {
   ).then(() => undefined)
 }
 
-/**
- * Build a real PDF file (not browser Print), so Safari/Chrome never stamp
- * the site URL, date/time, or "Page 1 of 1" onto the invoice.
- */
+/** Fallback HTML→canvas path used only for the blank memo pad. */
 async function downloadPdfFromHtml(html: string, filename: string): Promise<void> {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
-  frame.setAttribute('title', 'Invoice PDF')
-  frame.style.cssText = [
-    'position:fixed',
-    'left:-10000px',
-    'top:0',
-    'width:816px',
-    'height:2000px',
-    'border:0',
-    'opacity:0',
-    'pointer-events:none',
-  ].join(';')
+  frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;height:2000px;border:0;opacity:0;'
   document.body.appendChild(frame)
-
   const fw = frame.contentWindow
-  if (!fw) {
-    frame.remove()
-    throw new Error('Could not open PDF frame')
-  }
-
+  if (!fw) { frame.remove(); throw new Error('Could not open PDF frame') }
   try {
-    fw.document.open()
-    fw.document.write(html)
-    fw.document.close()
+    fw.document.open(); fw.document.write(html); fw.document.close()
     await waitForImages(fw.document)
-    await new Promise((resolve) => setTimeout(resolve, 120))
-
+    await new Promise((r) => setTimeout(r, 100))
     const body = fw.document.body
-    const captureWidth = Math.max(816, body.scrollWidth)
-    const captureHeight = Math.max(body.scrollHeight, body.offsetHeight)
-    // Grow the frame so html2canvas does not clip the right edge or footer.
-    frame.style.height = `${captureHeight + 40}px`
-
+    frame.style.height = `${body.scrollHeight + 40}px`
     const canvas = await html2canvas(body, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      width: captureWidth,
-      height: captureHeight,
-      windowWidth: captureWidth,
-      windowHeight: captureHeight,
-      scrollX: 0,
-      scrollY: 0,
-      logging: false,
+      scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
+      width: 816, height: body.scrollHeight, windowWidth: 816, windowHeight: body.scrollHeight, logging: false,
     })
-
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
-    const pageWidth = 8.5
-    const pageHeight = 11
     const imgData = canvas.toDataURL('image/png')
-    let imgWidth = pageWidth
-    let imgHeight = (canvas.height * pageWidth) / canvas.width
-
-    // Prefer a single clean letter page when the invoice is only slightly tall.
-    if (imgHeight > pageHeight && imgHeight <= pageHeight * 1.12) {
-      const fit = pageHeight / imgHeight
-      imgWidth *= fit
-      imgHeight = pageHeight
-      const x = (pageWidth - imgWidth) / 2
-      pdf.addImage(imgData, 'PNG', x, 0, imgWidth, imgHeight)
-      pdf.save(filename)
-      return
-    }
-
-    let heightLeft = imgHeight
-    let position = 0
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0.02) {
-      position -= pageHeight
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
-    }
-
+    const imgHeight = (canvas.height * 8.5) / canvas.width
+    pdf.addImage(imgData, 'PNG', 0, 0, 8.5, Math.min(imgHeight, 11))
     pdf.save(filename)
   } finally {
     frame.remove()
@@ -450,5 +711,6 @@ export async function printBlankMemo(): Promise<void> {
 export async function printSavedInvoice(inv: SavedInvoice): Promise<void> {
   const kind = inv.docKind === 'memo' ? 'Memo' : 'Invoice'
   const number = safeFilename(inv.invoiceNumber || inv.id)
-  await downloadPdfFromHtml(buildInvoiceHtml(inv), `AK-Gems-${kind}-${number}.pdf`)
+  const pdf = await buildInvoicePdf(inv)
+  pdf.save(`AK-Gems-${kind}-${number}.pdf`)
 }

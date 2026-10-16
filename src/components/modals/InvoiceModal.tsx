@@ -108,13 +108,11 @@ export function InvoiceModal() {
     if (!draft) return
     const record = draft
     persistInvoice(record)
-    // Keep users inside the app after opening print/save PDF.
+    // Keep users inside the app — PDF downloads without browser print chrome.
     close()
-    try {
-      printSavedInvoice(record)
-    } catch {
-      showToast('Print failed. Please try again.')
-    }
+    void printSavedInvoice(record)
+      .then(() => showToast('PDF downloaded'))
+      .catch(() => showToast('PDF failed. Please try again.'))
   }
 
   return (
@@ -275,7 +273,7 @@ export function InvoiceModal() {
               </button>
             </div>
             <button type="button" onClick={printInvoice} style={{ ...primaryBtnStyle, width: '100%', marginTop: 8 }}>
-              Download PDF / Print
+              Download PDF
             </button>
           </>
         )}

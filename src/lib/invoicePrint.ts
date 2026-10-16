@@ -1,3 +1,5 @@
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import { SavedInvoice } from '../types/invoice'
 import { dueDateLabel, termsLabel } from './invoiceTerms'
 import { itemDescriptionLabel } from './invoiceFormUtils'
@@ -6,6 +8,14 @@ import { itemDescriptionLabel } from './invoiceFormUtils'
 // cannot drift apart.
 export const COMPANY_LOGO = '/ak-monogram.png'
 export const ZELLE_QR = '/zelle-qr.png'
+
+/** Absolute URL so PDF capture can load logo / QR from any render host. */
+function assetUrl(path: string): string {
+  if (/^(https?:|data:|blob:)/i.test(path)) return path
+  if (typeof window === 'undefined') return path
+  const origin = window.location.origin
+  return path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`
+}
 export const COMPANY_ADDRESS = '580 5th Avenue, Ste # 523, New York, NY 10036'
 export const COMPANY_PHONE = '8622359224'
 export const COMPANY_EMAIL = 'info@akgemsinc.com'
@@ -62,18 +72,9 @@ function formatPhone(digits: string): string {
   return `(${d.slice(0, 3)})-${d.slice(3, 6)}-${d.slice(6)}`
 }
 
-/**
- * Zero page margins so Chrome/Edge have nowhere to draw the default
- * print chrome (site URL on the left, date + page number on the right).
- * Content inset is applied on the body instead.
- */
-const PRINT_CSS = `
-  @page { size: letter; margin: 0 !important; }
-  @media print {
-    html, body { margin: 0 !important; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
+const DOC_CSS = `
   * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; }
 `
 
 export function buildInvoiceHtml(inv: SavedInvoice): string {
@@ -116,13 +117,13 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 <head>
   <meta charset="utf-8" />
   <title>${docTitle} ${esc(docNumber)}</title>
-  <style>${PRINT_CSS}</style>
+  <style>${DOC_CSS}</style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;display:flex;flex-direction:column;box-sizing:border-box;">
   <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
     <tr>
       <td style="vertical-align:top;text-align:left;">
-        <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:42px;width:auto;vertical-align:bottom;" />
+        <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="display:inline-block;height:42px;width:auto;vertical-align:bottom;" />
         <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:400;letter-spacing:1px;word-spacing:3px;margin-left:8px;vertical-align:bottom;">GEMS INC</span>
         <div style="margin-top:6px;color:#374151;font-size:10px;line-height:1.4;">
           ${COMPANY_ADDRESS}<br />
@@ -214,7 +215,7 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
         <div>Zelle: <strong style="color:#111827;text-transform:lowercase;">${esc(WIRE_ZELLE)}</strong></div>
       </td>
       <td style="width:44%;vertical-align:top;text-align:right;padding-top:8px;">
-        <img src="${ZELLE_QR}" alt="" style="width:92px;height:92px;" />
+        <img src="${assetUrl(ZELLE_QR)}" alt="" style="width:92px;height:92px;" />
         <div style="margin-top:4px;font-size:9px;color:#374151;text-transform:none;">Zelle QR</div>
       </td>
     </tr>
@@ -261,13 +262,13 @@ export function buildBlankMemoHtml(rowCount = 22): string {
 <head>
   <meta charset="utf-8" />
   <title>MEMO</title>
-  <style>${PRINT_CSS}</style>
+  <style>${DOC_CSS}</style>
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px 24px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px 24px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;width:816px;background:#fff;">
   <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
     <tr>
       <td style="vertical-align:top;">
-        <img src="${COMPANY_LOGO}" alt="AK" style="display:inline-block;height:42px;vertical-align:bottom;" />
+        <img src="${assetUrl(COMPANY_LOGO)}" alt="AK" style="display:inline-block;height:42px;vertical-align:bottom;" />
         <span style="display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:16px;letter-spacing:1px;word-spacing:3px;margin-left:8px;vertical-align:bottom;">GEMS INC</span>
         <div style="margin-top:6px;color:#374151;font-size:10px;line-height:1.4;">
           ${COMPANY_ADDRESS}<br />Tel: ${formatPhone(COMPANY_PHONE)}<br />
@@ -330,64 +331,103 @@ export function buildBlankMemoHtml(rowCount = 22): string {
 </html>`
 }
 
-function printHtmlDoc(html: string): void {
-  // Zero-size iframes make some browsers fall back to the parent page's
-  // headers (vercel URL + date/page). A real letter-sized offscreen frame
-  // keeps @page { margin: 0 } working so that chrome stays off the sheet.
+function waitForImages(doc: Document): Promise<void> {
+  const images = [...doc.images]
+  if (!images.length) return Promise.resolve()
+  return Promise.all(
+    images.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete) {
+            resolve()
+            return
+          }
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        }),
+    ),
+  ).then(() => undefined)
+}
+
+/**
+ * Build a real PDF file (not browser Print), so Safari/Chrome never stamp
+ * the site URL, date/time, or "Page 1 of 1" onto the invoice.
+ */
+async function downloadPdfFromHtml(html: string, filename: string): Promise<void> {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
-  frame.setAttribute('title', 'Print')
+  frame.setAttribute('title', 'Invoice PDF')
   frame.style.cssText = [
     'position:fixed',
-    'left:0',
+    'left:-10000px',
     'top:0',
-    'width:8.5in',
-    'height:11in',
+    'width:816px',
+    'height:1100px',
     'border:0',
     'opacity:0',
     'pointer-events:none',
-    'z-index:-1',
   ].join(';')
   document.body.appendChild(frame)
 
-  let cleaned = false
-  const cleanup = () => {
-    if (cleaned) return
-    cleaned = true
-    setTimeout(() => frame.parentNode?.removeChild(frame), 400)
-  }
-
   const fw = frame.contentWindow
-  if (!fw) { cleanup(); return }
-
-  fw.document.open()
-  fw.document.write(html)
-  fw.document.close()
-
-  const onAfterPrint = () => {
-    cleanup()
-    fw.removeEventListener('afterprint', onAfterPrint)
+  if (!fw) {
+    frame.remove()
+    throw new Error('Could not open PDF frame')
   }
-  fw.addEventListener('afterprint', onAfterPrint)
 
-  // Wait a beat for images (logo / QR) so the preview isn't blank.
-  setTimeout(() => {
-    try {
-      fw.focus()
-      fw.print()
-    } catch {
-      cleanup()
+  try {
+    fw.document.open()
+    fw.document.write(html)
+    fw.document.close()
+    await waitForImages(fw.document)
+    // Let layout settle after images load.
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    const canvas = await html2canvas(fw.document.body, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: 816,
+      windowWidth: 816,
+      logging: false,
+    })
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
+    const pageWidth = 8.5
+    const pageHeight = 11
+    const imgWidth = pageWidth
+    const imgHeight = (canvas.height * pageWidth) / canvas.width
+    const imgData = canvas.toDataURL('image/jpeg', 0.92)
+
+    let heightLeft = imgHeight
+    let position = 0
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+    heightLeft -= pageHeight
+
+    while (heightLeft > 0.02) {
+      position -= pageHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+      heightLeft -= pageHeight
     }
-  }, 350)
 
-  // Safety net if afterprint never fires (some Android WebViews).
-  setTimeout(cleanup, 60_000)
+    pdf.save(filename)
+  } finally {
+    frame.remove()
+  }
 }
 
-export function printBlankMemo(): void {
-  printHtmlDoc(buildBlankMemoHtml())
+function safeFilename(value: string): string {
+  return value.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'document'
 }
 
-export function printSavedInvoice(inv: SavedInvoice): void {
-  printHtmlDoc(buildInvoiceHtml(inv))
+export async function printBlankMemo(): Promise<void> {
+  await downloadPdfFromHtml(buildBlankMemoHtml(), 'AK-Gems-Blank-Memo.pdf')
+}
+
+export async function printSavedInvoice(inv: SavedInvoice): Promise<void> {
+  const kind = inv.docKind === 'memo' ? 'Memo' : 'Invoice'
+  const number = safeFilename(inv.invoiceNumber || inv.id)
+  await downloadPdfFromHtml(buildInvoiceHtml(inv), `AK-Gems-${kind}-${number}.pdf`)
 }

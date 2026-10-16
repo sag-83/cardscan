@@ -876,8 +876,8 @@ function InvoiceRow({ inv, onMarkPaid, onDelete, onEdit }: {
               <Icon name="file" size={11} /> Edit
             </button>
           )}
-          <button onClick={() => printSavedInvoice(inv)} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150">
-            <Icon name="print" size={11} /> Print
+          <button onClick={() => void printSavedInvoice(inv)} className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150">
+            <Icon name="print" size={11} /> PDF
           </button>
           {isPending && onMarkPaid && !show && (
             <button onClick={() => setShow(true)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors duration-150">Mark Paid</button>
@@ -1405,9 +1405,9 @@ export function RevenueDashboard() {
               <div className="ml-auto flex items-center gap-2">
                 {lastRefresh && <p className="text-[11px] text-slate-400 dark:text-slate-600 tabular-nums">{lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                 {loading && <div className="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-indigo-500 animate-spin" />}
-                <button onClick={printBlankMemo}
+                <button onClick={() => void printBlankMemo()}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150">
-                  <Icon name="print" size={13} /> Blank memo
+                  <Icon name="print" size={13} /> Blank memo PDF
                 </button>
                 <button onClick={toggleDark}
                   className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150 text-slate-500 dark:text-slate-400">

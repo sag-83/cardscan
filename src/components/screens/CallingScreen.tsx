@@ -212,13 +212,16 @@ export function CallingScreen() {
   const active: QueueEntry | undefined = focusedEntry ?? upNext[0]
   const workingFromSearch = Boolean(focusedEntry)
 
-  const loggedToday = useMemo(() => {
+  const todayStartMs = useMemo(() => {
     const start = new Date()
     start.setHours(0, 0, 0, 0)
-    return callLogs
-      .filter((log) => Date.parse(log.called_at) >= start.getTime())
-      .slice(0, 40)
-  }, [callLogs])
+    return start.getTime()
+  }, [callLogs.length])
+
+  const loggedTodayCount = useMemo(
+    () => callLogs.filter((log) => Date.parse(log.called_at) >= todayStartMs).length,
+    [callLogs, todayStartMs],
+  )
 
   const unsyncedCount = useMemo(
     () => callLogs.reduce((n, log) => (log.synced ? n : n + 1), 0),
@@ -424,12 +427,20 @@ export function CallingScreen() {
 
       {upNext.length > 1 && <UpNext entries={upNext.slice(1, 6)} total={upNext.length - 1} />}
 
-      {loggedToday.length > 0 && (
-        <TodayLog
-          logs={loggedToday}
+      {callLogs.length > 0 && (
+        <CalledHistory
+          logs={callLogs}
           contacts={contacts}
+          todayStartMs={todayStartMs}
+          todayCount={loggedTodayCount}
           onUndo={undoLog}
           onOpenContact={setDetailContactId}
+          onWorkAgain={(contactId) => {
+            setFocusedId(contactId)
+            setSearchQuery('')
+            setSkipped((list) => list.filter((id) => id !== contactId))
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
         />
       )}
 
@@ -1107,75 +1118,206 @@ function UpNext({ entries, total }: { entries: QueueEntry[]; total: number }) {
   )
 }
 
-function TodayLog({ logs, contacts, onUndo, onOpenContact }: {
+function CalledHistory({
+  logs, contacts, todayStartMs, todayCount, onUndo, onOpenContact, onWorkAgain,
+}: {
   logs: CallLog[]
   contacts: ReturnType<typeof useStore.getState>['contacts']
+  todayStartMs: number
+  todayCount: number
   onUndo: (log: CallLog) => void
   onOpenContact: (id: string) => void
+  onWorkAgain: (contactId: string) => void
 }) {
+  const [scope, setScope] = useState<'today' | 'all'>('today')
+  const [filter, setFilter] = useState('')
+
+  const contactById = useMemo(() => {
+    const map = new Map<string, (typeof contacts)[number]>()
+    for (const contact of contacts) map.set(contact.id, contact)
+    return map
+  }, [contacts])
+
   const nameFor = (contactId: string) => {
-    const contact = contacts.find((c) => c.id === contactId)
+    const contact = contactById.get(contactId)
     return contact ? contact.company || contact.name || 'Unknown' : 'Deleted contact'
   }
 
+  const visible = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    const digits = phoneKey(filter)
+    const scoped = scope === 'today'
+      ? logs.filter((log) => Date.parse(log.called_at) >= todayStartMs)
+      : logs
+    if (!q && digits.length < 3) return scoped.slice(0, 80)
+
+    return scoped.filter((log) => {
+      const contact = contactById.get(log.contact_id)
+      const hay = [
+        contact?.name,
+        contact?.company,
+        contact?.city,
+        contact?.phone_mobile,
+        contact?.phone_work,
+        log.note,
+        CALL_OUTCOMES[log.outcome]?.short,
+      ].join(' ').toLowerCase()
+      const textMatch = hay.includes(q)
+      const phoneMatch = digits.length >= 3 && (
+        phoneKey(contact?.phone_mobile).includes(digits) ||
+        phoneKey(contact?.phone_work).includes(digits)
+      )
+      return textMatch || phoneMatch
+    }).slice(0, 80)
+  }, [logs, scope, filter, todayStartMs, contactById])
+
   return (
     <>
-      <SectionLabel>Logged today</SectionLabel>
-      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {logs.map((log) => {
-          const meta = CALL_OUTCOMES[log.outcome]
-          const { bg, fg } = tonePalette(meta?.tone ?? 'neutral')
-          return (
-            <div
-              key={log.id}
+      <SectionLabel>
+        Already called · {scope === 'today' ? `${todayCount} today` : `${logs.length} total`}
+      </SectionLabel>
+
+      <div style={{ padding: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <SegButton
+            active={scope === 'today'}
+            onClick={() => setScope('today')}
+            icon={<Clock className="size-3.5 shrink-0" aria-hidden />}
+            label={`Today (${todayCount})`}
+          />
+          <SegButton
+            active={scope === 'all'}
+            onClick={() => setScope('all')}
+            icon={<History className="size-3.5 shrink-0" aria-hidden />}
+            label={`All (${logs.length})`}
+          />
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <Search
+            className="size-3.5"
+            style={{
+              position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--text3)', pointerEvents: 'none',
+            }}
+            aria-hidden
+          />
+          <input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Search who you already called…"
+            aria-label="Search already called"
+            style={{
+              width: '100%', padding: '10px 36px 10px 34px', borderRadius: 11,
+              background: 'var(--bg2)', border: '1px solid var(--border2)',
+              fontSize: 14, color: 'var(--text)',
+            }}
+          />
+          {filter && (
+            <button
+              type="button"
+              onClick={() => setFilter('')}
+              aria-label="Clear called search"
               style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '10px 12px', borderRadius: 11,
-                background: 'var(--bg2)', border: '1px solid var(--border2)',
+                position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)',
+                width: 24, height: 24, borderRadius: '50%', border: 'none',
+                background: 'var(--bg4)', color: 'var(--text3)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
               }}
             >
-              <span style={{
-                flexShrink: 0, marginTop: 1, padding: '3px 8px', borderRadius: 999,
-                background: bg, color: fg, fontSize: 10.5, fontWeight: 800,
-              }}>
-                {meta?.short ?? log.outcome}
-              </span>
-              <button
-                type="button"
-                onClick={() => onOpenContact(log.contact_id)}
-                style={{
-                  flex: 1, minWidth: 0, border: 'none', background: 'none', padding: 0,
-                  textAlign: 'left', cursor: 'pointer',
-                }}
-              >
-                <div style={{
-                  fontSize: 13, fontWeight: 700, color: 'var(--text)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {nameFor(log.contact_id)}
-                </div>
-                {log.note && (
-                  <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.4 }}>
-                    {log.note}
+              <X className="size-3" aria-hidden />
+            </button>
+          )}
+        </div>
+
+        {visible.length === 0 ? (
+          <div style={{
+            padding: '16px 14px', borderRadius: 11, textAlign: 'center',
+            background: 'var(--bg2)', border: '1px solid var(--border2)',
+            fontSize: 13, color: 'var(--text3)',
+          }}>
+            {scope === 'today' && !filter
+              ? 'Nobody logged yet today — saves show up here after you pick an outcome.'
+              : 'No matching calls in this list.'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {visible.map((log) => {
+              const meta = CALL_OUTCOMES[log.outcome]
+              const { bg, fg } = tonePalette(meta?.tone ?? 'neutral')
+              const isToday = Date.parse(log.called_at) >= todayStartMs
+              return (
+                <div
+                  key={log.id}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '10px 12px', borderRadius: 11,
+                    background: 'var(--bg2)', border: '1px solid var(--border2)',
+                  }}
+                >
+                  <span style={{
+                    flexShrink: 0, marginTop: 1, padding: '3px 8px', borderRadius: 999,
+                    background: bg, color: fg, fontSize: 10.5, fontWeight: 800,
+                  }}>
+                    {meta?.short ?? log.outcome}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenContact(log.contact_id)}
+                    style={{
+                      flex: 1, minWidth: 0, border: 'none', background: 'none', padding: 0,
+                      textAlign: 'left', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      fontSize: 13, fontWeight: 700, color: 'var(--text)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {nameFor(log.contact_id)}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                      {isToday ? 'Today' : describeWhen(log.called_at)}
+                      {log.callback_at ? ` · callback ${describeWhen(log.callback_at)}` : ''}
+                    </div>
+                    {log.note && (
+                      <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 3, lineHeight: 1.4 }}>
+                        {log.note}
+                      </div>
+                    )}
+                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => onWorkAgain(log.contact_id)}
+                      aria-label="Open this call again"
+                      title="Open again — add notes or log another outcome"
+                      style={{
+                        width: 28, height: 28, borderRadius: 8, border: 'none',
+                        background: 'var(--chip-accent-bg)', color: 'var(--accent)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <PhoneCall className="size-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUndo(log)}
+                      aria-label="Undo this call"
+                      title="Undo — puts them back in the queue"
+                      style={{
+                        width: 28, height: 28, borderRadius: 8, border: 'none',
+                        background: 'var(--bg3)', color: 'var(--text3)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <Undo2 className="size-3.5" aria-hidden />
+                    </button>
                   </div>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onUndo(log)}
-                aria-label="Undo this call"
-                title="Undo — puts them back in the queue"
-                style={{
-                  flexShrink: 0, width: 28, height: 28, borderRadius: 8, border: 'none',
-                  background: 'var(--bg3)', color: 'var(--text3)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <Undo2 className="size-3.5" aria-hidden />
-              </button>
-            </div>
-          )
-        })}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </>
   )

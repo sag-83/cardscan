@@ -156,7 +156,9 @@ export function InvoiceModal() {
         </div>
         {!isPreview || !draft ? (
           <CreateInvoiceForm
+            key={draft?.id ?? `new-${contact.id}`}
             contact={contact}
+            initialInvoice={draft ?? undefined}
             existingInvoices={invoices ?? []}
             submitLabel={formKind === 'memo' ? 'Preview memo' : 'Preview invoice'}
             onDocKindChange={setFormKind}

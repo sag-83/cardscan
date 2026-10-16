@@ -62,6 +62,20 @@ function formatPhone(digits: string): string {
   return `(${d.slice(0, 3)})-${d.slice(3, 6)}-${d.slice(6)}`
 }
 
+/**
+ * Zero page margins so Chrome/Edge have nowhere to draw the default
+ * print chrome (site URL on the left, date + page number on the right).
+ * Content inset is applied on the body instead.
+ */
+const PRINT_CSS = `
+  @page { size: letter; margin: 0 !important; }
+  @media print {
+    html, body { margin: 0 !important; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  * { box-sizing: border-box; }
+`
+
 export function buildInvoiceHtml(inv: SavedInvoice): string {
   const docTitle = inv.docKind === 'invoice' ? 'INVOICE' : 'MEMO'
   const docNumber = inv.invoiceNumber || inv.id
@@ -101,11 +115,8 @@ export function buildInvoiceHtml(inv: SavedInvoice): string {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${docTitle}</title>
-  <style>
-    @page { margin: 0; }
-    * { box-sizing: border-box; }
-  </style>
+  <title>${docTitle} ${esc(docNumber)}</title>
+  <style>${PRINT_CSS}</style>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:22px 26px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;">
   <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
@@ -250,7 +261,7 @@ export function buildBlankMemoHtml(rowCount = 22): string {
 <head>
   <meta charset="utf-8" />
   <title>MEMO</title>
-  <style>@page { margin: 0; } * { box-sizing: border-box; }</style>
+  <style>${PRINT_CSS}</style>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px 24px;margin:0;color:#111827;text-transform:uppercase;font-size:11px;line-height:1.35;">
   <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
@@ -320,17 +331,57 @@ export function buildBlankMemoHtml(rowCount = 22): string {
 }
 
 function printHtmlDoc(html: string): void {
+  // Zero-size iframes make some browsers fall back to the parent page's
+  // headers (vercel URL + date/page). A real letter-sized offscreen frame
+  // keeps @page { margin: 0 } working so that chrome stays off the sheet.
   const frame = document.createElement('iframe')
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
   frame.setAttribute('aria-hidden', 'true')
+  frame.setAttribute('title', 'Print')
+  frame.style.cssText = [
+    'position:fixed',
+    'left:0',
+    'top:0',
+    'width:8.5in',
+    'height:11in',
+    'border:0',
+    'opacity:0',
+    'pointer-events:none',
+    'z-index:-1',
+  ].join(';')
   document.body.appendChild(frame)
-  const cleanup = () => setTimeout(() => frame.parentNode?.removeChild(frame), 250)
+
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    setTimeout(() => frame.parentNode?.removeChild(frame), 400)
+  }
+
   const fw = frame.contentWindow
   if (!fw) { cleanup(); return }
-  fw.document.open(); fw.document.write(html); fw.document.close()
-  const onAfterPrint = () => { cleanup(); fw.removeEventListener('afterprint', onAfterPrint) }
+
+  fw.document.open()
+  fw.document.write(html)
+  fw.document.close()
+
+  const onAfterPrint = () => {
+    cleanup()
+    fw.removeEventListener('afterprint', onAfterPrint)
+  }
   fw.addEventListener('afterprint', onAfterPrint)
-  setTimeout(() => { try { fw.focus(); fw.print() } catch { cleanup() } }, 200)
+
+  // Wait a beat for images (logo / QR) so the preview isn't blank.
+  setTimeout(() => {
+    try {
+      fw.focus()
+      fw.print()
+    } catch {
+      cleanup()
+    }
+  }, 350)
+
+  // Safety net if afterprint never fires (some Android WebViews).
+  setTimeout(cleanup, 60_000)
 }
 
 export function printBlankMemo(): void {
@@ -338,16 +389,5 @@ export function printBlankMemo(): void {
 }
 
 export function printSavedInvoice(inv: SavedInvoice): void {
-  const html = buildInvoiceHtml(inv)
-  const frame = document.createElement('iframe')
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
-  frame.setAttribute('aria-hidden', 'true')
-  document.body.appendChild(frame)
-  const cleanup = () => setTimeout(() => frame.parentNode?.removeChild(frame), 250)
-  const fw = frame.contentWindow
-  if (!fw) { cleanup(); return }
-  fw.document.open(); fw.document.write(html); fw.document.close()
-  const onAfterPrint = () => { cleanup(); fw.removeEventListener('afterprint', onAfterPrint) }
-  fw.addEventListener('afterprint', onAfterPrint)
-  setTimeout(() => { try { fw.focus(); fw.print() } catch { cleanup() } }, 200)
+  printHtmlDoc(buildInvoiceHtml(inv))
 }

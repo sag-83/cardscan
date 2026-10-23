@@ -168,6 +168,7 @@ export function TripScreen() {
 
   const [filterState, setFilterState] = useState(restored?.filterState ?? '')
   const [filterCity, setFilterCity] = useState(restored?.filterCity ?? '')
+  const [filterArea, setFilterArea] = useState(restored?.filterArea ?? '')
   const [filterType, setFilterType] = useState(restored?.filterType ?? '')
   const [minStars, setMinStars] = useState(restored?.minStars ?? 0)
 
@@ -193,12 +194,13 @@ export function TripScreen() {
       startPlaceLabel: startPlace.label,
       filterState,
       filterCity,
+      filterArea,
       filterType,
       minStars,
       setupOpen,
       error,
     })
-  }, [plan, excluded, lastRun, startPlace.label, filterState, filterCity, filterType, minStars, setupOpen, error])
+  }, [plan, excluded, lastRun, startPlace.label, filterState, filterCity, filterArea, filterType, minStars, setupOpen, error])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -212,6 +214,18 @@ export function TripScreen() {
       : contacts
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filterState])
+  const areas = useMemo(
+    () => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(),
+    [contacts],
+  )
+  const areaCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    contacts.forEach((contact) => {
+      if (!contact.area) return
+      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
+    })
+    return counts
+  }, [contacts])
 
   // Anyone whose most recent call ended in interest. The point of the calling
   // screen is to turn cold names into visits, so those names need to be
@@ -227,13 +241,14 @@ export function TripScreen() {
   const scoped = useMemo(() => contacts.filter((c) => {
     if (filterState && normalizeStateValue(c.state) !== filterState) return false
     if (filterCity && c.city !== filterCity) return false
+    if (filterArea && c.area !== filterArea) return false
     if (filterType === 'customer' && !c.is_customer) return false
     if (filterType === 'goods_shown' && !c.visited) return false
     if (filterType === 'not_visited' && c.visited) return false
     if (filterType === 'call_interested' && !interestedIds.has(c.id)) return false
     if (minStars > 0 && c.stars < minStars) return false
     return true
-  }), [contacts, filterState, filterCity, filterType, minStars, interestedIds])
+  }), [contacts, filterState, filterCity, filterArea, filterType, minStars, interestedIds])
 
   /**
    * Coordinates for a saved address. The lookup result is written back so the
@@ -492,6 +507,18 @@ export function TripScreen() {
                 >
                   <option value="">All cities</option>
                   {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <select
+                  value={filterArea}
+                  onChange={(e) => setFilterArea(e.target.value)}
+                  style={{ ...dropdownStyle(!!filterArea), flex: 1, minWidth: 0 }}
+                >
+                  <option value="">All areas</option>
+                  {areas.map((a) => (
+                    <option key={a} value={a}>{a} ({areaCounts.get(a) ?? 0})</option>
+                  ))}
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>

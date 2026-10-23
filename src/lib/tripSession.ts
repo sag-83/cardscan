@@ -15,6 +15,7 @@ export interface TripSession {
   startPlaceLabel: string
   filterState: string
   filterCity: string
+  filterArea: string
   filterType: string
   minStars: number
   setupOpen: boolean

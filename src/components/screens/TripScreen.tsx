@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
+import type { Contact } from '../../types/contact'
 import { buildHistories } from '../../lib/callQueue'
 import { normalizeStateValue } from '../../lib/usStates'
 import {
@@ -435,6 +436,7 @@ export function TripScreen() {
                   onEdit={() => setEditingHome(true)}
                   onDone={() => setEditingHome(false)}
                   onChange={(next) => patch({ home: next })}
+                  contacts={contacts}
                 />
               )}
               {startMode === 'place' && (
@@ -445,7 +447,8 @@ export function TripScreen() {
                     hit ? { label: hit.label, point: hit.point } : { label: p.label }
                   ))}
                   onSubmit={() => void run()}
-                  placeholder="Lancaster, PA · 19106 · hotel address"
+                  contacts={contacts}
+                  placeholder="Address, city, ZIP, or customer name"
                   ariaLabel="Starting place"
                 />
               )}
@@ -470,6 +473,7 @@ export function TripScreen() {
                   onEdit={() => setEditingHome(true)}
                   onDone={() => setEditingHome(false)}
                   onChange={(next) => patch({ home: next })}
+                  contacts={contacts}
                 />
               )}
               {endMode === 'custom' && (
@@ -481,7 +485,8 @@ export function TripScreen() {
                     customEnd: hit ? { label: hit.label, point: hit.point } : { label: s.customEnd.label },
                   }))}
                   onSubmit={() => void run()}
-                  placeholder="Where you're finishing the day"
+                  contacts={contacts}
+                  placeholder="Address, city, ZIP, or customer name"
                   ariaLabel="Finishing place"
                 />
               )}
@@ -1008,12 +1013,13 @@ function SkippedNote({ plan }: { plan: TripPlan }) {
 // ─── Small building blocks ──────────────────────────────────────────────────
 
 /** Shows the saved home base, and swaps to an address box when editing. */
-function HomeRow({ home, editing, onEdit, onDone, onChange }: {
+function HomeRow({ home, editing, onEdit, onDone, onChange, contacts = [] }: {
   home: SavedPlace
   editing: boolean
   onEdit: () => void
   onDone: () => void
   onChange: (next: SavedPlace) => void
+  contacts?: Contact[]
 }) {
   if (editing) {
     return (
@@ -1023,6 +1029,7 @@ function HomeRow({ home, editing, onEdit, onDone, onChange }: {
           onChange={(label) => onChange({ label })}
           onResolve={(hit) => { if (hit) onChange({ label: hit.label, point: hit.point }) }}
           onSubmit={onDone}
+          contacts={contacts}
           placeholder="Your office or home address"
           ariaLabel="Home address"
         />

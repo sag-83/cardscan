@@ -373,14 +373,20 @@ export async function searchPlaces(
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
   const query = text.trim()
-  if (query.length < 3) return []
+  if (query.length < 2) return []
 
   const key = query.toUpperCase().replace(/\s+/g, ' ')
   const cached = suggestionCache.get(key)
   if (cached) return cached
 
   const ask = (q: string) => nominatimRequest(
-    { q, limit: String(SUGGESTION_LIMIT), countrycodes: 'us', addressdetails: '1' },
+    {
+      q,
+      limit: String(SUGGESTION_LIMIT),
+      countrycodes: 'us',
+      addressdetails: '1',
+      dedupe: '1',
+    },
     signal,
   )
 
@@ -392,6 +398,10 @@ export async function searchPlaces(
     )
   }
   if (rows.length === 0 && !signal?.aborted) rows = await ask(query)
+  // Partial street + city often needs a USA suffix for Nominatim to rank US hits.
+  if (rows.length === 0 && !signal?.aborted && !/\busa\b/i.test(query)) {
+    rows = await ask(`${query}, USA`)
+  }
   if (rows.length === 0 && !signal?.aborted) {
     const trimmed = addressWithoutUnit(query)
     if (trimmed && trimmed !== query) rows = await ask(trimmed)

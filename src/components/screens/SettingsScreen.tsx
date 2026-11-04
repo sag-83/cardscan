@@ -55,6 +55,11 @@ import {
   syncFollowupReminders,
 } from '../../lib/reminderNotifications'
 import {
+  findGenericFollowupIds,
+  markGenericFollowupCleanupDone,
+  stripGenericFollowups,
+} from '../../lib/followupCleanup'
+import {
   enableLocationAccess,
   isLocationAccessEnabled,
   queryGeolocationPermission,
@@ -975,8 +980,11 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
   showToast: (msg: string) => void
 }) {
   const invoices = useStore((s) => s.invoices)
+  const setContacts = useStore((s) => s.setContacts)
   const status = getReminderPushStatus(contacts, invoices)
   const ready = status.enabled && status.permission === 'granted'
+  const genericCount = findGenericFollowupIds(contacts).length
+  const realFollowupCount = contacts.filter((c) => c.followup_at).length - genericCount
 
   const statusLine = !status.supported
     ? 'Not supported in this browser'
@@ -1060,6 +1068,49 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
           >
             Reschedule all
           </button>
+        </div>
+      )}
+
+      {(genericCount > 0 || contacts.some((c) => c.followup_at)) && (
+        <div style={{
+          width: '100%', marginTop: 4, paddingTop: 10,
+          borderTop: '1px solid var(--border2)',
+          fontSize: 12, color: 'var(--text3)', lineHeight: 1.5,
+        }}>
+          {genericCount > 0
+            ? `${genericCount} look like bulk/mass follow-ups`
+              + (realFollowupCount > 0 ? ` · ${realFollowupCount} look intentional` : '')
+            : `${realFollowupCount} intentional follow-up${realFollowupCount === 1 ? '' : 's'} (no mass stamps detected)`}
+          {genericCount > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm(
+                    `Clear ${genericCount} mass follow-up${genericCount === 1 ? '' : 's'}?\n\n`
+                    + 'Keeps ones with a real note (e.g. “Call back — …”). Removes empty / “Follow up” stamps that share the same time.',
+                  )) return
+                  const result = stripGenericFollowups(contacts)
+                  setContacts(result.contacts)
+                  const cleared = result.contacts.filter((c) => result.clearedIds.includes(c.id))
+                  void saveContactsToDB(cleared, { skipDedupe: true })
+                  void syncFollowupReminders(result.contacts, invoices)
+                  markGenericFollowupCleanupDone()
+                  showToast(
+                    result.clearedCount
+                      ? `Cleared ${result.clearedCount} · kept ${result.keptCount}`
+                      : 'Nothing to clear',
+                  )
+                }}
+                style={{
+                  fontSize: 12, fontWeight: 700, color: '#ff3b30',
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                }}
+              >
+                Clear mass follow-ups
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

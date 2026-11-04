@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
-import { initSupabase } from './lib/supabase'
+import { initSupabase, saveContactsToDB } from './lib/supabase'
 import { startCloudRealtimeSync } from './lib/cloudSync'
 import { loadImages } from './lib/imageStore'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
+import {
+  hasRunGenericFollowupCleanup,
+  markGenericFollowupCleanupDone,
+  stripGenericFollowups,
+} from './lib/followupCleanup'
 import {
   registerReminderServiceWorker,
   startFollowupReminderPolling,
@@ -145,6 +150,29 @@ export default function App() {
     if (!isUnlocked) return
     void (async () => {
       await registerReminderServiceWorker()
+
+      // Strip mass "Follow up" stamps (Bulk used to set every contact).
+      // Re-runs if cloud sync brings the junk back; toast only the first time.
+      if (!IS_DEMO_MODE) {
+        const before = useStore.getState()
+        const result = stripGenericFollowups(before.contacts)
+        if (result.clearedCount > 0) {
+          setContacts(result.contacts)
+          const cleared = result.contacts.filter((c) => result.clearedIds.includes(c.id))
+          void saveContactsToDB(cleared, { skipDedupe: true })
+          if (!hasRunGenericFollowupCleanup()) {
+            showToast(
+              `Cleared ${result.clearedCount} bulk follow-up${result.clearedCount === 1 ? '' : 's'}`
+              + (result.keptCount ? ` · kept ${result.keptCount} real one${result.keptCount === 1 ? '' : 's'}` : ''),
+              5000,
+            )
+          }
+          markGenericFollowupCleanupDone()
+        } else if (!hasRunGenericFollowupCleanup()) {
+          markGenericFollowupCleanupDone()
+        }
+      }
+
       const state = useStore.getState()
       await syncFollowupReminders(state.contacts, state.invoices)
     })()
@@ -152,7 +180,7 @@ export default function App() {
       () => useStore.getState().contacts,
       () => useStore.getState().invoices,
     )
-  }, [isUnlocked])
+  }, [isUnlocked, setContacts, showToast])
 
   useEffect(() => {
     if (!isUnlocked) return

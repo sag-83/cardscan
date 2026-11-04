@@ -7,6 +7,7 @@ import {
   ensureSupabaseClient,
   mapCallLogRow,
   mapContactRow,
+  saveContactsToDB,
   syncContactsFromDB,
   syncInvoicesFromDB,
 } from './supabase'
@@ -15,6 +16,7 @@ import {
   getDeletedInvoiceIds,
   reconcileInvoiceDeletions,
 } from './invoiceSync'
+import { stripGenericFollowups } from './followupCleanup'
 import { dedupeContacts, mergeContact, normalizeContact } from './utils'
 
 const POLL_MS = 30_000
@@ -125,8 +127,17 @@ export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
 
   const localContacts = store.getContacts()
   const localInvoices = store.getInvoices()
-  const mergedContacts = mergeCloudAndLocalContacts(localContacts, cloudContacts)
+  let mergedContacts = mergeCloudAndLocalContacts(localContacts, cloudContacts)
   const mergedInvoices = mergeCloudAndLocalInvoices(localInvoices, cloudInvoices)
+
+  // Cloud may still hold the old bulk "Follow up" stamps — strip them here
+  // so a pull can't put ~700 reminders back after local cleanup.
+  const cleaned = stripGenericFollowups(mergedContacts)
+  if (cleaned.clearedCount > 0) {
+    mergedContacts = cleaned.contacts
+    const cleared = cleaned.contacts.filter((c) => cleaned.clearedIds.includes(c.id))
+    void saveContactsToDB(cleared, { skipDedupe: true })
+  }
 
   // Polling every 30s used to replace the whole library even when nothing
   // changed — that stringify + 700-row reconcile is what froze the nav

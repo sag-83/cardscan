@@ -49,6 +49,7 @@ import { IS_DEMO_MODE } from '../../lib/demo'
 import { saveContactToDB } from '../../lib/supabase'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
+import { TripHistoryPanel } from './TripHistoryPanel'
 import {
   buildMapsLinks,
   buildTripText,
@@ -170,6 +171,7 @@ export function TripScreen() {
   const callLogs = useStore((s) => s.callLogs)
   const tripLogs = useStore((s) => s.tripLogs)
   const addTripLog = useStore((s) => s.addTripLog)
+  const deleteTripLog = useStore((s) => s.deleteTripLog)
   const clearTripLogs = useStore((s) => s.clearTripLogs)
   const savedItinerary = useStore((s) => s.savedItinerary)
   const setSavedItinerary = useStore((s) => s.setSavedItinerary)
@@ -195,6 +197,7 @@ export function TripScreen() {
 
   const [setupOpen, setSetupOpen] = useState(restored?.setupOpen ?? true)
   const [planMode, setPlanMode] = useState<PlanMode>('day')
+  const [screenTab, setScreenTab] = useState<'plan' | 'history'>('plan')
   const [itineraryDays, setItineraryDays] = useState(3)
   const [skipLogged, setSkipLogged] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -465,9 +468,10 @@ export function TripScreen() {
     setConfirmOpen(false)
     showToast(
       visitedIds.length
-        ? `Logged ${visitedIds.length} visit${visitedIds.length === 1 ? '' : 's'} — they'll stay out of the next plan`
+        ? `Logged ${visitedIds.length} visit${visitedIds.length === 1 ? '' : 's'} — see History for the record`
         : 'Trip logged with no visits',
     )
+    setScreenTab('history')
   }
 
   const openItineraryDay = async (itinerary: TripItinerary, dayIndex: number) => {
@@ -536,11 +540,47 @@ export function TripScreen() {
 
   return (
     <div style={{ paddingBottom: 24 }}>
+      <div style={{
+        display: 'flex', gap: 6, padding: '12px 16px 0',
+      }}>
+        <SegButton
+          active={screenTab === 'plan'}
+          onClick={() => setScreenTab('plan')}
+          icon={<Route className="size-3.5 shrink-0" aria-hidden />}
+          label="Plan"
+        />
+        <SegButton
+          active={screenTab === 'history'}
+          onClick={() => setScreenTab('history')}
+          icon={<ClipboardCheck className="size-3.5 shrink-0" aria-hidden />}
+          label={tripLogs.length ? `History (${tripLogs.length})` : 'History'}
+        />
+      </div>
+
+      {screenTab === 'history' ? (
+        <TripHistoryPanel
+          tripLogs={tripLogs}
+          contacts={contacts}
+          onOpenContact={setDetailContactId}
+          onDeleteLog={(id) => {
+            deleteTripLog(id)
+            showToast('Trip log deleted')
+          }}
+          onClearAll={() => {
+            if (!tripLogs.length) return
+            if (!confirm('Clear all logged trip visits? Future plans will suggest those stops again.')) return
+            clearTripLogs()
+            showToast('Trip history cleared')
+          }}
+        />
+      ) : (
+      <>
       {progressStats && (
         <TerritoryBanner
           progress={progressStats}
           remainingInFilter={remainingInScope}
           tripLogCount={tripLogs.length}
+          onViewHistory={() => setScreenTab('history')}
           onClearHistory={() => {
             if (!tripLogs.length) return
             if (!confirm('Clear all logged trip visits? Future plans will suggest those stops again.')) return
@@ -550,7 +590,7 @@ export function TripScreen() {
         />
       )}
 
-      <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
+      <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border2)', marginTop: progressStats ? 12 : 12 }}>
         <button
           type="button"
           onClick={() => setSetupOpen((v) => !v)}
@@ -913,16 +953,19 @@ export function TripScreen() {
           onConfirm={(ids) => void confirmVisits(ids)}
         />
       )}
+      </>
+      )}
     </div>
   )
 }
 
 function TerritoryBanner({
-  progress, remainingInFilter, tripLogCount, onClearHistory,
+  progress, remainingInFilter, tripLogCount, onViewHistory, onClearHistory,
 }: {
   progress: NonNullable<ReturnType<typeof territoryProgress>>
   remainingInFilter: number
   tripLogCount: number
+  onViewHistory: () => void
   onClearHistory: () => void
 }) {
   const label = [progress.city, progress.state].filter(Boolean).join(', ') || progress.state || 'This area'
@@ -943,13 +986,13 @@ function TerritoryBanner({
         {tripLogCount > 0 && (
           <button
             type="button"
-            onClick={onClearHistory}
+            onClick={onViewHistory}
             style={{
               border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-              fontSize: 11, fontWeight: 700, color: 'var(--text3)',
+              fontSize: 11, fontWeight: 700, color: 'var(--accent)',
             }}
           >
-            Clear history
+            View all
           </button>
         )}
       </div>
@@ -966,6 +1009,18 @@ function TerritoryBanner({
           : ''}
         {progress.tripDays > 0 ? ` · ${progress.tripDays} trip day${progress.tripDays === 1 ? '' : 's'} logged` : ''}
       </div>
+      {tripLogCount > 0 && (
+        <button
+          type="button"
+          onClick={onClearHistory}
+          style={{
+            marginTop: 8, border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+            fontSize: 11, fontWeight: 700, color: 'var(--text3)',
+          }}
+        >
+          Clear history
+        </button>
+      )}
     </div>
   )
 }

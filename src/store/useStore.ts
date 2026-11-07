@@ -4,6 +4,8 @@ import { Contact, Screen } from '../types/contact'
 import type { CallLog } from '../types/call'
 import { SavedInvoice } from '../types/invoice'
 import type { ChargeInvoice, ChargePayment } from '../types/chargeAccount'
+import type { TripItinerary, TripLog } from '../types/trip'
+import { mergeTripLogs } from '../lib/tripHistory'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
 import { debouncedPersistStorage } from '../lib/debouncedStorage'
@@ -28,6 +30,15 @@ interface AppState {
   mergeCallLogs: (logs: CallLog[]) => void
   markCallLogSynced: (id: string) => void
   deleteCallLog: (id: string) => void
+
+  // ─── Field trip history ──────────────────────────────────────────
+  tripLogs: TripLog[]
+  addTripLog: (log: TripLog) => void
+  mergeTripLogs: (logs: TripLog[]) => void
+  deleteTripLog: (id: string) => void
+  clearTripLogs: () => void
+  savedItinerary: TripItinerary | null
+  setSavedItinerary: (itinerary: TripItinerary | null) => void
 
   // ─── Invoices ────────────────────────────────────────────────────
   invoices: SavedInvoice[]
@@ -195,6 +206,18 @@ export const useStore = create<AppState>()(
 
       deleteCallLog: (id) => set((s) => ({ callLogs: s.callLogs.filter((log) => log.id !== id) })),
 
+      tripLogs: [],
+      addTripLog: (log) => set((s) => ({ tripLogs: [log, ...s.tripLogs] })),
+      mergeTripLogs: (incoming) =>
+        set((s) => {
+          if (!incoming.length) return s
+          return { tripLogs: mergeTripLogs(s.tripLogs, incoming) }
+        }),
+      deleteTripLog: (id) => set((s) => ({ tripLogs: s.tripLogs.filter((log) => log.id !== id) })),
+      clearTripLogs: () => set({ tripLogs: [] }),
+      savedItinerary: null,
+      setSavedItinerary: (savedItinerary) => set({ savedItinerary }),
+
       // ─── Invoices ──────────────────────────────────────────────
       invoices: [],
       addInvoice: (invoice) =>
@@ -319,6 +342,8 @@ export const useStore = create<AppState>()(
       partialize: (s) => ({
         contacts: s.contacts,
         callLogs: s.callLogs,
+        tripLogs: s.tripLogs,
+        savedItinerary: s.savedItinerary,
         invoices: s.invoices,
         apiKey: s.apiKey,
         apiKey2: s.apiKey2,

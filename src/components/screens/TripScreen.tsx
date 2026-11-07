@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
+  CalendarRange,
   Car,
   Check,
   ChevronDown,
+  ClipboardCheck,
   Copy,
   Crosshair,
   ExternalLink,
@@ -23,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import type { Contact } from '../../types/contact'
+import type { TripItinerary } from '../../types/trip'
 import { buildHistories } from '../../lib/callQueue'
 import { normalizeStateValue } from '../../lib/usStates'
 import {
@@ -30,13 +33,22 @@ import {
   getUserPosition,
   LocationError,
   type GeoPoint,
-  type PlaceSuggestion,
 } from '../../lib/geocode'
 import { formatDuration, formatMiles } from '../../lib/geoMath'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 import { saveLastTripScope } from '../../lib/lastTripScope'
 import { readTripSession, writeTripSession } from '../../lib/tripSession'
+import {
+  allLoggedVisitedIds,
+  buildTripLog,
+  emptyItineraryHint,
+  territoryProgress,
+} from '../../lib/tripHistory'
+import { planItinerary } from '../../lib/itineraryPlanner'
+import { IS_DEMO_MODE } from '../../lib/demo'
+import { saveContactToDB } from '../../lib/supabase'
 import { AddressAutocomplete } from '../AddressAutocomplete'
+import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
 import {
   buildMapsLinks,
   buildTripText,
@@ -151,9 +163,17 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : 'Could not plan this route'
 }
 
+type PlanMode = 'day' | 'itinerary'
+
 export function TripScreen() {
   const contacts = useStore((s) => s.contacts)
   const callLogs = useStore((s) => s.callLogs)
+  const tripLogs = useStore((s) => s.tripLogs)
+  const addTripLog = useStore((s) => s.addTripLog)
+  const clearTripLogs = useStore((s) => s.clearTripLogs)
+  const savedItinerary = useStore((s) => s.savedItinerary)
+  const setSavedItinerary = useStore((s) => s.setSavedItinerary)
+  const updateContact = useStore((s) => s.updateContact)
   const showToast = useStore((s) => s.showToast)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
 
@@ -174,6 +194,11 @@ export function TripScreen() {
   const [minStars, setMinStars] = useState(restored?.minStars ?? 0)
 
   const [setupOpen, setSetupOpen] = useState(restored?.setupOpen ?? true)
+  const [planMode, setPlanMode] = useState<PlanMode>('day')
+  const [itineraryDays, setItineraryDays] = useState(3)
+  const [skipLogged, setSkipLogged] = useState(true)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [itineraryDayProgress, setItineraryDayProgress] = useState<{ day: number; total: number } | null>(null)
 
   const [working, setWorking] = useState(false)
   const [progress, setProgress] = useState<TripProgress | null>(null)
@@ -251,6 +276,17 @@ export function TripScreen() {
     return true
   }), [contacts, filterState, filterCity, filterArea, filterType, minStars, interestedIds])
 
+  const loggedVisited = useMemo(() => allLoggedVisitedIds(tripLogs), [tripLogs])
+
+  const progressStats = useMemo(
+    () => territoryProgress(contacts, tripLogs, {
+      state: filterState,
+      city: filterCity,
+      area: filterArea,
+    }),
+    [contacts, tripLogs, filterState, filterCity, filterArea],
+  )
+
   /**
    * Coordinates for a saved address. The lookup result is written back so the
    * same address isn't re-geocoded on every plan, and so a point picked from
@@ -308,6 +344,19 @@ export function TripScreen() {
     return { label: customEnd.label.trim(), point }
   }
 
+  const omitIdsForPlan = (extraExcluded: string[]) => {
+    const omit = new Set(extraExcluded)
+    if (skipLogged) {
+      for (const id of loggedVisited) omit.add(id)
+      // Also honour the contact.visited "goods shown" flag so old work
+      // before trip logs still stays out of the funnel.
+      for (const c of contacts) {
+        if (c.visited) omit.add(c.id)
+      }
+    }
+    return omit
+  }
+
   const run = async (overrides?: { reuseLast?: boolean; excluded?: string[] }) => {
     if (working) return
     const excludedNow = overrides?.excluded ?? excluded
@@ -315,6 +364,7 @@ export function TripScreen() {
     setError('')
     setWorking(true)
     setProgress(null)
+    setItineraryDayProgress(null)
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -327,8 +377,49 @@ export function TripScreen() {
       const end = reuse ? reuse.end : await resolveEnd(origin)
       setLastRun({ origin, end })
 
-      const pool = scoped.filter((c) => !excludedNow.includes(c.id))
-      if (pool.length === 0) throw new TripPlanError('No contacts match these filters.')
+      const omit = omitIdsForPlan(excludedNow)
+      const pool = scoped.filter((c) => !omit.has(c.id))
+      if (pool.length === 0) {
+        throw new TripPlanError(
+          skipLogged
+            ? 'No contacts left — everyone matching these filters is already logged as visited. Turn off “Skip logged visits” or widen the area.'
+            : 'No contacts match these filters.',
+        )
+      }
+
+      if (planMode === 'itinerary' && !overrides?.reuseLast) {
+        const itinerary = await planItinerary({
+          contacts: pool,
+          omitIds: new Set(),
+          origin,
+          end,
+          dayCount: itineraryDays,
+          stopsPerDay: options.maxStops,
+          options: {
+            radiusMiles: options.radiusMiles,
+            minutesPerStop: options.minutesPerStop,
+            priority: options.priority,
+          },
+          filterState,
+          filterCity,
+          filterArea,
+          onProgress: (day, total, p) => {
+            setItineraryDayProgress({ day, total })
+            setProgress(p)
+          },
+          signal: controller.signal,
+        })
+        setSavedItinerary(itinerary)
+        setPlan(null)
+        setSetupOpen(false)
+        saveLastTripScope({
+          state: filterState,
+          city: filterCity,
+          originLabel: origin.label,
+        })
+        showToast(`Built ${itinerary.dayCount}-day itinerary · ${itinerary.days.reduce((n, d) => n + d.stops.length, 0)} stops`)
+        return
+      }
 
       const result = await planTrip(pool, origin, end, options, setProgress, controller.signal)
       setPlan(result)
@@ -340,11 +431,75 @@ export function TripScreen() {
       })
     } catch (err) {
       if (err instanceof TripCancelledError) return
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError(describeError(err))
     } finally {
       setWorking(false)
       setProgress(null)
+      setItineraryDayProgress(null)
       abortRef.current = null
+    }
+  }
+
+  const confirmVisits = async (visitedIds: string[]) => {
+    if (!plan) return
+    const log = buildTripLog({
+      plan,
+      visitedIds,
+      filterState,
+      filterCity,
+      filterArea,
+    })
+    addTripLog(log)
+
+    // Mark goods-shown so Contacts filters and future plans stay in sync.
+    for (const id of visitedIds) {
+      const contact = contacts.find((c) => c.id === id)
+      if (!contact || contact.visited) continue
+      updateContact(id, { visited: true })
+      if (!IS_DEMO_MODE) {
+        void saveContactToDB({ ...contact, visited: true })
+      }
+    }
+
+    setConfirmOpen(false)
+    showToast(
+      visitedIds.length
+        ? `Logged ${visitedIds.length} visit${visitedIds.length === 1 ? '' : 's'} — they'll stay out of the next plan`
+        : 'Trip logged with no visits',
+    )
+  }
+
+  const openItineraryDay = async (itinerary: TripItinerary, dayIndex: number) => {
+    const day = itinerary.days.find((d) => d.dayIndex === dayIndex)
+    if (!day) return
+    const ids = new Set(day.stops.map((s) => s.contactId))
+    const pool = contacts.filter((c) => ids.has(c.id))
+    if (!pool.length) {
+      showToast('Those contacts are no longer in the library')
+      return
+    }
+    setWorking(true)
+    setError('')
+    try {
+      const origin = lastRun?.origin ?? (await resolveOrigin())
+      const end = lastRun ? lastRun.end : await resolveEnd(origin)
+      setLastRun({ origin, end })
+      const result = await planTrip(
+        pool,
+        origin,
+        end,
+        { ...options, maxStops: pool.length },
+        setProgress,
+      )
+      setPlan(result)
+      setExcluded([])
+      showToast(`Day ${dayIndex} ready — log visits when you're done`)
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setWorking(false)
+      setProgress(null)
     }
   }
 
@@ -374,8 +529,27 @@ export function TripScreen() {
     }
   }
 
+  const remainingInScope = scoped.filter((c) => {
+    if (!skipLogged) return true
+    return !loggedVisited.has(c.id) && !c.visited
+  }).length
+
   return (
     <div style={{ paddingBottom: 24 }}>
+      {progressStats && (
+        <TerritoryBanner
+          progress={progressStats}
+          remainingInFilter={remainingInScope}
+          tripLogCount={tripLogs.length}
+          onClearHistory={() => {
+            if (!tripLogs.length) return
+            if (!confirm('Clear all logged trip visits? Future plans will suggest those stops again.')) return
+            clearTripLogs()
+            showToast('Trip history cleared')
+          }}
+        />
+      )}
+
       <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
         <button
           type="button"
@@ -391,8 +565,9 @@ export function TripScreen() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Trip setup</div>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-              {scoped.length} contact{scoped.length === 1 ? '' : 's'} in scope · up to {options.maxStops} stops
-              {' · '}{options.radiusMiles} mi · {END_SUMMARY[endMode]}
+              {remainingInScope} left in scope
+              {skipLogged && loggedVisited.size > 0 ? ` · ${loggedVisited.size} logged` : ''}
+              {' · '}up to {options.maxStops}/day · {options.radiusMiles} mi · {END_SUMMARY[endMode]}
             </div>
           </div>
           <ChevronDown
@@ -551,6 +726,60 @@ export function TripScreen() {
               </div>
             </Group>
 
+            <Group label="How to plan">
+              <div style={{ display: 'flex', gap: 6 }}>
+                <SegButton
+                  active={planMode === 'day'}
+                  onClick={() => setPlanMode('day')}
+                  icon={<Route className="size-3.5 shrink-0" aria-hidden />}
+                  label="One day"
+                />
+                <SegButton
+                  active={planMode === 'itinerary'}
+                  onClick={() => setPlanMode('itinerary')}
+                  icon={<CalendarRange className="size-3.5 shrink-0" aria-hidden />}
+                  label="Itinerary"
+                />
+              </div>
+              {planMode === 'itinerary' && (
+                <>
+                  <SliderRow
+                    label="How many days"
+                    value={itineraryDays}
+                    min={2}
+                    max={10}
+                    step={1}
+                    format={(v) => `${v} day${v === 1 ? '' : 's'}`}
+                    onChange={setItineraryDays}
+                  />
+                  <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 2 }}>
+                    {emptyItineraryHint(progressStats, options.maxStops, itineraryDays)
+                      || 'Builds day 1 from the closest stops, then peels the next days from what’s left — so a month in one state doesn’t repeat.'}
+                  </div>
+                </>
+              )}
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 8,
+                padding: '10px 12px', borderRadius: 10, background: 'var(--bg3)',
+                border: '1px solid var(--border2)', cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={skipLogged}
+                  onChange={(e) => setSkipLogged(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 750, color: 'var(--text)' }}>
+                    Skip logged visits
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.4 }}>
+                    Omit stops you’ve already confirmed on a trip (and anyone marked goods shown).
+                  </span>
+                </span>
+              </label>
+            </Group>
+
             <Group label="Trip shape">
               <SliderRow
                 label="Search radius"
@@ -562,7 +791,7 @@ export function TripScreen() {
                 onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
               />
               <SliderRow
-                label="Stops to visit"
+                label={planMode === 'itinerary' ? 'Stops per day' : 'Stops to visit'}
                 value={options.maxStops}
                 min={2}
                 max={30}
@@ -607,7 +836,9 @@ export function TripScreen() {
               >
                 {working
                   ? <><Loader2 className="size-4 animate-spin" aria-hidden />Planning…</>
-                  : <><Route className="size-4 shrink-0" aria-hidden />Plan my route</>}
+                  : planMode === 'itinerary'
+                    ? <><CalendarRange className="size-4 shrink-0" aria-hidden />Build itinerary</>
+                    : <><Route className="size-4 shrink-0" aria-hidden />Plan my route</>}
               </button>
               {working && (
                 <button
@@ -627,7 +858,12 @@ export function TripScreen() {
         )}
       </div>
 
-      {working && <ProgressBanner progress={progress} />}
+      {working && (
+        <ProgressBanner
+          progress={progress}
+          itineraryDay={itineraryDayProgress}
+        />
+      )}
 
       {error && (
         <div style={{
@@ -640,7 +876,18 @@ export function TripScreen() {
         </div>
       )}
 
-      {!plan && !working && !error && <EmptyState hasContacts={contacts.length > 0} />}
+      {!plan && !savedItinerary && !working && !error && (
+        <EmptyState hasContacts={contacts.length > 0} />
+      )}
+
+      {savedItinerary && !working && (
+        <ItineraryView
+          itinerary={savedItinerary}
+          busy={working}
+          onOpenDay={(dayIndex) => void openItineraryDay(savedItinerary, dayIndex)}
+          onDismiss={() => setSavedItinerary(null)}
+        />
+      )}
 
       {plan && (
         <PlanView
@@ -650,15 +897,85 @@ export function TripScreen() {
           onOpenContact={setDetailContactId}
           onRemoveStop={removeStop}
           onRestoreRemoved={restoreRemoved}
-          onReplan={() => void run({ reuseLast: true })}
+          onReplan={() => {
+            setPlanMode('day')
+            void run({ reuseLast: true })
+          }}
           onCopy={() => void copyPlan()}
+          onLogVisits={() => setConfirmOpen(true)}
+        />
+      )}
+
+      {confirmOpen && plan && (
+        <ConfirmTripVisitsModal
+          plan={plan}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={(ids) => void confirmVisits(ids)}
         />
       )}
     </div>
   )
 }
 
-function ProgressBanner({ progress }: { progress: TripProgress | null }) {
+function TerritoryBanner({
+  progress, remainingInFilter, tripLogCount, onClearHistory,
+}: {
+  progress: NonNullable<ReturnType<typeof territoryProgress>>
+  remainingInFilter: number
+  tripLogCount: number
+  onClearHistory: () => void
+}) {
+  const label = [progress.city, progress.state].filter(Boolean).join(', ') || progress.state || 'This area'
+  const pct = progress.inScope > 0
+    ? Math.round((progress.loggedVisited / progress.inScope) * 100)
+    : 0
+
+  return (
+    <div style={{
+      margin: '12px 16px 0', padding: '12px 14px', borderRadius: 14,
+      background: 'var(--bg2)', border: '1px solid var(--border2)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <ClipboardCheck className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+          {label} progress
+        </div>
+        {tripLogCount > 0 && (
+          <button
+            type="button"
+            onClick={onClearHistory}
+            style={{
+              border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+              fontSize: 11, fontWeight: 700, color: 'var(--text3)',
+            }}
+          >
+            Clear history
+          </button>
+        )}
+      </div>
+      <div style={{ height: 6, borderRadius: 99, background: 'var(--bg4)', overflow: 'hidden', marginBottom: 8 }}>
+        <div style={{
+          width: `${pct}%`, height: '100%', borderRadius: 99, background: 'var(--accent)',
+          transition: 'width 0.25s ease',
+        }} />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.45, fontWeight: 600 }}>
+        {progress.loggedVisited} visited · {progress.remaining} left in area
+        {remainingInFilter !== progress.remaining
+          ? ` · ${remainingInFilter} match your filters`
+          : ''}
+        {progress.tripDays > 0 ? ` · ${progress.tripDays} trip day${progress.tripDays === 1 ? '' : 's'} logged` : ''}
+      </div>
+    </div>
+  )
+}
+
+function ProgressBanner({
+  progress, itineraryDay,
+}: {
+  progress: TripProgress | null
+  itineraryDay?: { day: number; total: number } | null
+}) {
   const phaseLabel = progress?.phase === 'scanning'
     ? 'Checking which areas are in range'
     : progress?.phase === 'locating'
@@ -673,7 +990,9 @@ function ProgressBanner({ progress }: { progress: TripProgress | null }) {
     <div style={{ padding: '14px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--border2)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <Loader2 className="size-4 animate-spin shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{phaseLabel}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+          {itineraryDay ? `Day ${itineraryDay.day} of ${itineraryDay.total} · ${phaseLabel}` : phaseLabel}
+        </div>
         {pct !== null && (
           <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>
             {progress!.done}/{progress!.total}
@@ -709,19 +1028,111 @@ function EmptyState({ hasContacts }: { hasContacts: boolean }) {
         <Route size={44} strokeWidth={1.25} aria-hidden />
       </div>
       <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text2)', marginBottom: 8 }}>
-        {hasContacts ? 'Plan a day of visits' : 'No contacts yet'}
+        {hasContacts ? 'Plan a day — or a whole territory' : 'No contacts yet'}
       </div>
-      <div style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 320, margin: '0 auto' }}>
+      <div style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 340, margin: '0 auto' }}>
         {hasContacts
-          ? 'Pick where you are starting from, how far you will travel and how many stores you want to see. You get the stops in driving order with a Maps link for each leg.'
+          ? 'One-day routes work like before. For a month in one state, switch to Itinerary, then log visits at the end of each day so tomorrow only shows what’s left.'
           : 'Scan some cards first — the planner routes between the addresses you have saved.'}
       </div>
     </div>
   )
 }
 
+function ItineraryView({
+  itinerary, busy, onOpenDay, onDismiss,
+}: {
+  itinerary: TripItinerary
+  busy: boolean
+  onOpenDay: (dayIndex: number) => void
+  onDismiss: () => void
+}) {
+  const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0)
+
+  return (
+    <div style={{ padding: '14px 16px 8px' }}>
+      <div style={{
+        background: 'var(--bg2)', borderRadius: 16, padding: 16,
+        border: '1px solid var(--border2)', marginBottom: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <CalendarRange className="size-5 shrink-0" style={{ color: 'var(--accent)', marginTop: 1 }} aria-hidden />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{itinerary.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, lineHeight: 1.45 }}>
+              {itinerary.dayCount} day{itinerary.dayCount === 1 ? '' : 's'} · {totalStops} stops ·
+              {' '}start {shortPlace(itinerary.originLabel)}
+              {itinerary.endLabel ? ` · end ${shortPlace(itinerary.endLabel)}` : ''}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss itinerary"
+            style={{
+              border: 'none', background: 'var(--bg3)', borderRadius: 99,
+              width: 30, height: 30, cursor: 'pointer', color: 'var(--text3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, lineHeight: 1.45 }}>
+          Open a day to get Maps links and the stop list. At the end of that day, tap
+          {' '}<strong style={{ color: 'var(--text2)' }}>Log today's visits</strong> so the next day
+          won't repeat them.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {itinerary.days.map((day) => (
+          <button
+            key={day.dayIndex}
+            type="button"
+            disabled={busy}
+            onClick={() => onOpenDay(day.dayIndex)}
+            style={{
+              textAlign: 'left', padding: '14px 14px', borderRadius: 14, cursor: busy ? 'default' : 'pointer',
+              border: '1.5px solid var(--border)', background: 'var(--bg2)',
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                background: 'var(--chip-accent-bg)', color: 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 850,
+              }}>
+                D{day.dayIndex}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
+                  Day {day.dayIndex} · {day.stops.length} stop{day.stops.length === 1 ? '' : 's'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                  {formatMiles(day.totalMiles)} · {formatDuration(day.driveMinutes + day.visitMinutes)}
+                  {' · '}
+                  {day.stops.slice(0, 2).map((s) => s.company || s.name || 'Stop').join(', ')}
+                  {day.stops.length > 2 ? '…' : ''}
+                </div>
+              </div>
+              <ChevronDown
+                className="size-4 shrink-0"
+                style={{ color: 'var(--text3)', transform: 'rotate(-90deg)' }}
+                aria-hidden
+              />
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PlanView({
-  plan, excludedCount, busy, onOpenContact, onRemoveStop, onRestoreRemoved, onReplan, onCopy,
+  plan, excludedCount, busy, onOpenContact, onRemoveStop, onRestoreRemoved, onReplan, onCopy, onLogVisits,
 }: {
   plan: TripPlan
   excludedCount: number
@@ -731,6 +1142,7 @@ function PlanView({
   onRestoreRemoved: () => void
   onReplan: () => void
   onCopy: () => void
+  onLogVisits: () => void
 }) {
   const mapsLinks = useMemo(() => buildMapsLinks(plan), [plan])
   const dayMinutes = plan.driveMinutes + plan.visitMinutes
@@ -795,6 +1207,20 @@ function PlanView({
       </div>
 
       <div style={{ padding: '0 16px 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={onLogVisits}
+          disabled={busy}
+          style={{
+            ...secondaryButtonStyle(busy),
+            background: 'var(--chip-success-bg)',
+            borderColor: 'var(--chip-success-fg)',
+            color: 'var(--chip-success-fg)',
+          }}
+        >
+          <ClipboardCheck className="size-3.5 shrink-0" aria-hidden />
+          Log today's visits
+        </button>
         <button type="button" onClick={onCopy} style={secondaryButtonStyle()}>
           <Copy className="size-3.5 shrink-0" aria-hidden />
           Copy list

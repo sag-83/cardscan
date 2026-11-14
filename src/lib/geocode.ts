@@ -328,6 +328,8 @@ export interface PlaceSuggestion {
   point: GeoPoint
   /** True when the match is a building or road rather than a whole town. */
   exact: boolean
+  /** Set when the suggestion came from a saved contact. */
+  contactId?: string
 }
 
 const SUGGESTION_LIMIT = 6

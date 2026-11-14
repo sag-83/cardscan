@@ -331,6 +331,7 @@ export async function resolveTripPlace(
       label: address ? `${title} — ${address}` : title,
       point: loc.point,
       exact: !loc.approximate,
+      contactId: contact.id,
     }
   }
 

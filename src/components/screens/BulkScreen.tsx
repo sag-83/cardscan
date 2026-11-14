@@ -161,9 +161,10 @@ export function BulkScreen() {
           <MapPin className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
           Map tips
         </div>
-        Tap <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Show on map</span> for green customer
-        / orange non-customer pins in the app. Use the filter chips to show only one group. Tap a pin →
-        Google Maps for turn-by-turn. The My Maps CSV is only if you want a shared map on a computer.
+        Tap <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Show on map</span> for green/orange
+        pins in the app. For Google Maps itself: on a computer open google.com/mymaps → Create map →
+        Import the My Maps CSV twice (filter Category = Customer, then Non-customer) as two layers with
+        different pin colors → phone: Maps → Saved → Maps.
       </div>
 
       <div style={{

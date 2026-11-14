@@ -60,3 +60,55 @@ export function formatMiles(miles: number): string {
   if (miles < 10) return `${miles.toFixed(1)} mi`
   return `${Math.round(miles)} mi`
 }
+
+/** Closest point on segment AB to P, plus distance along AB from A. */
+function closestOnSegment(
+  p: GeoPoint,
+  a: GeoPoint,
+  b: GeoPoint,
+): { point: GeoPoint; t: number; milesFromA: number } {
+  const abLat = b.lat - a.lat
+  const abLng = b.lng - a.lng
+  const abLen2 = abLat * abLat + abLng * abLng
+  if (abLen2 < 1e-18) {
+    return { point: a, t: 0, milesFromA: 0 }
+  }
+  const t = Math.max(0, Math.min(1,
+    ((p.lat - a.lat) * abLat + (p.lng - a.lng) * abLng) / abLen2,
+  ))
+  const point = { lat: a.lat + t * abLat, lng: a.lng + t * abLng }
+  return { point, t, milesFromA: distanceBetween(a, point) }
+}
+
+/**
+ * Distance from a point to a polyline, and how far along the path that
+ * projection sits — used to pick jewelry stopovers along a highway corridor.
+ */
+export function distanceToPolyline(
+  point: GeoPoint,
+  path: GeoPoint[],
+): { miles: number; alongMiles: number } {
+  if (path.length === 0) return { miles: Infinity, alongMiles: 0 }
+  if (path.length === 1) {
+    return { miles: distanceBetween(point, path[0]), alongMiles: 0 }
+  }
+
+  let bestMiles = Infinity
+  let bestAlong = 0
+  let traveled = 0
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i]
+    const b = path[i + 1]
+    const segLen = distanceBetween(a, b)
+    const hit = closestOnSegment(point, a, b)
+    const d = distanceBetween(point, hit.point)
+    if (d < bestMiles) {
+      bestMiles = d
+      bestAlong = traveled + hit.milesFromA
+    }
+    traveled += segLen
+  }
+
+  return { miles: bestMiles, alongMiles: bestAlong }
+}

@@ -112,3 +112,60 @@ export async function fetchDrivingMatrix(
     signal?.removeEventListener('abort', onAbort)
   }
 }
+
+export interface DrivingRoute {
+  /** Road path from start to end (lng/lat order from OSRM, stored as GeoPoints). */
+  geometry: GeoPoint[]
+  miles: number
+  minutes: number
+}
+
+interface OsrmRouteResponse {
+  code?: string
+  routes?: Array<{
+    distance?: number
+    duration?: number
+    geometry?: { coordinates?: [number, number][] }
+  }>
+}
+
+/**
+ * A single driving route between two points (geometry for corridor stopovers).
+ * Returns null when OSRM is down — callers fall back to a straight corridor.
+ */
+export async function fetchDrivingRoute(
+  from: GeoPoint,
+  to: GeoPoint,
+  signal?: AbortSignal,
+): Promise<DrivingRoute | null> {
+  const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`
+  const url = `${OSRM_BASE}/route/v1/driving/${coords}?overview=full&geometries=geojson`
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const onAbort = () => controller.abort()
+  signal?.addEventListener('abort', onAbort)
+
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return null
+    const data = await res.json() as OsrmRouteResponse
+    const route = data.routes?.[0]
+    const raw = route?.geometry?.coordinates
+    if (data.code !== 'Ok' || !route || !Array.isArray(raw) || raw.length < 2) return null
+
+    const geometry = raw.map(([lng, lat]) => ({ lat, lng }))
+    const meters = typeof route.distance === 'number' ? route.distance : 0
+    const seconds = typeof route.duration === 'number' ? route.duration : 0
+    return {
+      geometry,
+      miles: meters * MILES_PER_METER,
+      minutes: seconds / 60,
+    }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
+}

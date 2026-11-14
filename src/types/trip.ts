@@ -53,6 +53,9 @@ export interface TripItinerary {
   /** One planned day each — visits confirmed later via TripLog. */
   days: Array<{
     dayIndex: number
+    /** travel = corridor drive day; explore = radius day at a stopover base */
+    kind?: 'travel' | 'explore' | 'area'
+    title?: string
     originLabel: string
     endLabel: string
     stops: TripStopSnapshot[]

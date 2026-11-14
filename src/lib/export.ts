@@ -60,6 +60,7 @@ const MY_MAPS_HEADERS = [
   'State',
   'Zip Code',
   'Full Address',
+  'Category',
   'Phone',
   'Email',
 ]
@@ -135,6 +136,7 @@ export function exportForGoogleMyMaps(contacts: Contact[]): {
           (loc.state ?? '').trim(),
           (loc.zip ?? '').trim(),
           fullAddressLine(loc),
+          c.is_customer ? 'Customer' : 'Non-customer',
           c.phone_mobile || c.phone_work || '',
           c.email || '',
         ]

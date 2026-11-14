@@ -21,12 +21,14 @@ import {
 import { saveContactsToDB } from '../../lib/supabase'
 import { deleteImages } from '../../lib/imageStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
+import { CustomerMapModal } from '../CustomerMapModal'
 
 export function BulkScreen() {
   const [isSendingSheets, setIsSendingSheets] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
   const {
     contacts, selectedIds, clearSelected,
-    deleteContact, setContacts, setBulkMessageType, showToast,
+    deleteContact, setContacts, setBulkMessageType, setDetailContactId, showToast,
   } = useStore((s) => ({
     contacts: s.contacts,
     selectedIds: s.selectedIds,
@@ -34,6 +36,7 @@ export function BulkScreen() {
     deleteContact: s.deleteContact,
     setContacts: s.setContacts,
     setBulkMessageType: s.setBulkMessageType,
+    setDetailContactId: s.setDetailContactId,
     showToast: s.showToast,
   }), shallow)
 
@@ -126,10 +129,18 @@ export function BulkScreen() {
           : 'Actions apply to all contacts.'}
       </div>
 
-      <ActionButton icon={<Download className="size-[18px] shrink-0" />} label="Export CSV" onClick={handleExportCSV} />
       <ActionButton
         icon={<MapPin className="size-[18px] shrink-0" />}
-        label="Export for Google My Maps"
+        label="Show on map"
+        onClick={() => {
+          if (!targetContacts.length) { showToast('No contacts'); return }
+          setMapOpen(true)
+        }}
+      />
+      <ActionButton icon={<Download className="size-[18px] shrink-0" />} label="Export CSV" onClick={handleExportCSV} />
+      <ActionButton
+        icon={<Download className="size-[18px] shrink-0" />}
+        label="Export CSV for My Maps (computer)"
         onClick={handleExportMyMaps}
       />
       <ActionButton
@@ -148,12 +159,11 @@ export function BulkScreen() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: 'var(--text2)', marginBottom: 4 }}>
           <MapPin className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
-          Show customers on Google Maps
+          Map tips
         </div>
-        Export for Google My Maps → on a computer open{' '}
-        <span style={{ color: 'var(--text2)', fontWeight: 700 }}>google.com/mymaps</span>
-        {' '}→ Create map → Import the CSV → choose <span style={{ fontWeight: 700 }}>Full Address</span> for location
-        and <span style={{ fontWeight: 700 }}>Name</span> for the pin title → Save. On phone: Maps → Saved → Maps → your map.
+        Tap <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Show on map</span> for green customer
+        / orange non-customer pins in the app. Use the filter chips to show only one group. Tap a pin →
+        Google Maps for turn-by-turn. The My Maps CSV is only if you want a shared map on a computer.
       </div>
 
       <div style={{
@@ -183,6 +193,17 @@ export function BulkScreen() {
           <Trash2 className="size-[18px] shrink-0" aria-hidden />
           Delete Selected ({selectedIds.length})
         </button>
+      )}
+
+      {mapOpen && (
+        <CustomerMapModal
+          contacts={targetContacts}
+          onClose={() => setMapOpen(false)}
+          onOpenContact={(id) => {
+            setMapOpen(false)
+            setDetailContactId(id)
+          }}
+        />
       )}
     </div>
   )

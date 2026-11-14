@@ -201,7 +201,7 @@ export function BulkScreen() {
           contacts={targetContacts}
           onClose={() => setMapOpen(false)}
           onOpenContact={(id) => {
-            setMapOpen(false)
+            // Keep the map mounted under ContactDetail so Back returns here.
             setDetailContactId(id)
           }}
         />

@@ -57,10 +57,23 @@ interface GooglePlacesService {
   ): void
 }
 
+interface GoogleGeocoderResult {
+  geometry?: { location?: { lat: () => number; lng: () => number } }
+  types?: string[]
+}
+
+interface GoogleGeocoder {
+  geocode(
+    request: { address: string; componentRestrictions?: { country: string } },
+    callback: (results: GoogleGeocoderResult[] | null, status: string) => void,
+  ): void
+}
+
 declare global {
   interface Window {
     google?: {
       maps?: {
+        Geocoder?: new () => GoogleGeocoder
         places?: {
           PlacesService: new (element: HTMLElement) => GooglePlacesService
           PlacesServiceStatus: Record<string, GooglePlacesStatus>

@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ExternalLink, Loader2, MapPin, X } from 'lucide-react'
 import type { Contact } from '../types/contact'
+import { useStore } from '../store/useStore'
 import {
   googleMapsSearchUrl,
   resolveCustomerMapPins,
@@ -17,6 +18,7 @@ const PROSPECT_COLOR = '#ff9500'
 interface Props {
   contacts: Contact[]
   onClose: () => void
+  /** Opens the contact card; map stays mounted underneath so Back returns here. */
   onOpenContact: (id: string) => void
 }
 
@@ -24,13 +26,16 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
   const mapEl = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
+  const fittedRef = useRef(false)
 
   const [pins, setPins] = useState<CustomerMapPin[]>([])
   const [loading, setLoading] = useState(true)
+  const [refining, setRefining] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [selected, setSelected] = useState<CustomerMapPin | null>(null)
   const [error, setError] = useState('')
+  const detailContactId = useStore((s) => s.detailContactId)
 
   const visible = useMemo(() => {
     if (filter === 'all') return pins
@@ -40,42 +45,61 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
   const counts = useMemo(() => {
     let customer = 0
     let prospect = 0
+    let exact = 0
     for (const p of pins) {
       if (p.kind === 'customer') customer++
       else prospect++
+      if (!p.approximate) exact++
     }
-    return { customer, prospect, all: pins.length }
+    return { customer, prospect, all: pins.length, exact }
   }, [pins])
 
-  // Load / geocode pins
+  // Progressive geocode: city pins first, then street refinement.
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
+    setRefining(false)
     setError('')
+    fittedRef.current = false
+
     void (async () => {
       try {
-        const resolved = await resolveCustomerMapPins(
-          contacts,
-          (done, total, label) => setProgress({ done, total, label }),
-          controller.signal,
-        )
+        await resolveCustomerMapPins(contacts, controller.signal, {
+          onProgress: (done, total, label) => setProgress({ done, total, label }),
+          onUpdate: (next) => {
+            if (controller.signal.aborted) return
+            setPins(next)
+            // First paint with any pins → drop the blocking overlay so the
+            // user can already browse while streets keep refining.
+            setLoading(false)
+            setRefining(true)
+          },
+        })
         if (controller.signal.aborted) return
-        setPins(resolved)
-        if (!resolved.length) {
-          setError('No contacts have an address we can place on the map.')
-        }
+        setRefining(false)
+        setProgress(null)
       } catch (err) {
         if (controller.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Could not build the map')
+        setLoading(false)
+        setRefining(false)
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
+          setRefining(false)
           setProgress(null)
         }
       }
     })()
+
     return () => controller.abort()
   }, [contacts])
+
+  useEffect(() => {
+    if (!pins.length && !loading) {
+      setError('No contacts have an address we can place on the map.')
+    }
+  }, [pins.length, loading])
 
   // Init map once
   useEffect(() => {
@@ -86,14 +110,13 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
     }).setView([39.5, -98.35], 4)
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
+      maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
     }).addTo(map)
 
     layerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
 
-    // Leaflet needs a size pass after the modal paints.
     const t = window.setTimeout(() => map.invalidateSize(), 50)
     return () => {
       window.clearTimeout(t)
@@ -103,7 +126,7 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
     }
   }, [])
 
-  // Draw markers whenever the filtered set changes
+  // Redraw markers when the filtered set changes (including street refinements).
   useEffect(() => {
     const map = mapRef.current
     const layer = layerRef.current
@@ -115,23 +138,37 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
     const bounds = L.latLngBounds([])
     for (const pin of visible) {
       const marker = L.circleMarker([pin.point.lat, pin.point.lng], {
-        radius: pin.kind === 'customer' ? 8 : 7,
+        radius: pin.kind === 'customer' ? 9 : 7,
         color: '#fff',
         weight: 1.5,
         fillColor: pin.kind === 'customer' ? CUSTOMER_COLOR : PROSPECT_COLOR,
-        fillOpacity: 0.92,
+        fillOpacity: pin.approximate ? 0.7 : 0.95,
       })
       marker.bindTooltip(pin.label, { direction: 'top', opacity: 0.95 })
-      marker.on('click', () => setSelected(pin))
+      marker.on('click', () => {
+        setSelected(pin)
+        // Open the business card; map stays mounted (z-index below ContactDetail).
+        onOpenContact(pin.contactId)
+      })
       marker.addTo(layer)
       bounds.extend([pin.point.lat, pin.point.lng])
     }
 
-    if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.12), { maxZoom: 11, animate: true })
+    if (bounds.isValid() && !fittedRef.current) {
+      map.fitBounds(bounds.pad(0.12), { maxZoom: 12, animate: true })
+      fittedRef.current = true
     }
     window.setTimeout(() => map.invalidateSize(), 30)
-  }, [visible])
+  }, [visible, onOpenContact])
+
+  // When the business card closes, refresh Leaflet layout so the map is usable again.
+  useEffect(() => {
+    if (detailContactId) return
+    const map = mapRef.current
+    if (!map) return
+    const t = window.setTimeout(() => map.invalidateSize(), 220)
+    return () => window.clearTimeout(t)
+  }, [detailContactId])
 
   return (
     <div
@@ -155,7 +192,9 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
           <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 1 }}>
             {loading
               ? 'Placing pins…'
-              : `${visible.length} shown · green = customer · orange = not yet`}
+              : refining
+                ? `Refining addresses… ${counts.exact}/${counts.all} street-level`
+                : `${visible.length} shown · tap a pin for the business card · green = customer`}
           </div>
         </div>
         <button
@@ -236,6 +275,20 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
           </div>
         )}
 
+        {refining && !loading && (
+          <div style={{
+            position: 'absolute', left: 12, right: 12, top: 12, zIndex: 500,
+            padding: '8px 12px', borderRadius: 10,
+            background: 'var(--bg2)', border: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontSize: 12, fontWeight: 700, color: 'var(--text2)',
+          }}>
+            <Loader2 className="size-3.5 animate-spin shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+            Improving pin accuracy…
+            {progress ? ` ${progress.done}/${progress.total}` : ''}
+          </div>
+        )}
+
         {error && !loading && (
           <div style={{
             position: 'absolute', left: 16, right: 16, top: 16, zIndex: 500,
@@ -265,7 +318,7 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, lineHeight: 1.4 }}>
                   {selected.kind === 'customer' ? 'Customer' : 'Non-customer'}
-                  {selected.approximate ? ' · city pin' : ' · street pin'}
+                  {selected.approximate ? ' · approximating city' : ' · street address'}
                   {selected.address ? ` · ${selected.address}` : ''}
                 </div>
               </div>
@@ -284,13 +337,10 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button
                 type="button"
-                onClick={() => {
-                  onOpenContact(selected.contactId)
-                  onClose()
-                }}
+                onClick={() => onOpenContact(selected.contactId)}
                 style={sheetBtnStyle(false)}
               >
-                Open contact
+                Open business card
               </button>
               <a
                 href={googleMapsSearchUrl(selected)}
@@ -299,7 +349,7 @@ export function CustomerMapModal({ contacts, onClose, onOpenContact }: Props) {
                 style={{ ...sheetBtnStyle(true), textDecoration: 'none' }}
               >
                 <ExternalLink className="size-3.5 shrink-0" aria-hidden />
-                Google Maps
+                Directions
               </a>
             </div>
           </div>

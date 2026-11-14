@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LayoutGrid } from 'lucide-react'
 import { useStore } from './store/useStore'
 import { initSupabase, saveContactsToDB } from './lib/supabase'
 import { startCloudRealtimeSync } from './lib/cloudSync'
@@ -62,6 +63,21 @@ export default function App() {
     return isAppSessionUnlocked()
   })
   const notifiedBuildRef = useRef('')
+  // On Trips (phone): show the tab bar briefly, then tuck it away so the map
+  // can use ~half the screen. A floating orb brings tabs back.
+  const [tripsNavOpen, setTripsNavOpen] = useState(true)
+
+  useEffect(() => {
+    // Entering Trips on phone: show tabs, then auto-tuck after 3s.
+    if (!isDesktop && activeScreen === 'trips') setTripsNavOpen(true)
+    else setTripsNavOpen(true)
+  }, [activeScreen, isDesktop])
+
+  useEffect(() => {
+    if (isDesktop || activeScreen !== 'trips' || !tripsNavOpen) return
+    const t = window.setTimeout(() => setTripsNavOpen(false), 3000)
+    return () => window.clearTimeout(t)
+  }, [activeScreen, isDesktop, tripsNavOpen])
 
   useEffect(() => {
     if (!isUnlocked) return
@@ -296,13 +312,15 @@ export default function App() {
             paddingBottom: isDesktop || activeScreen === 'trips' ? 0 : 86,
             display: activeScreen === 'trips' ? 'flex' : undefined,
             flexDirection: activeScreen === 'trips' ? 'column' : undefined,
-            // Mobile nav is fixed (~72px); leave it out of the trips chrome so the
-            // map+plan split never scrolls the map away under the tab bar.
+            // When the Trips tab bar is tucked away, use the full phone height.
             height: activeScreen === 'trips'
-              ? (isDesktop ? '100dvh' : 'calc(100dvh - 72px)')
+              ? (isDesktop
+                ? '100dvh'
+                : tripsNavOpen ? 'calc(100dvh - 72px)' : '100dvh')
               : undefined,
             minHeight: activeScreen === 'trips' ? 0 : undefined,
             overflow: activeScreen === 'trips' ? 'hidden' : undefined,
+            transition: activeScreen === 'trips' ? 'height 0.28s ease' : undefined,
           }}
         >
           <Header />
@@ -324,7 +342,34 @@ export default function App() {
             {activeScreen === 'settings' && <SettingsScreen />}
           </div>
 
-          {!isDesktop && <NavBar />}
+          {!isDesktop && (activeScreen !== 'trips' || tripsNavOpen) && <NavBar />}
+
+          {!isDesktop && activeScreen === 'trips' && !tripsNavOpen && (
+            <button
+              type="button"
+              onClick={() => setTripsNavOpen(true)}
+              aria-label="Show navigation"
+              style={{
+                position: 'fixed',
+                right: 14,
+                bottom: 'max(18px, env(safe-area-inset-bottom))',
+                zIndex: 60,
+                width: 52,
+                height: 52,
+                borderRadius: 999,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg2)',
+                color: 'var(--accent)',
+                boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <LayoutGrid size={22} strokeWidth={2.2} aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 

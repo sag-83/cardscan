@@ -51,6 +51,8 @@ interface Props {
   fill?: boolean
   /** When false the panel may be CSS-hidden; remount is avoided but size must refresh. */
   active?: boolean
+  /** Phone Trips: thinner chrome so the map itself gets ~half the screen. */
+  compact?: boolean
 }
 
 export function TripMapPanel({
@@ -65,6 +67,7 @@ export function TripMapPanel({
   onFilterChange,
   fill = false,
   active = true,
+  compact = false,
 }: Props) {
   const mapEl = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -195,7 +198,7 @@ export function TripMapPanel({
     if (!map) return
     const t = window.setTimeout(() => map.invalidateSize(), 180)
     return () => window.clearTimeout(t)
-  }, [expanded, fill, active, detailContactId])
+  }, [expanded, fill, active, compact, detailContactId])
 
   useEffect(() => {
     const map = mapRef.current
@@ -251,28 +254,33 @@ export function TripMapPanel({
           borderBottom: '1px solid var(--border2)', background: 'var(--bg2)',
         }
 
+  const statusText = loading
+    ? (progress ? `Placing… ${progress.done}/${progress.total}` : 'Placing pins…')
+    : refining
+      ? `Refining ${counts.exact}/${counts.all}`
+      : `${visible.length}${query.trim() ? ` match` : ''} · tap pin`
+
   return (
     <div style={shellStyle}>
       <div style={{
-        padding: '8px 12px', borderBottom: '1px solid var(--border2)',
-        display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+        padding: compact ? '5px 8px' : '8px 12px',
+        borderBottom: '1px solid var(--border2)',
+        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
         background: 'var(--bg2)',
       }}>
         <MapPin className="size-3.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 750, color: 'var(--text2)' }}>
-          {loading
-            ? (progress
-              ? `Placing pins… ${progress.done}/${progress.total}`
-              : 'Placing pins…')
-            : refining
-              ? `Refining… ${counts.exact}/${counts.all} street`
-              : `${visible.length}${query.trim() ? ` match · ${counts.all} total` : ' pins'} · tap to plan`}
+        <div style={{
+          flex: 1, minWidth: 0,
+          fontSize: compact ? 11.5 : 12.5, fontWeight: 750, color: 'var(--text2)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {statusText}
         </div>
         <button
           type="button"
           onClick={onToggleExpand}
           aria-label={expanded ? 'Minimize map' : 'Maximize map'}
-          style={iconBtnStyle}
+          style={{ ...iconBtnStyle, width: compact ? 28 : 30, height: compact ? 28 : 30 }}
         >
           {expanded
             ? <Minimize2 className="size-3.5" aria-hidden />
@@ -281,94 +289,107 @@ export function TripMapPanel({
       </div>
 
       <div style={{
-        display: 'flex', gap: 6, padding: '8px 10px', flexShrink: 0,
+        display: 'flex', gap: compact ? 4 : 6,
+        padding: compact ? '5px 8px' : '8px 10px',
+        flexShrink: 0,
         overflowX: 'auto', borderBottom: '1px solid var(--border2)',
       }}>
-        <FilterChip active={filter === 'all'} label={`All (${counts.all})`} onClick={() => onFilterChange('all')} />
+        <FilterChip
+          active={filter === 'all'}
+          label={compact ? `All ${counts.all}` : `All (${counts.all})`}
+          compact={compact}
+          onClick={() => onFilterChange('all')}
+        />
         <FilterChip
           active={filter === 'customer'}
-          label={`Customers (${counts.customer})`}
+          label={compact ? `Cust ${counts.customer}` : `Customers (${counts.customer})`}
           color={CUSTOMER_COLOR}
+          compact={compact}
           onClick={() => onFilterChange('customer')}
         />
         <FilterChip
           active={filter === 'prospect'}
-          label={`Non-customers (${counts.prospect})`}
+          label={compact ? `Non ${counts.prospect}` : `Non-customers (${counts.prospect})`}
           color={PROSPECT_COLOR}
+          compact={compact}
           onClick={() => onFilterChange('prospect')}
         />
       </div>
 
-      <div style={{
-        position: 'relative', flexShrink: 0, padding: '8px 10px',
-        borderBottom: '1px solid var(--border2)',
-      }}>
-        <div style={{ position: 'relative' }}>
-          <Search
-            className="size-3.5"
-            style={{
-              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-              color: 'var(--text3)', pointerEvents: 'none',
-            }}
-            aria-hidden
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shop, city, address…"
-            aria-label="Search map pins"
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              padding: '9px 34px 9px 32px', borderRadius: 10,
-              border: '1.5px solid var(--border)', background: 'var(--bg3)',
-              color: 'var(--text)', fontSize: 13, fontWeight: 600,
-            }}
-          />
-          {query.trim() && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label="Clear search"
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        {/* Search floats on the map so the tile area stays large on phones. */}
+        <div style={{
+          position: 'absolute', left: 8, right: compact ? 52 : 8, top: 8, zIndex: 550,
+        }}>
+          <div style={{ position: 'relative' }}>
+            <Search
+              className="size-3.5"
               style={{
-                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                ...iconBtnStyle, width: 26, height: 26,
+                position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                color: 'var(--text3)', pointerEvents: 'none',
               }}
-            >
-              <X className="size-3" aria-hidden />
-            </button>
-          )}
-        </div>
-        {searchHits.length > 0 && query.trim().length >= 2 && (
-          <div style={{
-            position: 'absolute', left: 10, right: 10, top: '100%', zIndex: 600,
-            marginTop: 4, borderRadius: 12, overflow: 'hidden',
-            background: 'var(--bg2)', border: '1px solid var(--border)',
-            boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
-            maxHeight: 220, overflowY: 'auto',
-          }}>
-            {searchHits.map((pin) => (
+              aria-hidden
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search shop, city…"
+              aria-label="Search map pins"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: compact ? '7px 30px 7px 28px' : '9px 34px 9px 32px',
+                borderRadius: 10,
+                border: '1.5px solid var(--border)',
+                background: 'var(--bg2)',
+                color: 'var(--text)',
+                fontSize: compact ? 12.5 : 13,
+                fontWeight: 600,
+                boxShadow: '0 4px 14px rgba(0,0,0,0.22)',
+              }}
+            />
+            {query.trim() && (
               <button
-                key={pin.id}
                 type="button"
-                onClick={() => focusPin(pin)}
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
                 style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '10px 12px', border: 'none', borderBottom: '1px solid var(--border2)',
-                  background: 'transparent', cursor: 'pointer', color: 'var(--text)',
+                  position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                  ...iconBtnStyle, width: 24, height: 24,
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 750 }}>{pin.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                  {pin.kind === 'customer' ? 'Customer' : 'Non-customer'}
-                  {pin.city ? ` · ${pin.city}${pin.state ? `, ${pin.state}` : ''}` : ''}
-                </div>
+                <X className="size-3" aria-hidden />
               </button>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+          {searchHits.length > 0 && query.trim().length >= 2 && (
+            <div style={{
+              marginTop: 4, borderRadius: 12, overflow: 'hidden',
+              background: 'var(--bg2)', border: '1px solid var(--border)',
+              boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
+              maxHeight: compact ? 160 : 220, overflowY: 'auto',
+            }}>
+              {searchHits.map((pin) => (
+                <button
+                  key={pin.id}
+                  type="button"
+                  onClick={() => focusPin(pin)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '9px 11px', border: 'none', borderBottom: '1px solid var(--border2)',
+                    background: 'transparent', cursor: 'pointer', color: 'var(--text)',
+                  }}
+                >
+                  <div style={{ fontSize: 12.5, fontWeight: 750 }}>{pin.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                    {pin.kind === 'customer' ? 'Customer' : 'Non-customer'}
+                    {pin.city ? ` · ${pin.city}${pin.state ? `, ${pin.state}` : ''}` : ''}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <div ref={mapEl} style={{ position: 'absolute', inset: 0 }} />
 
         {loading && (
@@ -387,19 +408,20 @@ export function TripMapPanel({
 
         {refining && !loading && (
           <div style={{
-            position: 'absolute', left: 10, right: 10, top: 10, zIndex: 500,
-            padding: '7px 10px', borderRadius: 10, fontSize: 11.5, fontWeight: 700,
+            position: 'absolute', left: 8, right: 8, top: compact ? 46 : 52, zIndex: 500,
+            padding: compact ? '5px 8px' : '7px 10px', borderRadius: 10,
+            fontSize: compact ? 10.5 : 11.5, fontWeight: 700,
             background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text2)',
             display: 'flex', alignItems: 'center', gap: 7,
           }}>
             <Loader2 className="size-3.5 animate-spin" style={{ color: 'var(--accent)' }} aria-hidden />
-            Improving street accuracy{progress ? ` · ${progress.done}/${progress.total}` : ''}
+            Improving accuracy{progress ? ` · ${progress.done}/${progress.total}` : ''}
           </div>
         )}
 
         {error && !loading && (
           <div style={{
-            position: 'absolute', left: 10, right: 10, top: 10, zIndex: 500,
+            position: 'absolute', left: 8, right: 8, top: compact ? 46 : 52, zIndex: 500,
             padding: '10px 12px', borderRadius: 10, fontSize: 12, fontWeight: 650,
             background: 'var(--chip-danger-bg)', color: 'var(--chip-danger-fg)',
           }}>
@@ -488,20 +510,23 @@ export function TripMapPanel({
 }
 
 function FilterChip({
-  active, label, color, onClick,
+  active, label, color, onClick, compact,
 }: {
   active: boolean
   label: string
   color?: string
   onClick: () => void
+  compact?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
-        flexShrink: 0, padding: '6px 10px', borderRadius: 99, cursor: 'pointer',
-        fontSize: 11.5, fontWeight: 750, whiteSpace: 'nowrap',
+        flexShrink: 0,
+        padding: compact ? '4px 8px' : '6px 10px',
+        borderRadius: 99, cursor: 'pointer',
+        fontSize: compact ? 11 : 11.5, fontWeight: 750, whiteSpace: 'nowrap',
         border: `1.5px solid ${active ? (color || 'var(--accent)') : 'var(--border)'}`,
         background: active ? 'var(--chip-accent-bg)' : 'var(--bg3)',
         color: active ? (color || 'var(--accent)') : 'var(--text2)',

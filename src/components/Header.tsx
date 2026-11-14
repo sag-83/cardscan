@@ -3,12 +3,18 @@ import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useStore } from '../store/useStore'
 import { IS_DEMO_MODE } from '../lib/demo'
+import { useIsDesktop } from '../hooks/useIsDesktop'
 
 export function Header() {
   const [showQr, setShowQr] = useState(false)
   const [qrPressed, setQrPressed] = useState(false)
   const { theme, toggle } = useTheme()
   const contactCount = useStore((s) => s.contacts.length)
+  const activeScreen = useStore((s) => s.activeScreen)
+  const isDesktop = useIsDesktop()
+
+  // Trips on phone: reclaim vertical space for the map — no title / QR / count.
+  const tripsCompact = activeScreen === 'trips' && !isDesktop
 
   useEffect(() => {
     if (!showQr) return
@@ -18,6 +24,36 @@ export function Header() {
       document.body.style.overflow = prevOverflow
     }
   }, [showQr])
+
+  if (tripsCompact) {
+    return (
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          padding: '4px 10px',
+          background: 'var(--bg2)',
+          borderBottom: '1px solid var(--border2)',
+          flexShrink: 0,
+          zIndex: 50,
+        }}
+      >
+        <button
+          onClick={toggle}
+          style={{
+            width: 26, height: 26, borderRadius: '50%', border: 'none',
+            background: 'var(--bg3)', color: 'var(--text3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+          aria-label="Toggle theme"
+        >
+          {theme === 'dark' ? <Sun size={14} strokeWidth={2.25} /> : <Moon size={14} strokeWidth={2.25} />}
+        </button>
+      </header>
+    )
+  }
 
   return (
     <header
@@ -33,7 +69,6 @@ export function Header() {
         backdropFilter: 'blur(20px)',
       }}
     >
-      {/* Theme toggle */}
       <button
         onClick={toggle}
         style={{

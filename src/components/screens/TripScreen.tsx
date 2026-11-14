@@ -745,13 +745,13 @@ export function TripScreen() {
       overflow: 'hidden',
       height: '100%',
     }}>
-      {/* Map stays fixed in the split — only the plan column scrolls. */}
+      {/* Map stays fixed — ~half the phone; only the plan column scrolls. */}
       <div style={
         !planChrome
           ? { display: 'none' }
           : isDesktop
             ? { flex: 1, minWidth: 0, minHeight: 0 }
-            : { flexShrink: 0, height: '42%', minHeight: 200, maxHeight: '48%' }
+            : { flexShrink: 0, height: '52%', minHeight: 280 }
       }>
         <TripMapPanel
           contacts={contacts}
@@ -765,8 +765,34 @@ export function TripScreen() {
           onFilterChange={setMapFilter}
           fill
           active={planChrome}
+          compact={!isDesktop}
         />
       </div>
+
+      {/* Clear map ↔ plan seam so scrolling feels intentional. */}
+      {planChrome && !isDesktop && (
+        <div
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 4,
+            padding: '6px 0 4px',
+            background: 'var(--bg)',
+            borderTop: '1px solid var(--border)',
+            boxShadow: '0 -6px 16px rgba(0,0,0,0.12)',
+          }}
+        >
+          <div style={{
+            width: 36, height: 4, borderRadius: 99, background: 'var(--border)',
+          }} />
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: 0.4 }}>
+            TRIP SETUP · SCROLL
+          </div>
+        </div>
+      )}
 
       <div style={{
         flex: planChrome && isDesktop ? undefined : 1,
@@ -816,16 +842,17 @@ export function TripScreen() {
         />
       ) : (
       <>
-      <div style={{
-        margin: '10px 16px 0', padding: '10px 12px', borderRadius: 12,
-        background: 'var(--bg3)', border: '1px solid var(--border2)',
-        fontSize: 12, color: 'var(--text3)', lineHeight: 1.45,
-      }}>
-        Map stays put while you scroll this panel. Search or tap a pin →
-        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Set destination</span> /
-        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Start here</span>.
-        Road trips: stopovers on the way out, explore days at the destination, stopovers on the way back.
-      </div>
+      {isDesktop && (
+        <div style={{
+          margin: '10px 16px 0', padding: '10px 12px', borderRadius: 12,
+          background: 'var(--bg3)', border: '1px solid var(--border2)',
+          fontSize: 12, color: 'var(--text3)', lineHeight: 1.45,
+        }}>
+          Tap a pin → <span style={{ fontWeight: 750, color: 'var(--text2)' }}>Set destination</span> /
+          {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Start here</span>.
+          Chain any cities as legs; return home with stopovers when you want.
+        </div>
+      )}
 
       {progressStats && (
         <TerritoryBanner

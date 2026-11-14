@@ -52,6 +52,117 @@ export function exportToCSV(contacts: Contact[]): void {
   anchor.click()
 }
 
+/** Columns Google My Maps expects for Import → place markers. */
+const MY_MAPS_HEADERS = [
+  'Name',
+  'Address',
+  'City',
+  'State',
+  'Zip Code',
+  'Full Address',
+  'Phone',
+  'Email',
+]
+
+function contactPinName(c: Contact): string {
+  return (c.company || c.name || 'Customer').trim()
+}
+
+function fullAddressLine(parts: {
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+}): string {
+  return [parts.address, parts.city, parts.state, parts.zip]
+    .map((p) => (p ?? '').trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
+function canMapAddress(parts: {
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+}): boolean {
+  const street = (parts.address ?? '').trim()
+  const city = (parts.city ?? '').trim()
+  const state = (parts.state ?? '').trim()
+  const zip = (parts.zip ?? '').trim()
+  // Street + city/ZIP pins best; city+state alone still drops a town pin.
+  if (street && (city || zip || state)) return true
+  if (city && state) return true
+  if (zip.length >= 5) return true
+  return false
+}
+
+/**
+ * CSV shaped for Google My Maps → Import.
+ * Only contacts with a usable address are included; multi-location cards
+ * get one row per extra address.
+ */
+export function exportForGoogleMyMaps(contacts: Contact[]): {
+  exported: number
+  skipped: number
+} {
+  const rows: string[] = []
+  let skipped = 0
+
+  for (const c of contacts) {
+    const primary = {
+      address: c.address,
+      city: c.city,
+      state: c.state,
+      zip: c.zip,
+    }
+    const extras = Array.isArray(c.extra_addresses) ? c.extra_addresses : []
+    const locations = [primary, ...extras]
+    let wroteOne = false
+
+    locations.forEach((loc, index) => {
+      if (!canMapAddress(loc)) return
+      const name = index === 0
+        ? contactPinName(c)
+        : `${contactPinName(c)} (${index + 1})`
+      const who = c.company && c.name && c.company !== c.name ? c.name : ''
+      const label = who && index === 0 ? `${name} — ${who}` : name
+      rows.push(
+        [
+          label,
+          (loc.address ?? '').trim(),
+          (loc.city ?? '').trim(),
+          (loc.state ?? '').trim(),
+          (loc.zip ?? '').trim(),
+          fullAddressLine(loc),
+          c.phone_mobile || c.phone_work || '',
+          c.email || '',
+        ]
+          .map(csvQuote)
+          .join(','),
+      )
+      wroteOne = true
+    })
+
+    if (!wroteOne) skipped++
+  }
+
+  if (!rows.length) {
+    return { exported: 0, skipped }
+  }
+
+  // UTF-8 BOM helps Excel/Sheets open the file without mangling names.
+  const blob = new Blob(
+    ['\uFEFF' + MY_MAPS_HEADERS.join(',') + '\n' + rows.join('\n')],
+    { type: 'text/csv;charset=utf-8' },
+  )
+  const anchor = document.createElement('a')
+  anchor.href = URL.createObjectURL(blob)
+  anchor.download = `google_my_maps_customers_${new Date().toISOString().split('T')[0]}.csv`
+  anchor.click()
+  return { exported: rows.length, skipped }
+}
+
 /**
  * Maps Contact fields to the shape the Apps Script expects:
  * name, title, company, email, phone, phone2, website,

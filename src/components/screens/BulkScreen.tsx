@@ -5,6 +5,7 @@ import {
   Download,
   Loader2,
   Mail,
+  MapPin,
   MessageSquare,
   Trash2,
 } from 'lucide-react'
@@ -12,6 +13,7 @@ import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store/useStore'
 import {
   exportToCSV,
+  exportForGoogleMyMaps,
   sendToGoogleSheets,
   filterUnsentContactsForSheets,
   markContactsSentToSheets,
@@ -44,6 +46,20 @@ export function BulkScreen() {
     if (!targetContacts.length) { showToast('No contacts'); return }
     exportToCSV(targetContacts)
     showToast('CSV downloaded!')
+  }
+
+  const handleExportMyMaps = () => {
+    if (!targetContacts.length) { showToast('No contacts'); return }
+    const { exported, skipped } = exportForGoogleMyMaps(targetContacts)
+    if (!exported) {
+      showToast('No contacts have an address My Maps can pin')
+      return
+    }
+    showToast(
+      skipped
+        ? `My Maps CSV ready · ${exported} pin${exported === 1 ? '' : 's'} · ${skipped} skipped (no address)`
+        : `My Maps CSV ready · ${exported} pin${exported === 1 ? '' : 's'}`,
+    )
   }
 
   const handleSendToSheets = async () => {
@@ -112,6 +128,11 @@ export function BulkScreen() {
 
       <ActionButton icon={<Download className="size-[18px] shrink-0" />} label="Export CSV" onClick={handleExportCSV} />
       <ActionButton
+        icon={<MapPin className="size-[18px] shrink-0" />}
+        label="Export for Google My Maps"
+        onClick={handleExportMyMaps}
+      />
+      <ActionButton
         icon={isSendingSheets ? <Loader2 className="size-[18px] shrink-0 animate-spin" /> : <BarChart3 className="size-[18px] shrink-0" />}
         label={isSendingSheets ? 'Sending to Google Sheets...' : 'Send to Google Sheets'}
         onClick={handleSendToSheets}
@@ -119,6 +140,21 @@ export function BulkScreen() {
       />
       <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
       <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
+
+      <div style={{
+        marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+        background: 'var(--bg3)', border: '1px solid var(--border2)',
+        fontSize: 12.5, color: 'var(--text3)', lineHeight: 1.5,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: 'var(--text2)', marginBottom: 4 }}>
+          <MapPin className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+          Show customers on Google Maps
+        </div>
+        Export for Google My Maps → on a computer open{' '}
+        <span style={{ color: 'var(--text2)', fontWeight: 700 }}>google.com/mymaps</span>
+        {' '}→ Create map → Import the CSV → choose <span style={{ fontWeight: 700 }}>Full Address</span> for location
+        and <span style={{ fontWeight: 700 }}>Name</span> for the pin title → Save. On phone: Maps → Saved → Maps → your map.
+      </div>
 
       <div style={{
         marginBottom: 14, padding: '12px 14px', borderRadius: 12,

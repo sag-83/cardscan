@@ -9,6 +9,8 @@ import {
   Minimize2,
   Navigation,
   Flag,
+  Search,
+  X,
 } from 'lucide-react'
 import type { Contact } from '../types/contact'
 import { useStore } from '../store/useStore'
@@ -68,6 +70,8 @@ export function TripMapPanel({
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
   const fittedRef = useRef(false)
+  const contactsRef = useRef(contacts)
+  contactsRef.current = contacts
 
   const [pins, setPins] = useState<CustomerMapPin[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,12 +79,35 @@ export function TripMapPanel({
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null)
   const [selected, setSelected] = useState<CustomerMapPin | null>(null)
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
   const detailContactId = useStore((s) => s.detailContactId)
 
+  // Only re-resolve when the contact set actually changes — not on every
+  // store tick (visited flags, etc.) which would abort mid-geocode forever.
+  const contactKey = useMemo(
+    () => `${contacts.length}:${contacts[0]?.id ?? ''}:${contacts[contacts.length - 1]?.id ?? ''}`,
+    [contacts],
+  )
+
   const visible = useMemo(() => {
-    if (filter === 'all') return pins
-    return pins.filter((p) => p.kind === filter)
-  }, [pins, filter])
+    let list = filter === 'all' ? pins : pins.filter((p) => p.kind === filter)
+    const q = query.trim().toLowerCase()
+    if (q) {
+      list = list.filter((p) => (
+        p.label.toLowerCase().includes(q)
+        || p.address.toLowerCase().includes(q)
+        || p.city.toLowerCase().includes(q)
+        || p.state.toLowerCase().includes(q)
+      ))
+    }
+    return list
+  }, [pins, filter, query])
+
+  const searchHits = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (q.length < 2) return []
+    return visible.slice(0, 8)
+  }, [query, visible])
 
   const counts = useMemo(() => {
     let customer = 0
@@ -103,7 +130,7 @@ export function TripMapPanel({
 
     void (async () => {
       try {
-        await resolveCustomerMapPins(contacts, controller.signal, {
+        await resolveCustomerMapPins(contactsRef.current, controller.signal, {
           onProgress: (done, total, label) => setProgress({ done, total, label }),
           onUpdate: (next) => {
             if (controller.signal.aborted) return
@@ -130,7 +157,7 @@ export function TripMapPanel({
     })()
 
     return () => controller.abort()
-  }, [contacts])
+  }, [contactKey])
 
   useEffect(() => {
     if (!pins.length && !loading) {
@@ -163,7 +190,6 @@ export function TripMapPanel({
     }
   }, [])
 
-  // Resize when expand/collapse or detail closes.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -202,6 +228,12 @@ export function TripMapPanel({
     window.setTimeout(() => map.invalidateSize(), 30)
   }, [visible, highlightIds])
 
+  const focusPin = (pin: CustomerMapPin) => {
+    setSelected(pin)
+    setQuery(pin.label)
+    mapRef.current?.flyTo([pin.point.lat, pin.point.lng], 12, { duration: 0.6 })
+  }
+
   const shellStyle: CSSProperties = expanded
     ? {
         position: 'fixed', inset: 0, zIndex: 85,
@@ -214,7 +246,7 @@ export function TripMapPanel({
           borderRight: '1px solid var(--border2)', background: 'var(--bg2)',
         }
       : {
-          position: 'relative', height: '48vh', minHeight: 240, maxHeight: 480,
+          position: 'relative', height: '100%', minHeight: 0,
           display: 'flex', flexDirection: 'column',
           borderBottom: '1px solid var(--border2)', background: 'var(--bg2)',
         }
@@ -229,10 +261,12 @@ export function TripMapPanel({
         <MapPin className="size-3.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
         <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 750, color: 'var(--text2)' }}>
           {loading
-            ? 'Placing pins…'
+            ? (progress
+              ? `Placing pins… ${progress.done}/${progress.total}`
+              : 'Placing pins…')
             : refining
               ? `Refining… ${counts.exact}/${counts.all} street`
-              : `${visible.length} pins · tap to plan`}
+              : `${visible.length}${query.trim() ? ` match · ${counts.all} total` : ' pins'} · tap to plan`}
         </div>
         <button
           type="button"
@@ -265,6 +299,75 @@ export function TripMapPanel({
         />
       </div>
 
+      <div style={{
+        position: 'relative', flexShrink: 0, padding: '8px 10px',
+        borderBottom: '1px solid var(--border2)',
+      }}>
+        <div style={{ position: 'relative' }}>
+          <Search
+            className="size-3.5"
+            style={{
+              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--text3)', pointerEvents: 'none',
+            }}
+            aria-hidden
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search shop, city, address…"
+            aria-label="Search map pins"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '9px 34px 9px 32px', borderRadius: 10,
+              border: '1.5px solid var(--border)', background: 'var(--bg3)',
+              color: 'var(--text)', fontSize: 13, fontWeight: 600,
+            }}
+          />
+          {query.trim() && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              style={{
+                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                ...iconBtnStyle, width: 26, height: 26,
+              }}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          )}
+        </div>
+        {searchHits.length > 0 && query.trim().length >= 2 && (
+          <div style={{
+            position: 'absolute', left: 10, right: 10, top: '100%', zIndex: 600,
+            marginTop: 4, borderRadius: 12, overflow: 'hidden',
+            background: 'var(--bg2)', border: '1px solid var(--border)',
+            boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
+            maxHeight: 220, overflowY: 'auto',
+          }}>
+            {searchHits.map((pin) => (
+              <button
+                key={pin.id}
+                type="button"
+                onClick={() => focusPin(pin)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '10px 12px', border: 'none', borderBottom: '1px solid var(--border2)',
+                  background: 'transparent', cursor: 'pointer', color: 'var(--text)',
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 750 }}>{pin.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                  {pin.kind === 'customer' ? 'Customer' : 'Non-customer'}
+                  {pin.city ? ` · ${pin.city}${pin.state ? `, ${pin.state}` : ''}` : ''}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <div ref={mapEl} style={{ position: 'absolute', inset: 0 }} />
 
@@ -272,9 +375,13 @@ export function TripMapPanel({
           <div style={{
             position: 'absolute', inset: 0, zIndex: 500,
             background: 'rgba(0,0,0,0.28)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 10,
           }}>
             <Loader2 className="size-5 animate-spin" style={{ color: 'var(--accent)' }} aria-hidden />
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>
+              {progress ? `${progress.done} / ${progress.total}` : 'Starting…'}
+            </div>
           </div>
         )}
 
@@ -286,7 +393,7 @@ export function TripMapPanel({
             display: 'flex', alignItems: 'center', gap: 7,
           }}>
             <Loader2 className="size-3.5 animate-spin" style={{ color: 'var(--accent)' }} aria-hidden />
-            Improving accuracy{progress ? ` · ${progress.done}/${progress.total}` : ''}
+            Improving street accuracy{progress ? ` · ${progress.done}/${progress.total}` : ''}
           </div>
         )}
 

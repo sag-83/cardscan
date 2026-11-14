@@ -287,9 +287,22 @@ export default function App() {
         <div
           style={{
             width: '100%',
-            maxWidth: isDesktop ? 900 : 480,
-            margin: isDesktop ? undefined : '0 auto',
-            paddingBottom: isDesktop ? 0 : 86,
+            // Trips needs the full viewport for map + plan (My Maps–style).
+            // Other screens stay centered in a readable column.
+            maxWidth: activeScreen === 'trips'
+              ? undefined
+              : isDesktop ? 900 : 480,
+            margin: isDesktop || activeScreen === 'trips' ? undefined : '0 auto',
+            paddingBottom: isDesktop || activeScreen === 'trips' ? 0 : 86,
+            display: activeScreen === 'trips' ? 'flex' : undefined,
+            flexDirection: activeScreen === 'trips' ? 'column' : undefined,
+            // Mobile nav is fixed (~72px); leave it out of the trips chrome so the
+            // map+plan split never scrolls the map away under the tab bar.
+            height: activeScreen === 'trips'
+              ? (isDesktop ? '100dvh' : 'calc(100dvh - 72px)')
+              : undefined,
+            minHeight: activeScreen === 'trips' ? 0 : undefined,
+            overflow: activeScreen === 'trips' ? 'hidden' : undefined,
           }}
         >
           <Header />
@@ -298,13 +311,18 @@ export default function App() {
               Contacts list (and the Stats/Scan/Trips trees) still reconciled
               on every call log, toast, and star tap — which is what made the
               nav feel stuck after a phone or text action. */}
-          {activeScreen === 'scan' && <ScanScreen />}
-          {activeScreen === 'contacts' && <ContactsScreen />}
-          {activeScreen === 'calls' && <CallingScreen />}
-          {activeScreen === 'trips' && <TripScreen />}
-          {activeScreen === 'dashboard' && <DashboardScreen />}
-          {activeScreen === 'bulk' && <BulkScreen />}
-          {activeScreen === 'settings' && <SettingsScreen />}
+          <div style={activeScreen === 'trips'
+            ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+            : undefined}
+          >
+            {activeScreen === 'scan' && <ScanScreen />}
+            {activeScreen === 'contacts' && <ContactsScreen />}
+            {activeScreen === 'calls' && <CallingScreen />}
+            {activeScreen === 'trips' && <TripScreen />}
+            {activeScreen === 'dashboard' && <DashboardScreen />}
+            {activeScreen === 'bulk' && <BulkScreen />}
+            {activeScreen === 'settings' && <SettingsScreen />}
+          </div>
 
           {!isDesktop && <NavBar />}
         </div>

@@ -209,8 +209,11 @@ export async function resolveCustomerMapPins(
 
   let done = 0
   const total = pool.length
+  let groupIdx = 0
+  const groupCount = groups.size
   for (const [key, list] of groups) {
     if (signal?.aborted) break
+    groupIdx++
 
     let point: GeoPoint | null = null
     if (key.startsWith('city:')) {
@@ -231,6 +234,9 @@ export async function resolveCustomerMapPins(
       if (existing && !existing.approximate) continue
       byId.set(c.id, toPin(c, point, true))
     }
+
+    // Paint early — otherwise 700+ contacts look "stuck" until every city resolves.
+    if (groupIdx === 1 || groupIdx % 4 === 0 || groupIdx === groupCount) publish()
   }
   publish()
 

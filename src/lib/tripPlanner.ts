@@ -515,22 +515,11 @@ export interface MapsLink {
   url: string
 }
 
-export function buildMapsLinks(plan: TripPlan): MapsLink[] {
-  if (plan.stops.length === 0) return []
-
-  const places = [
-    { label: plan.origin.label, query: `${plan.origin.point.lat},${plan.origin.point.lng}` },
-    ...plan.stops.map((stop, index) => ({
-      label: `${index + 1}. ${stop.contact.company || stop.contact.name || 'Stop'}`,
-      query: mapsQuery(stop),
-    })),
-  ]
-  if (plan.end) {
-    places.push({
-      label: plan.endsAtStart ? `Back to ${plan.end.label}` : plan.end.label,
-      query: `${plan.end.point.lat},${plan.end.point.lng}`,
-    })
-  }
+/** Chunks origin → stops → end into Google Maps dir links (≤8 waypoints each). */
+export function buildMapsLinksFromPlaces(
+  places: Array<{ label: string; query: string }>,
+): MapsLink[] {
+  if (places.length < 2) return []
 
   const links: MapsLink[] = []
   const chunkSize = MAX_WAYPOINTS_PER_LINK + 2
@@ -556,6 +545,55 @@ export function buildMapsLinks(plan: TripPlan): MapsLink[] {
   }
 
   return links
+}
+
+export function buildMapsLinks(plan: TripPlan): MapsLink[] {
+  if (plan.stops.length === 0) return []
+
+  const places = [
+    { label: plan.origin.label, query: `${plan.origin.point.lat},${plan.origin.point.lng}` },
+    ...plan.stops.map((stop, index) => ({
+      label: `${index + 1}. ${stop.contact.company || stop.contact.name || 'Stop'}`,
+      query: mapsQuery(stop),
+    })),
+  ]
+  if (plan.end) {
+    places.push({
+      label: plan.endsAtStart ? `Back to ${plan.end.label}` : plan.end.label,
+      query: `${plan.end.point.lat},${plan.end.point.lng}`,
+    })
+  }
+
+  return buildMapsLinksFromPlaces(places)
+}
+
+/** Maps links for a saved itinerary day (travel or explore) using stop addresses. */
+export function buildItineraryDayMapsLinks(day: {
+  originLabel: string
+  endLabel: string
+  stops: Array<{ name: string; company: string; city: string; state: string; address: string }>
+}): MapsLink[] {
+  if (!day.stops.length) return []
+
+  const stopPlace = (s: (typeof day.stops)[number], index: number) => {
+    const name = s.company || s.name || `Stop ${index + 1}`
+    const address = [s.address, s.city, s.state].filter(Boolean).join(', ')
+    const place = [s.city, s.state].filter(Boolean).join(', ')
+    return {
+      label: `${index + 1}. ${name}`,
+      query: address || [name, place].filter(Boolean).join(', ') || name,
+    }
+  }
+
+  const places = [
+    { label: day.originLabel || 'Start', query: day.originLabel || 'Start' },
+    ...day.stops.map(stopPlace),
+  ]
+  if (day.endLabel && day.endLabel !== day.originLabel) {
+    places.push({ label: day.endLabel, query: day.endLabel })
+  }
+
+  return buildMapsLinksFromPlaces(places)
 }
 
 export function buildTripText(plan: TripPlan): string {

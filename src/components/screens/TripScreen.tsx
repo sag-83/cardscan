@@ -4,6 +4,7 @@ import {
   Car,
   Check,
   ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Copy,
   Crosshair,
@@ -15,6 +16,7 @@ import {
   MapPin,
   Navigation,
   Pencil,
+  Plus,
   RefreshCw,
   Route,
   SlidersHorizontal,
@@ -54,6 +56,7 @@ import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
 import { TripMapPanel, type TripMapFilter, type TripMapPick } from '../TripMapPanel'
 import { TripHistoryPanel } from './TripHistoryPanel'
 import {
+  buildItineraryDayMapsLinks,
   buildMapsLinks,
   buildTripText,
   DEFAULT_TRIP_OPTIONS,
@@ -175,6 +178,29 @@ interface RoadDest {
   contactId?: string
 }
 
+/** One hop on an open-ended road trip — VA, Charlotte, Atlanta, Orlando, … */
+interface RoadLegDraft {
+  id: string
+  dest: RoadDest
+  stopovers: number
+  detourMiles: number
+  exploreDays: number
+}
+
+function newRoadLegId(): string {
+  return `leg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function makeRoadLeg(partial?: Partial<RoadLegDraft>): RoadLegDraft {
+  return {
+    id: partial?.id ?? newRoadLegId(),
+    dest: partial?.dest ?? { label: '' },
+    stopovers: partial?.stopovers ?? 4,
+    detourMiles: partial?.detourMiles ?? 25,
+    exploreDays: partial?.exploreDays ?? 1,
+  }
+}
+
 export function TripScreen() {
   const isDesktop = useIsDesktop()
   const contacts = useStore((s) => s.contacts)
@@ -209,11 +235,11 @@ export function TripScreen() {
   const [planMode, setPlanMode] = useState<PlanMode>('day')
   const [screenTab, setScreenTab] = useState<'plan' | 'history'>('plan')
   const [itineraryDays, setItineraryDays] = useState(3)
-  const [roadDest, setRoadDest] = useState<RoadDest>({ label: '' })
-  const [roadOnward, setRoadOnward] = useState<RoadDest | null>(null)
-  const [roadStopovers, setRoadStopovers] = useState(4)
-  const [roadDetourMiles, setRoadDetourMiles] = useState(25)
-  const [roadExploreDays, setRoadExploreDays] = useState(1)
+  const [roadLegs, setRoadLegs] = useState<RoadLegDraft[]>(() => [
+    makeRoadLeg({ exploreDays: 3, stopovers: 4, detourMiles: 25 }),
+  ])
+  const [roadReturn, setRoadReturn] = useState(true)
+  const [roadActiveLegId, setRoadActiveLegId] = useState<string | null>(null)
   const [skipLogged, setSkipLogged] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [itineraryDayProgress, setItineraryDayProgress] = useState<{ day: number; total: number } | null>(null)
@@ -414,44 +440,54 @@ export function TripScreen() {
       }
 
       if (planMode === 'road' && !overrides?.reuseLast) {
-        const destPoint = roadDest.point ?? (roadDest.label.trim()
-          ? await geocodePlace(roadDest.label.trim())
-          : null)
-        if (!roadDest.label.trim() || !destPoint) {
-          throw new TripPlanError('Pick a destination (city, address, or customer) for the road trip.')
+        const filled = roadLegs.filter((l) => l.dest.label.trim())
+        if (!filled.length) {
+          throw new TripPlanError('Add at least one destination (city, address, or customer) for the road trip.')
         }
-        setRoadDest((d) => ({ ...d, point: destPoint }))
 
-        const legs = [{
-          destination: {
-            label: roadDest.label.trim(),
-            point: destPoint,
-            contactId: roadDest.contactId,
-          },
-          maxStopovers: roadStopovers,
-          maxDetourMiles: roadDetourMiles,
-          exploreDays: roadExploreDays,
-          exploreStopsPerDay: options.maxStops,
-          exploreRadiusMiles: options.radiusMiles,
-          exploreMinutesPerStop: options.minutesPerStop,
-          priority: options.priority,
-        }]
-
-        if (roadOnward?.label.trim()) {
-          const onwardPoint = roadOnward.point ?? await geocodePlace(roadOnward.label.trim())
-          if (!onwardPoint) {
-            throw new TripPlanError(`Could not find onward destination "${roadOnward.label}".`)
+        const resolvedLegs = []
+        const nextRoadLegs = [...roadLegs]
+        for (let i = 0; i < filled.length; i++) {
+          const draft = filled[i]
+          const point = draft.dest.point ?? await geocodePlace(draft.dest.label.trim())
+          if (!point) {
+            throw new TripPlanError(`Could not find destination "${draft.dest.label}".`)
           }
-          setRoadOnward((d) => (d ? { ...d, point: onwardPoint } : d))
-          legs.push({
+          const idx = nextRoadLegs.findIndex((l) => l.id === draft.id)
+          if (idx >= 0) {
+            nextRoadLegs[idx] = {
+              ...nextRoadLegs[idx],
+              dest: { ...nextRoadLegs[idx].dest, point },
+            }
+          }
+          resolvedLegs.push({
             destination: {
-              label: roadOnward.label.trim(),
-              point: onwardPoint,
-              contactId: roadOnward.contactId,
+              label: draft.dest.label.trim(),
+              point,
+              contactId: draft.dest.contactId,
             },
-            maxStopovers: roadStopovers,
-            maxDetourMiles: roadDetourMiles,
-            exploreDays: roadExploreDays,
+            maxStopovers: draft.stopovers,
+            maxDetourMiles: draft.detourMiles,
+            exploreDays: draft.exploreDays,
+            exploreStopsPerDay: options.maxStops,
+            exploreRadiusMiles: options.radiusMiles,
+            exploreMinutesPerStop: options.minutesPerStop,
+            priority: options.priority,
+          })
+        }
+        setRoadLegs(nextRoadLegs)
+
+        // Optional return: stopovers on the corridor back to start (no explore).
+        if (roadReturn) {
+          const lastDraft = filled[filled.length - 1]
+          resolvedLegs.push({
+            destination: {
+              label: origin.label,
+              point: origin.point,
+            },
+            maxStopovers: lastDraft.stopovers,
+            maxDetourMiles: lastDraft.detourMiles,
+            exploreDays: 0,
             exploreStopsPerDay: options.maxStops,
             exploreRadiusMiles: options.radiusMiles,
             exploreMinutesPerStop: options.minutesPerStop,
@@ -461,7 +497,7 @@ export function TripScreen() {
 
         const itinerary = await planRoadTrip({
           start: origin,
-          legs,
+          legs: resolvedLegs,
           contacts: pool,
           omitIds: new Set(),
           filterState,
@@ -643,13 +679,52 @@ export function TripScreen() {
 
   const pickDestination = (pick: TripMapPick) => {
     setPlanMode('road')
-    setRoadDest({
+    setSetupOpen(true)
+    const dest = {
       label: pick.label,
       point: pick.point,
       contactId: pick.contactId,
+    }
+    // Prefer empty leg → active empty/incomplete → otherwise append a new leg
+    // so map-taps can build NJ → VA → Charlotte → Atlanta without leaving the map.
+    const empty = roadLegs.find((l) => !l.dest.label.trim())
+    const active = roadActiveLegId
+      ? roadLegs.find((l) => l.id === roadActiveLegId)
+      : undefined
+    const target = empty ?? (active && !active.dest.label.trim() ? active : null)
+
+    if (target) {
+      updateRoadLeg(target.id, { dest })
+      setRoadActiveLegId(target.id)
+    } else {
+      const last = roadLegs[roadLegs.length - 1]
+      const added = makeRoadLeg({
+        dest,
+        stopovers: last?.stopovers ?? 4,
+        detourMiles: last?.detourMiles ?? 25,
+        exploreDays: 1,
+      })
+      setRoadLegs((prev) => [...prev, added])
+      setRoadActiveLegId(added.id)
+    }
+    showToast('Destination added from map — add more cities or Build road trip')
+  }
+
+  const updateRoadLeg = (id: string, patchLeg: Partial<RoadLegDraft>) => {
+    setRoadLegs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patchLeg } : l)))
+  }
+
+  const moveRoadLeg = (id: string, dir: -1 | 1) => {
+    setRoadLegs((prev) => {
+      const i = prev.findIndex((l) => l.id === id)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      const tmp = next[i]
+      next[i] = next[j]
+      next[j] = tmp
+      return next
     })
-    setSetupOpen(true)
-    showToast('Destination set from map — adjust stopovers below, then Build road trip')
   }
 
   const pickStart = (pick: TripMapPick) => {
@@ -659,20 +734,24 @@ export function TripScreen() {
     showToast('Start set from map')
   }
 
+  const planChrome = screenTab === 'plan'
+
   return (
     <div style={{
-      paddingBottom: isDesktop ? 0 : 24,
-      display: isDesktop && screenTab === 'plan' ? 'flex' : undefined,
-      flexDirection: isDesktop && screenTab === 'plan' ? 'row' : undefined,
-      alignItems: isDesktop && screenTab === 'plan' ? 'stretch' : undefined,
-      minHeight: isDesktop && screenTab === 'plan' ? 'calc(100dvh - 56px)' : undefined,
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: isDesktop ? 'row' : 'column',
+      overflow: 'hidden',
+      height: '100%',
     }}>
+      {/* Map stays fixed in the split — only the plan column scrolls. */}
       <div style={
-        screenTab !== 'plan'
+        !planChrome
           ? { display: 'none' }
           : isDesktop
-            ? { width: '52%', flexShrink: 0, minHeight: 0, position: 'sticky', top: 0, height: 'calc(100dvh - 56px)' }
-            : undefined
+            ? { flex: 1, minWidth: 0, minHeight: 0 }
+            : { flexShrink: 0, height: '42%', minHeight: 200, maxHeight: '48%' }
       }>
         <TripMapPanel
           contacts={contacts}
@@ -684,16 +763,23 @@ export function TripScreen() {
           highlightIds={highlightIds}
           filter={mapFilter}
           onFilterChange={setMapFilter}
-          fill={isDesktop}
-          active={screenTab === 'plan'}
+          fill
+          active={planChrome}
         />
       </div>
 
       <div style={{
-        flex: isDesktop && screenTab === 'plan' ? 1 : undefined,
-        minWidth: 0,
-        overflowY: isDesktop && screenTab === 'plan' ? 'auto' : undefined,
-        maxHeight: isDesktop && screenTab === 'plan' ? 'calc(100dvh - 56px)' : undefined,
+        flex: planChrome && isDesktop ? undefined : 1,
+        width: planChrome && isDesktop ? 400 : undefined,
+        maxWidth: planChrome && isDesktop ? 420 : undefined,
+        flexShrink: 0,
+        minWidth: planChrome && isDesktop ? 340 : 0,
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        borderLeft: planChrome && isDesktop ? '1px solid var(--border2)' : undefined,
+        background: 'var(--bg)',
+        paddingBottom: 24,
       }}>
       <div style={{
         display: 'flex', gap: 6, padding: '12px 16px 0',
@@ -735,9 +821,10 @@ export function TripScreen() {
         background: 'var(--bg3)', border: '1px solid var(--border2)',
         fontSize: 12, color: 'var(--text3)', lineHeight: 1.45,
       }}>
-        Tap a map pin → <span style={{ fontWeight: 750, color: 'var(--text2)' }}>Set destination</span> or
-        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Start here</span>, then build the trip below.
-        Expand the map for a full-screen view. Planned stops highlight in blue.
+        Map stays put while you scroll this panel. Search or tap a pin →
+        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Set destination</span> /
+        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Start here</span>.
+        Road trips: stopovers on the way out, explore days at the destination, stopovers on the way back.
       </div>
 
       {progressStats && (
@@ -974,99 +1061,150 @@ export function TripScreen() {
               {planMode === 'road' && (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45 }}>
-                    Drive from your start to a destination with jewelry stopovers on the way, then
-                    explore around where you arrive — add another destination to keep going.
+                    Chain any number of destinations — Virginia, Charlotte, Atlanta, Orlando, Jacksonville…
+                    Each leg gets stopovers on the drive in, optional explore days there, then the next hop.
+                    Map pin → fills the highlighted leg (or adds a new one).
                   </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 750, color: 'var(--text2)', marginBottom: 2 }}>
-                      Destination
-                    </div>
-                    <AddressAutocomplete
-                      value={roadDest.label}
-                      onChange={(label) => setRoadDest({ label })}
-                      onResolve={(hit) => setRoadDest(
-                        hit
-                          ? { label: hit.label, point: hit.point, contactId: hit.contactId }
-                          : { label: roadDest.label },
-                      )}
-                      contacts={contacts}
-                      placeholder="Virginia · Richmond · or a customer name"
-                      ariaLabel="Road trip destination"
-                    />
-                  </div>
-                  <SliderRow
-                    label="Stopovers along the drive"
-                    value={roadStopovers}
-                    min={0}
-                    max={12}
-                    step={1}
-                    format={(v) => (v === 0 ? 'none' : `${v}`)}
-                    onChange={setRoadStopovers}
-                  />
-                  <SliderRow
-                    label="Max detour off the highway"
-                    value={roadDetourMiles}
-                    min={5}
-                    max={60}
-                    step={5}
-                    format={(v) => `${v} mi`}
-                    onChange={setRoadDetourMiles}
-                  />
-                  <SliderRow
-                    label="Explore days after you arrive"
-                    value={roadExploreDays}
-                    min={0}
-                    max={7}
-                    step={1}
-                    format={(v) => (v === 0 ? 'arrive only' : `${v} day${v === 1 ? '' : 's'}`)}
-                    onChange={setRoadExploreDays}
-                  />
-                  {roadOnward ? (
-                    <div>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        marginBottom: 2,
-                      }}>
-                        <div style={{ fontSize: 12, fontWeight: 750, color: 'var(--text2)' }}>
-                          Then go to
+                  {roadLegs.map((leg, index) => {
+                    const active = (roadActiveLegId ?? roadLegs[0]?.id) === leg.id
+                    return (
+                      <div
+                        key={leg.id}
+                        onClick={() => setRoadActiveLegId(leg.id)}
+                        style={{
+                          padding: 12, borderRadius: 12,
+                          border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border2)'}`,
+                          background: active ? 'var(--chip-accent-bg)' : 'var(--bg3)',
+                          display: 'flex', flexDirection: 'column', gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            fontSize: 11, fontWeight: 800, color: 'var(--accent)',
+                            letterSpacing: 0.3, flex: 1,
+                          }}>
+                            LEG {index + 1}
+                            {index === 0 ? ' · from start' : ` · after leg ${index}`}
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="Move leg up"
+                            disabled={index === 0}
+                            onClick={(e) => { e.stopPropagation(); moveRoadLeg(leg.id, -1) }}
+                            style={{ ...legIconBtn, opacity: index === 0 ? 0.35 : 1 }}
+                          >
+                            <ChevronUp className="size-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Move leg down"
+                            disabled={index === roadLegs.length - 1}
+                            onClick={(e) => { e.stopPropagation(); moveRoadLeg(leg.id, 1) }}
+                            style={{ ...legIconBtn, opacity: index === roadLegs.length - 1 ? 0.35 : 1 }}
+                          >
+                            <ChevronDown className="size-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Remove leg"
+                            disabled={roadLegs.length <= 1}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (roadLegs.length <= 1) return
+                              setRoadLegs((prev) => prev.filter((l) => l.id !== leg.id))
+                              if (roadActiveLegId === leg.id) setRoadActiveLegId(null)
+                            }}
+                            style={{ ...legIconBtn, opacity: roadLegs.length <= 1 ? 0.35 : 1, color: 'var(--danger)' }}
+                          >
+                            <Trash2 className="size-3.5" aria-hidden />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setRoadOnward(null)}
-                          style={{
-                            border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-                            fontSize: 11, fontWeight: 700, color: 'var(--text3)',
-                          }}
-                        >
-                          Remove
-                        </button>
+                        <AddressAutocomplete
+                          value={leg.dest.label}
+                          onChange={(label) => updateRoadLeg(leg.id, {
+                            dest: { ...leg.dest, label, point: undefined, contactId: undefined },
+                          })}
+                          onResolve={(hit) => updateRoadLeg(leg.id, {
+                            dest: hit
+                              ? { label: hit.label, point: hit.point, contactId: hit.contactId }
+                              : { ...leg.dest },
+                          })}
+                          contacts={contacts}
+                          placeholder="City, state, or customer (VA · Charlotte · Atlanta…)"
+                          ariaLabel={`Road trip leg ${index + 1} destination`}
+                        />
+                        <SliderRow
+                          label="Stopovers on the drive in"
+                          value={leg.stopovers}
+                          min={0}
+                          max={12}
+                          step={1}
+                          format={(v) => (v === 0 ? 'none' : `${v}`)}
+                          onChange={(stopovers) => updateRoadLeg(leg.id, { stopovers })}
+                        />
+                        <SliderRow
+                          label="Max detour off highway"
+                          value={leg.detourMiles}
+                          min={5}
+                          max={60}
+                          step={5}
+                          format={(v) => `${v} mi`}
+                          onChange={(detourMiles) => updateRoadLeg(leg.id, { detourMiles })}
+                        />
+                        <SliderRow
+                          label="Explore days here"
+                          value={leg.exploreDays}
+                          min={0}
+                          max={7}
+                          step={1}
+                          format={(v) => (v === 0 ? 'pass through' : `${v} day${v === 1 ? '' : 's'}`)}
+                          onChange={(exploreDays) => updateRoadLeg(leg.id, { exploreDays })}
+                        />
                       </div>
-                      <AddressAutocomplete
-                        value={roadOnward.label}
-                        onChange={(label) => setRoadOnward({ label })}
-                        onResolve={(hit) => setRoadOnward(
-                          hit
-                            ? { label: hit.label, point: hit.point, contactId: hit.contactId }
-                            : { label: roadOnward.label },
-                        )}
-                        contacts={contacts}
-                        placeholder="Next city, state, or customer"
-                        ariaLabel="Onward destination"
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setRoadOnward({ label: '' })}
-                      style={{
-                        alignSelf: 'flex-start', padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
-                        border: '1.5px dashed var(--border)', background: 'transparent',
-                        color: 'var(--accent)', fontSize: 12.5, fontWeight: 750,
-                      }}
-                    >
-                      + Add onward destination
-                    </button>
-                  )}
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const last = roadLegs[roadLegs.length - 1]
+                      const added = makeRoadLeg({
+                        stopovers: last?.stopovers ?? 4,
+                        detourMiles: last?.detourMiles ?? 25,
+                        exploreDays: 1,
+                      })
+                      setRoadLegs((prev) => [...prev, added])
+                      setRoadActiveLegId(added.id)
+                    }}
+                    style={{
+                      alignSelf: 'stretch', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                      border: '1.5px dashed var(--border)', background: 'transparent',
+                      color: 'var(--accent)', fontSize: 12.5, fontWeight: 750,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    <Plus className="size-3.5" aria-hidden />
+                    Add destination (Charlotte, Atlanta, Orlando…)
+                  </button>
+                  <label style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '10px 12px', borderRadius: 10, background: 'var(--bg3)',
+                    border: '1px solid var(--border2)', cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={roadReturn}
+                      onChange={(e) => setRoadReturn(e.target.checked)}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 750, color: 'var(--text)' }}>
+                        Return to start with stopovers
+                      </span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.4 }}>
+                        After the last destination, plan the drive home with shops along that corridor too.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               )}
               <label style={{
@@ -1103,9 +1241,9 @@ export function TripScreen() {
                   onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
                 />
               )}
-              {planMode === 'road' && roadExploreDays > 0 && (
+              {planMode === 'road' && roadLegs.some((l) => l.exploreDays > 0) && (
                 <SliderRow
-                  label="Explore radius at destination"
+                  label="Explore radius at each stay"
                   value={options.radiusMiles}
                   min={5}
                   max={250}
@@ -1424,55 +1562,86 @@ function ItineraryView({
           </button>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, lineHeight: 1.45 }}>
-          Open a day to get Maps links and the stop list. At the end of that day, tap
-          {' '}<strong style={{ color: 'var(--text2)' }}>Log today's visits</strong> so the next day
-          won't repeat them.
+          Open Maps for each day below (split into legs when Google’s waypoint limit hits).
+          Tap a day for the full stop list and to log visits so later days don’t repeat them.
         </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {itinerary.days.map((day) => (
-          <button
-            key={day.dayIndex}
-            type="button"
-            disabled={busy}
-            onClick={() => onOpenDay(day.dayIndex)}
-            style={{
-              textAlign: 'left', padding: '14px 14px', borderRadius: 14, cursor: busy ? 'default' : 'pointer',
-              border: '1.5px solid var(--border)', background: 'var(--bg2)',
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                background: day.kind === 'travel' ? 'var(--chip-warning-bg, var(--chip-accent-bg))' : 'var(--chip-accent-bg)',
-                color: day.kind === 'travel' ? 'var(--chip-warning-fg, var(--accent))' : 'var(--accent)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 850,
-              }}>
-                {day.kind === 'travel' ? '→' : `D${day.dayIndex}`}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
-                  {day.title || `Day ${day.dayIndex}`}
-                  {!day.title ? ` · ${day.stops.length} stop${day.stops.length === 1 ? '' : 's'}` : ''}
+        {itinerary.days.map((day) => {
+          const dayLinks = buildItineraryDayMapsLinks(day)
+          return (
+            <div
+              key={day.dayIndex}
+              style={{
+                padding: '14px 14px', borderRadius: 14,
+                border: '1.5px solid var(--border)', background: 'var(--bg2)',
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onOpenDay(day.dayIndex)}
+                style={{
+                  width: '100%', textAlign: 'left', padding: 0, border: 'none',
+                  background: 'transparent', cursor: busy ? 'default' : 'pointer',
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                    background: day.kind === 'travel' ? 'var(--chip-warning-bg, var(--chip-accent-bg))' : 'var(--chip-accent-bg)',
+                    color: day.kind === 'travel' ? 'var(--chip-warning-fg, var(--accent))' : 'var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 850,
+                  }}>
+                    {day.kind === 'travel' ? '→' : `D${day.dayIndex}`}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
+                      {day.title || `Day ${day.dayIndex}`}
+                      {!day.title ? ` · ${day.stops.length} stop${day.stops.length === 1 ? '' : 's'}` : ''}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                      {day.stops.length} stop{day.stops.length === 1 ? '' : 's'}
+                      {' · '}{formatMiles(day.totalMiles)} · {formatDuration(day.driveMinutes + day.visitMinutes)}
+                      {day.stops.length > 0 ? ` · ${day.stops.slice(0, 2).map((s) => s.company || s.name || 'Stop').join(', ')}` : ''}
+                      {day.stops.length > 2 ? '…' : ''}
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className="size-4 shrink-0"
+                    style={{ color: 'var(--text3)', transform: 'rotate(-90deg)' }}
+                    aria-hidden
+                  />
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                  {day.stops.length} stop{day.stops.length === 1 ? '' : 's'}
-                  {' · '}{formatMiles(day.totalMiles)} · {formatDuration(day.driveMinutes + day.visitMinutes)}
-                  {day.stops.length > 0 ? ` · ${day.stops.slice(0, 2).map((s) => s.company || s.name || 'Stop').join(', ')}` : ''}
-                  {day.stops.length > 2 ? '…' : ''}
+              </button>
+              {dayLinks.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                  {dayLinks.map((link, index) => (
+                    <a
+                      key={`${day.dayIndex}-${index}`}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        padding: '7px 10px', borderRadius: 9, textDecoration: 'none',
+                        border: '1.5px solid var(--border)', background: 'var(--bg3)',
+                        color: 'var(--accent)', fontSize: 11.5, fontWeight: 750,
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                      }}
+                    >
+                      <ExternalLink className="size-3 shrink-0" aria-hidden />
+                      {dayLinks.length > 1 ? `Maps leg ${index + 1}` : 'Open in Maps'}
+                    </a>
+                  ))}
                 </div>
-              </div>
-              <ChevronDown
-                className="size-4 shrink-0"
-                style={{ color: 'var(--text3)', transform: 'rotate(-90deg)' }}
-                aria-hidden
-              />
+              )}
             </div>
-          </button>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -1994,4 +2163,10 @@ function dropdownStyle(active: boolean): CSSProperties {
     backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
     paddingRight: 22,
   }
+}
+
+const legIconBtn: CSSProperties = {
+  width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)',
+  background: 'var(--bg2)', color: 'var(--text2)', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }

@@ -26,10 +26,15 @@ interface Props {
   /** Called on Enter when no suggestion is highlighted. */
   onSubmit?: () => void
   ariaLabel?: string
+  /**
+   * Value was set from the map (or another resolved source) with coords already
+   * known — lock it so we don't re-search and wipe the selection.
+   */
+  locked?: boolean
 }
 
 export function AddressAutocomplete({
-  value, onChange, onResolve, contacts = [], placeholder, onSubmit, ariaLabel,
+  value, onChange, onResolve, contacts = [], placeholder, onSubmit, ariaLabel, locked = false,
 }: Props) {
   const [items, setItems] = useState<TripPlaceSuggestion[]>([])
   const [open, setOpen] = useState(false)
@@ -51,9 +56,24 @@ export function AddressAutocomplete({
     if (blurTimer.current) window.clearTimeout(blurTimer.current)
   }, [])
 
+  // Map "Start here" / "End here" sets the field with known coords — treat that
+  // string as already chosen so suggestPlaces doesn't thrash and look broken.
+  useEffect(() => {
+    if (!locked) return
+    const q = value.trim()
+    if (!q) return
+    chosenRef.current = q
+    abortRef.current?.abort()
+    setItems([])
+    setOpen(false)
+    setLoading(false)
+    setSearched(false)
+    setActiveIndex(-1)
+  }, [locked, value])
+
   useEffect(() => {
     const query = value.trim()
-    if (chosenRef.current === query || query.length < MIN_CHARS) {
+    if (locked || chosenRef.current === query || query.length < MIN_CHARS) {
       setItems([])
       setLoading(false)
       setSearched(false)
@@ -157,6 +177,7 @@ export function AddressAutocomplete({
             onChange(event.target.value)
             onResolve(null)
           }}
+          // Locked fields still allow edits; typing clears the lock via onChange.
           onKeyDown={handleKeyDown}
           onFocus={() => { if (items.length > 0 || searched) setOpen(true) }}
           onBlur={() => {

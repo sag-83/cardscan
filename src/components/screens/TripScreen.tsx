@@ -53,7 +53,7 @@ import { saveContactToDB } from '../../lib/supabase'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
-import { TripMapPanel, type TripMapFilter, type TripMapPick } from '../TripMapPanel'
+import { TripMapPanel, type TripMapFilter, type TripMapPick, type TripMapTapMode } from '../TripMapPanel'
 import { TripHistoryPanel } from './TripHistoryPanel'
 import {
   buildItineraryDayMapsLinks,
@@ -246,6 +246,10 @@ export function TripScreen() {
   const [roadStatus, setRoadStatus] = useState('')
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapFilter, setMapFilter] = useState<TripMapFilter>('all')
+  const [mapTapMode, setMapTapMode] = useState<TripMapTapMode>('pick')
+  const [startPlaceLocked, setStartPlaceLocked] = useState(false)
+  const [mapStartContactId, setMapStartContactId] = useState<string | null>(null)
+  const [mapEndContactId, setMapEndContactId] = useState<string | null>(null)
 
   const [working, setWorking] = useState(false)
   const [progress, setProgress] = useState<TripProgress | null>(null)
@@ -677,25 +681,47 @@ export function TripScreen() {
     return ids
   }, [plan, savedItinerary])
 
-  const pickDestination = (pick: TripMapPick) => {
+  const placeLabel = (pick: TripMapPick) => (
+    pick.address ? `${pick.label} · ${pick.address}` : pick.label
+  )
+
+  const destFromPick = (pick: TripMapPick): RoadDest => ({
+    label: placeLabel(pick),
+    point: pick.point,
+    contactId: pick.contactId,
+  })
+
+  /** End here — sets / replaces the trip's final destination leg. */
+  const pickEnd = (pick: TripMapPick) => {
     setPlanMode('road')
     setSetupOpen(true)
-    const dest = {
-      label: pick.label,
-      point: pick.point,
-      contactId: pick.contactId,
-    }
-    // Prefer empty leg → active empty/incomplete → otherwise append a new leg
-    // so map-taps can build NJ → VA → Charlotte → Atlanta without leaving the map.
+    const dest = destFromPick(pick)
+    setMapEndContactId(pick.contactId)
     const empty = roadLegs.find((l) => !l.dest.label.trim())
-    const active = roadActiveLegId
-      ? roadLegs.find((l) => l.id === roadActiveLegId)
-      : undefined
-    const target = empty ?? (active && !active.dest.label.trim() ? active : null)
+    if (empty) {
+      updateRoadLeg(empty.id, { dest })
+      setRoadActiveLegId(empty.id)
+    } else if (roadLegs.length === 1) {
+      updateRoadLeg(roadLegs[0].id, { dest })
+      setRoadActiveLegId(roadLegs[0].id)
+    } else {
+      const last = roadLegs[roadLegs.length - 1]
+      updateRoadLeg(last.id, { dest })
+      setRoadActiveLegId(last.id)
+    }
+    showToast('End set from map')
+  }
 
-    if (target) {
-      updateRoadLeg(target.id, { dest })
-      setRoadActiveLegId(target.id)
+  /** Add stop — appends another destination leg (VA → Charlotte → Atlanta…). */
+  const pickVia = (pick: TripMapPick) => {
+    setPlanMode('road')
+    setSetupOpen(true)
+    const dest = destFromPick(pick)
+    const empty = roadLegs.find((l) => !l.dest.label.trim())
+    if (empty) {
+      updateRoadLeg(empty.id, { dest })
+      setRoadActiveLegId(empty.id)
+      setMapEndContactId(pick.contactId)
     } else {
       const last = roadLegs[roadLegs.length - 1]
       const added = makeRoadLeg({
@@ -706,8 +732,9 @@ export function TripScreen() {
       })
       setRoadLegs((prev) => [...prev, added])
       setRoadActiveLegId(added.id)
+      setMapEndContactId(pick.contactId)
     }
-    showToast('Destination added from map — add more cities or Build road trip')
+    showToast('Stop added — tap more pins or Build road trip')
   }
 
   const updateRoadLeg = (id: string, patchLeg: Partial<RoadLegDraft>) => {
@@ -729,10 +756,20 @@ export function TripScreen() {
 
   const pickStart = (pick: TripMapPick) => {
     patch({ startMode: 'place' })
-    setStartPlace({ label: pick.label, point: pick.point })
+    setStartPlace({ label: placeLabel(pick), point: pick.point })
+    setStartPlaceLocked(true)
+    setMapStartContactId(pick.contactId)
     setSetupOpen(true)
     showToast('Start set from map')
   }
+
+  const routeViaIds = useMemo(
+    () => roadLegs
+      .slice(0, -1)
+      .map((l) => l.dest.contactId)
+      .filter((id): id is string => Boolean(id)),
+    [roadLegs],
+  )
 
   const planChrome = screenTab === 'plan'
 
@@ -758,9 +795,17 @@ export function TripScreen() {
           expanded={mapExpanded}
           onToggleExpand={() => setMapExpanded((v) => !v)}
           onOpenContact={setDetailContactId}
-          onPickDestination={pickDestination}
           onPickStart={pickStart}
+          onPickEnd={pickEnd}
+          onPickVia={pickVia}
           highlightIds={highlightIds}
+          routeMarks={{
+            startId: mapStartContactId,
+            endId: mapEndContactId,
+            viaIds: routeViaIds,
+          }}
+          tapMode={mapTapMode}
+          onTapModeChange={setMapTapMode}
           filter={mapFilter}
           onFilterChange={setMapFilter}
           fill
@@ -936,10 +981,21 @@ export function TripScreen() {
               {startMode === 'place' && (
                 <AddressAutocomplete
                   value={startPlace.label}
-                  onChange={(label) => setStartPlace((p) => ({ ...p, label }))}
-                  onResolve={(hit) => setStartPlace((p) => (
-                    hit ? { label: hit.label, point: hit.point } : { label: p.label }
-                  ))}
+                  locked={startPlaceLocked && Boolean(startPlace.point)}
+                  onChange={(label) => {
+                    setStartPlaceLocked(false)
+                    setMapStartContactId(null)
+                    setStartPlace({ label })
+                  }}
+                  onResolve={(hit) => {
+                    if (hit) {
+                      setStartPlaceLocked(true)
+                      setStartPlace({ label: hit.label, point: hit.point })
+                    } else {
+                      setStartPlace((p) => ({ label: p.label }))
+                      setStartPlaceLocked(false)
+                    }
+                  }}
                   onSubmit={() => void run()}
                   contacts={contacts}
                   placeholder="Address, city, ZIP, or customer name"
@@ -1148,13 +1204,14 @@ export function TripScreen() {
                         </div>
                         <AddressAutocomplete
                           value={leg.dest.label}
+                          locked={Boolean(leg.dest.point)}
                           onChange={(label) => updateRoadLeg(leg.id, {
-                            dest: { ...leg.dest, label, point: undefined, contactId: undefined },
+                            dest: { label },
                           })}
                           onResolve={(hit) => updateRoadLeg(leg.id, {
                             dest: hit
                               ? { label: hit.label, point: hit.point, contactId: hit.contactId }
-                              : { ...leg.dest },
+                              : { label: leg.dest.label },
                           })}
                           contacts={contacts}
                           placeholder="City, state, or customer (VA · Charlotte · Atlanta…)"

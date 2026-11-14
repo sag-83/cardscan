@@ -9,6 +9,7 @@ import {
   Minimize2,
   Navigation,
   Flag,
+  Plus,
   Search,
   X,
 } from 'lucide-react'
@@ -21,10 +22,15 @@ import {
 } from '../lib/customerMapPins'
 
 export type TripMapFilter = 'all' | 'customer' | 'prospect'
+/** Tap a pin to apply this role without opening the sheet first. */
+export type TripMapTapMode = 'pick' | 'start' | 'end' | 'via'
 
 const CUSTOMER_COLOR = '#34c759'
 const PROSPECT_COLOR = '#ff9500'
 const HIGHLIGHT_COLOR = '#007aff'
+const START_COLOR = '#30d158'
+const END_COLOR = '#ff453a'
+const VIA_COLOR = '#bf5af2'
 
 export interface TripMapPick {
   label: string
@@ -39,12 +45,18 @@ interface Props {
   expanded: boolean
   onToggleExpand: () => void
   onOpenContact: (id: string) => void
-  /** When set, pin sheet offers “Use as destination”. */
-  onPickDestination?: (pick: TripMapPick) => void
-  /** When set, pin sheet offers “Start from here”. */
+  /** End / final destination for this hop. */
+  onPickEnd?: (pick: TripMapPick) => void
+  /** Start from here. */
   onPickStart?: (pick: TripMapPick) => void
+  /** Add as another stop/leg on the road trip (Charlotte after VA, etc.). */
+  onPickVia?: (pick: TripMapPick) => void
   /** Planned stop ids — drawn thicker / blue ring. */
   highlightIds?: Set<string>
+  /** Contact ids currently chosen as start / end / mid stops (map rings). */
+  routeMarks?: { startId?: string | null; endId?: string | null; viaIds?: string[] }
+  tapMode: TripMapTapMode
+  onTapModeChange: (mode: TripMapTapMode) => void
   filter: TripMapFilter
   onFilterChange: (filter: TripMapFilter) => void
   /** Desktop side panel uses fill height; mobile uses fraction. */
@@ -55,14 +67,27 @@ interface Props {
   compact?: boolean
 }
 
+function toPick(pin: CustomerMapPin): TripMapPick {
+  return {
+    label: pin.label,
+    point: pin.point,
+    contactId: pin.contactId,
+    address: pin.address,
+  }
+}
+
 export function TripMapPanel({
   contacts,
   expanded,
   onToggleExpand,
   onOpenContact,
-  onPickDestination,
+  onPickEnd,
   onPickStart,
+  onPickVia,
   highlightIds,
+  routeMarks,
+  tapMode,
+  onTapModeChange,
   filter,
   onFilterChange,
   fill = false,
@@ -75,6 +100,10 @@ export function TripMapPanel({
   const fittedRef = useRef(false)
   const contactsRef = useRef(contacts)
   contactsRef.current = contacts
+  const tapModeRef = useRef(tapMode)
+  tapModeRef.current = tapMode
+  const pickRef = useRef({ onPickStart, onPickEnd, onPickVia, onToggleExpand, expanded })
+  pickRef.current = { onPickStart, onPickEnd, onPickVia, onToggleExpand, expanded }
 
   const [pins, setPins] = useState<CustomerMapPin[]>([])
   const [loading, setLoading] = useState(true)
@@ -208,18 +237,52 @@ export function TripMapPanel({
     layer.clearLayers()
     if (!visible.length) return
 
+    const viaSet = new Set(routeMarks?.viaIds ?? [])
     const bounds = L.latLngBounds([])
     for (const pin of visible) {
+      const isStart = routeMarks?.startId === pin.contactId
+      const isEnd = routeMarks?.endId === pin.contactId
+      const isVia = viaSet.has(pin.contactId)
       const highlighted = highlightIds?.has(pin.contactId)
+      const ring = isStart ? START_COLOR : isEnd ? END_COLOR : isVia ? VIA_COLOR : highlighted ? HIGHLIGHT_COLOR : '#fff'
       const marker = L.circleMarker([pin.point.lat, pin.point.lng], {
-        radius: highlighted ? 10 : pin.kind === 'customer' ? 8 : 7,
-        color: highlighted ? HIGHLIGHT_COLOR : '#fff',
-        weight: highlighted ? 2.5 : 1.5,
+        radius: isStart || isEnd || isVia || highlighted ? 10 : pin.kind === 'customer' ? 8 : 7,
+        color: ring,
+        weight: isStart || isEnd || isVia || highlighted ? 2.5 : 1.5,
         fillColor: pin.kind === 'customer' ? CUSTOMER_COLOR : PROSPECT_COLOR,
         fillOpacity: pin.approximate ? 0.7 : 0.95,
       })
-      marker.bindTooltip(pin.label, { direction: 'top', opacity: 0.95 })
-      marker.on('click', () => setSelected(pin))
+      marker.bindTooltip(
+        isStart ? `START · ${pin.label}` : isEnd ? `END · ${pin.label}` : isVia ? `STOP · ${pin.label}` : pin.label,
+        { direction: 'top', opacity: 0.95 },
+      )
+      marker.on('click', () => {
+        const mode = tapModeRef.current
+        const h = pickRef.current
+        const pick = toPick(pin)
+        if (mode === 'start' && h.onPickStart) {
+          h.onPickStart(pick)
+          setSelected(null)
+          setQuery('')
+          if (h.expanded) h.onToggleExpand()
+          return
+        }
+        if (mode === 'end' && h.onPickEnd) {
+          h.onPickEnd(pick)
+          setSelected(null)
+          setQuery('')
+          if (h.expanded) h.onToggleExpand()
+          return
+        }
+        if (mode === 'via' && h.onPickVia) {
+          h.onPickVia(pick)
+          setSelected(null)
+          setQuery('')
+          if (h.expanded) h.onToggleExpand()
+          return
+        }
+        setSelected(pin)
+      })
       marker.addTo(layer)
       bounds.extend([pin.point.lat, pin.point.lng])
     }
@@ -229,11 +292,21 @@ export function TripMapPanel({
       fittedRef.current = true
     }
     window.setTimeout(() => map.invalidateSize(), 30)
-  }, [visible, highlightIds])
+  }, [visible, highlightIds, routeMarks])
+
+  const applyPick = (pin: CustomerMapPin, role: 'start' | 'end' | 'via') => {
+    const pick = toPick(pin)
+    if (role === 'start') onPickStart?.(pick)
+    else if (role === 'end') onPickEnd?.(pick)
+    else onPickVia?.(pick)
+    setSelected(null)
+    setQuery('')
+    if (expanded) onToggleExpand()
+  }
 
   const focusPin = (pin: CustomerMapPin) => {
     setSelected(pin)
-    setQuery(pin.label)
+    // Don't dump the name into search — that filtered the map and looked broken.
     mapRef.current?.flyTo([pin.point.lat, pin.point.lng], 12, { duration: 0.6 })
   }
 
@@ -313,6 +386,42 @@ export function TripMapPanel({
           color={PROSPECT_COLOR}
           compact={compact}
           onClick={() => onFilterChange('prospect')}
+        />
+      </div>
+
+      <div style={{
+        display: 'flex', gap: 4,
+        padding: compact ? '5px 8px' : '6px 10px',
+        flexShrink: 0, overflowX: 'auto',
+        borderBottom: '1px solid var(--border2)',
+        background: 'var(--bg3)',
+      }}>
+        <ModeChip
+          active={tapMode === 'pick'}
+          label="Tap info"
+          compact={compact}
+          onClick={() => onTapModeChange('pick')}
+        />
+        <ModeChip
+          active={tapMode === 'start'}
+          label="Start"
+          color={START_COLOR}
+          compact={compact}
+          onClick={() => onTapModeChange('start')}
+        />
+        <ModeChip
+          active={tapMode === 'end'}
+          label="End"
+          color={END_COLOR}
+          compact={compact}
+          onClick={() => onTapModeChange('end')}
+        />
+        <ModeChip
+          active={tapMode === 'via'}
+          label="+ Stop"
+          color={VIA_COLOR}
+          compact={compact}
+          onClick={() => onTapModeChange('via')}
         />
       </div>
 
@@ -443,46 +552,34 @@ export function TripMapPanel({
               {selected.address ? ` · ${selected.address}` : ''}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-              {onPickDestination && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onPickDestination({
-                      label: selected.address
-                        ? `${selected.label} — ${selected.address}`
-                        : selected.label,
-                      point: selected.point,
-                      contactId: selected.contactId,
-                      address: selected.address,
-                    })
-                    setSelected(null)
-                    if (expanded) onToggleExpand()
-                  }}
-                  style={actionBtn(true)}
-                >
-                  <Flag className="size-3.5 shrink-0" aria-hidden />
-                  Set destination
-                </button>
-              )}
               {onPickStart && (
                 <button
                   type="button"
-                  onClick={() => {
-                    onPickStart({
-                      label: selected.address
-                        ? `${selected.label} — ${selected.address}`
-                        : selected.label,
-                      point: selected.point,
-                      contactId: selected.contactId,
-                      address: selected.address,
-                    })
-                    setSelected(null)
-                    if (expanded) onToggleExpand()
-                  }}
-                  style={actionBtn(false)}
+                  onClick={() => applyPick(selected, 'start')}
+                  style={actionBtn(true)}
                 >
                   <Navigation className="size-3.5 shrink-0" aria-hidden />
                   Start here
+                </button>
+              )}
+              {onPickEnd && (
+                <button
+                  type="button"
+                  onClick={() => applyPick(selected, 'end')}
+                  style={actionBtn(false)}
+                >
+                  <Flag className="size-3.5 shrink-0" aria-hidden />
+                  End here
+                </button>
+              )}
+              {onPickVia && (
+                <button
+                  type="button"
+                  onClick={() => applyPick(selected, 'via')}
+                  style={actionBtn(false)}
+                >
+                  <Plus className="size-3.5 shrink-0" aria-hidden />
+                  Add stop
                 </button>
               )}
               <button
@@ -534,6 +631,34 @@ function FilterChip({
       }}
     >
       {color && <span style={{ width: 7, height: 7, borderRadius: 99, background: color }} />}
+      {label}
+    </button>
+  )
+}
+
+function ModeChip({
+  active, label, color, onClick, compact,
+}: {
+  active: boolean
+  label: string
+  color?: string
+  onClick: () => void
+  compact?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flexShrink: 0,
+        padding: compact ? '5px 9px' : '6px 11px',
+        borderRadius: 10, cursor: 'pointer',
+        fontSize: compact ? 11 : 11.5, fontWeight: 800, whiteSpace: 'nowrap',
+        border: `1.5px solid ${active ? (color || 'var(--accent)') : 'var(--border)'}`,
+        background: active ? (color ? `${color}22` : 'var(--chip-accent-bg)') : 'var(--bg2)',
+        color: active ? (color || 'var(--accent)') : 'var(--text2)',
+      }}
+    >
       {label}
     </button>
   )

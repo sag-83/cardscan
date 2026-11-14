@@ -48,8 +48,10 @@ import { planItinerary } from '../../lib/itineraryPlanner'
 import { planRoadTrip } from '../../lib/roadTripPlanner'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { saveContactToDB } from '../../lib/supabase'
+import { useIsDesktop } from '../../hooks/useIsDesktop'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
+import { TripMapPanel, type TripMapFilter, type TripMapPick } from '../TripMapPanel'
 import { TripHistoryPanel } from './TripHistoryPanel'
 import {
   buildMapsLinks,
@@ -174,6 +176,7 @@ interface RoadDest {
 }
 
 export function TripScreen() {
+  const isDesktop = useIsDesktop()
   const contacts = useStore((s) => s.contacts)
   const callLogs = useStore((s) => s.callLogs)
   const tripLogs = useStore((s) => s.tripLogs)
@@ -215,6 +218,8 @@ export function TripScreen() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [itineraryDayProgress, setItineraryDayProgress] = useState<{ day: number; total: number } | null>(null)
   const [roadStatus, setRoadStatus] = useState('')
+  const [mapExpanded, setMapExpanded] = useState(false)
+  const [mapFilter, setMapFilter] = useState<TripMapFilter>('all')
 
   const [working, setWorking] = useState(false)
   const [progress, setProgress] = useState<TripProgress | null>(null)
@@ -629,8 +634,67 @@ export function TripScreen() {
     return !loggedVisited.has(c.id) && !c.visited
   }).length
 
+  const highlightIds = useMemo(() => {
+    const ids = new Set<string>()
+    plan?.stops.forEach((s) => ids.add(s.contact.id))
+    savedItinerary?.days.forEach((d) => d.stops.forEach((s) => ids.add(s.contactId)))
+    return ids
+  }, [plan, savedItinerary])
+
+  const pickDestination = (pick: TripMapPick) => {
+    setPlanMode('road')
+    setRoadDest({
+      label: pick.label,
+      point: pick.point,
+      contactId: pick.contactId,
+    })
+    setSetupOpen(true)
+    showToast('Destination set from map — adjust stopovers below, then Build road trip')
+  }
+
+  const pickStart = (pick: TripMapPick) => {
+    patch({ startMode: 'place' })
+    setStartPlace({ label: pick.label, point: pick.point })
+    setSetupOpen(true)
+    showToast('Start set from map')
+  }
+
   return (
-    <div style={{ paddingBottom: 24 }}>
+    <div style={{
+      paddingBottom: isDesktop ? 0 : 24,
+      display: isDesktop && screenTab === 'plan' ? 'flex' : undefined,
+      flexDirection: isDesktop && screenTab === 'plan' ? 'row' : undefined,
+      alignItems: isDesktop && screenTab === 'plan' ? 'stretch' : undefined,
+      minHeight: isDesktop && screenTab === 'plan' ? 'calc(100dvh - 56px)' : undefined,
+    }}>
+      <div style={
+        screenTab !== 'plan'
+          ? { display: 'none' }
+          : isDesktop
+            ? { width: '52%', flexShrink: 0, minHeight: 0, position: 'sticky', top: 0, height: 'calc(100dvh - 56px)' }
+            : undefined
+      }>
+        <TripMapPanel
+          contacts={contacts}
+          expanded={mapExpanded}
+          onToggleExpand={() => setMapExpanded((v) => !v)}
+          onOpenContact={setDetailContactId}
+          onPickDestination={pickDestination}
+          onPickStart={pickStart}
+          highlightIds={highlightIds}
+          filter={mapFilter}
+          onFilterChange={setMapFilter}
+          fill={isDesktop}
+          active={screenTab === 'plan'}
+        />
+      </div>
+
+      <div style={{
+        flex: isDesktop && screenTab === 'plan' ? 1 : undefined,
+        minWidth: 0,
+        overflowY: isDesktop && screenTab === 'plan' ? 'auto' : undefined,
+        maxHeight: isDesktop && screenTab === 'plan' ? 'calc(100dvh - 56px)' : undefined,
+      }}>
       <div style={{
         display: 'flex', gap: 6, padding: '12px 16px 0',
       }}>
@@ -666,6 +730,16 @@ export function TripScreen() {
         />
       ) : (
       <>
+      <div style={{
+        margin: '10px 16px 0', padding: '10px 12px', borderRadius: 12,
+        background: 'var(--bg3)', border: '1px solid var(--border2)',
+        fontSize: 12, color: 'var(--text3)', lineHeight: 1.45,
+      }}>
+        Tap a map pin → <span style={{ fontWeight: 750, color: 'var(--text2)' }}>Set destination</span> or
+        {' '}<span style={{ fontWeight: 750, color: 'var(--text2)' }}>Start here</span>, then build the trip below.
+        Expand the map for a full-screen view. Planned stops highlight in blue.
+      </div>
+
       {progressStats && (
         <TerritoryBanner
           progress={progressStats}
@@ -1168,6 +1242,7 @@ export function TripScreen() {
       )}
       </>
       )}
+      </div>
     </div>
   )
 }

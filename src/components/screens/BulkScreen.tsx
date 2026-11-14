@@ -161,10 +161,10 @@ export function BulkScreen() {
           <MapPin className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
           Map tips
         </div>
-        Tap <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Show on map</span> for green/orange
-        pins in the app. For Google Maps itself: on a computer open google.com/mymaps → Create map →
-        Import the My Maps CSV twice (filter Category = Customer, then Non-customer) as two layers with
-        different pin colors → phone: Maps → Saved → Maps.
+        Plan trips from the map on the <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Trips</span> tab
+        (pick pins as start/destination). Here, <span style={{ fontWeight: 700, color: 'var(--text2)' }}>Show on map</span> is
+        view-only. For Google My Maps on a computer: google.com/mymaps → Create map → Import the My Maps CSV
+        twice (Category = Customer, then Non-customer) as two layers → phone: Maps → Saved → Maps.
       </div>
 
       <div style={{

@@ -7,14 +7,17 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
+  Moon,
   Navigation,
   Flag,
   Plus,
   Search,
+  Sun,
   X,
 } from 'lucide-react'
 import type { Contact } from '../types/contact'
 import { useStore } from '../store/useStore'
+import { useTheme } from '../hooks/useTheme'
 import {
   googleMapsSearchUrl,
   resolveCustomerMapPins,
@@ -31,6 +34,17 @@ const HIGHLIGHT_COLOR = '#007aff'
 const START_COLOR = '#30d158'
 const END_COLOR = '#ff453a'
 const VIA_COLOR = '#bf5af2'
+
+/** Distinct colors per itinerary day drawn on the map. */
+export const TRIP_DAY_COLORS = [
+  '#007aff', '#ff9500', '#34c759', '#af52de', '#ff2d55', '#5ac8fa', '#ffcc00', '#ff3b30',
+]
+
+export interface TripMapDayRoute {
+  dayIndex: number
+  label: string
+  contactIds: string[]
+}
 
 export interface TripMapPick {
   label: string
@@ -65,6 +79,8 @@ interface Props {
   active?: boolean
   /** Phone Trips: thinner chrome so the map itself gets ~half the screen. */
   compact?: boolean
+  /** Planned multi-day routes — colored polylines + day badges on the map. */
+  dayRoutes?: TripMapDayRoute[]
 }
 
 function toPick(pin: CustomerMapPin): TripMapPick {
@@ -93,10 +109,14 @@ export function TripMapPanel({
   fill = false,
   active = true,
   compact = false,
+  dayRoutes = [],
 }: Props) {
+  const { theme, toggle: toggleTheme } = useTheme()
   const mapEl = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
+  const routeLayerRef = useRef<L.LayerGroup | null>(null)
+  const zoomCtrlRef = useRef<L.Control.Zoom | null>(null)
   const fittedRef = useRef(false)
   const contactsRef = useRef(contacts)
   contactsRef.current = contacts
@@ -201,8 +221,10 @@ export function TripMapPanel({
 
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return
+    // No built-in zoom — we place it bottom-right on desktop, hide on phone
+    // (pinch-to-zoom) so it never covers the search field.
     const map = L.map(mapEl.current, {
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: true,
     }).setView([39.5, -98.35], 4)
 
@@ -212,6 +234,7 @@ export function TripMapPanel({
     }).addTo(map)
 
     layerRef.current = L.layerGroup().addTo(map)
+    routeLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
     const t = window.setTimeout(() => map.invalidateSize(), 80)
     return () => {
@@ -219,8 +242,23 @@ export function TripMapPanel({
       map.remove()
       mapRef.current = null
       layerRef.current = null
+      routeLayerRef.current = null
+      zoomCtrlRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (zoomCtrlRef.current) {
+      map.removeControl(zoomCtrlRef.current)
+      zoomCtrlRef.current = null
+    }
+    if (!compact) {
+      zoomCtrlRef.current = L.control.zoom({ position: 'bottomright' })
+      zoomCtrlRef.current.addTo(map)
+    }
+  }, [compact, active])
 
   useEffect(() => {
     const map = mapRef.current
@@ -228,6 +266,17 @@ export function TripMapPanel({
     const t = window.setTimeout(() => map.invalidateSize(), 180)
     return () => window.clearTimeout(t)
   }, [expanded, fill, active, compact, detailContactId])
+
+  const dayColorByContact = useMemo(() => {
+    const map = new Map<string, { dayIndex: number; color: string; label: string }>()
+    for (const day of dayRoutes) {
+      const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
+      for (const id of day.contactIds) {
+        if (!map.has(id)) map.set(id, { dayIndex: day.dayIndex, color, label: day.label })
+      }
+    }
+    return map
+  }, [dayRoutes])
 
   useEffect(() => {
     const map = mapRef.current
@@ -244,18 +293,38 @@ export function TripMapPanel({
       const isEnd = routeMarks?.endId === pin.contactId
       const isVia = viaSet.has(pin.contactId)
       const highlighted = highlightIds?.has(pin.contactId)
-      const ring = isStart ? START_COLOR : isEnd ? END_COLOR : isVia ? VIA_COLOR : highlighted ? HIGHLIGHT_COLOR : '#fff'
+      const dayMeta = dayColorByContact.get(pin.contactId)
+      const ring = isStart
+        ? START_COLOR
+        : isEnd
+          ? END_COLOR
+          : isVia
+            ? VIA_COLOR
+            : dayMeta
+              ? dayMeta.color
+              : highlighted
+                ? HIGHLIGHT_COLOR
+                : '#fff'
+      const fill = dayMeta
+        ? dayMeta.color
+        : pin.kind === 'customer' ? CUSTOMER_COLOR : PROSPECT_COLOR
       const marker = L.circleMarker([pin.point.lat, pin.point.lng], {
-        radius: isStart || isEnd || isVia || highlighted ? 10 : pin.kind === 'customer' ? 8 : 7,
+        radius: isStart || isEnd || isVia || dayMeta || highlighted ? 10 : pin.kind === 'customer' ? 8 : 7,
         color: ring,
-        weight: isStart || isEnd || isVia || highlighted ? 2.5 : 1.5,
-        fillColor: pin.kind === 'customer' ? CUSTOMER_COLOR : PROSPECT_COLOR,
+        weight: isStart || isEnd || isVia || dayMeta || highlighted ? 2.5 : 1.5,
+        fillColor: fill,
         fillOpacity: pin.approximate ? 0.7 : 0.95,
       })
-      marker.bindTooltip(
-        isStart ? `START · ${pin.label}` : isEnd ? `END · ${pin.label}` : isVia ? `STOP · ${pin.label}` : pin.label,
-        { direction: 'top', opacity: 0.95 },
-      )
+      const tip = isStart
+        ? `START · ${pin.label}`
+        : isEnd
+          ? `END · ${pin.label}`
+          : isVia
+            ? `STOP · ${pin.label}`
+            : dayMeta
+              ? `Day ${dayMeta.dayIndex} · ${pin.label}`
+              : pin.label
+      marker.bindTooltip(tip, { direction: 'top', opacity: 0.95 })
       marker.on('click', () => {
         const mode = tapModeRef.current
         const h = pickRef.current
@@ -292,7 +361,59 @@ export function TripMapPanel({
       fittedRef.current = true
     }
     window.setTimeout(() => map.invalidateSize(), 30)
-  }, [visible, highlightIds, routeMarks])
+  }, [visible, highlightIds, routeMarks, dayColorByContact])
+
+  // Draw colored day paths once pins exist (order follows itinerary stop list).
+  useEffect(() => {
+    const map = mapRef.current
+    const routeLayer = routeLayerRef.current
+    if (!map || !routeLayer) return
+    routeLayer.clearLayers()
+    if (!dayRoutes.length || !pins.length) return
+
+    const byId = new Map(pins.map((p) => [p.contactId, p]))
+    const routeBounds = L.latLngBounds([])
+    let drew = false
+
+    for (const day of dayRoutes) {
+      const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
+      const pts: L.LatLngExpression[] = []
+      for (const id of day.contactIds) {
+        const pin = byId.get(id)
+        if (!pin) continue
+        pts.push([pin.point.lat, pin.point.lng])
+        routeBounds.extend([pin.point.lat, pin.point.lng])
+      }
+      if (pts.length < 2) continue
+      drew = true
+      L.polyline(pts, {
+        color,
+        weight: 4,
+        opacity: 0.85,
+        lineJoin: 'round',
+      }).bindTooltip(day.label || `Day ${day.dayIndex}`, { sticky: true }).addTo(routeLayer)
+
+      // Day badge at the first stop of that day.
+      const first = pts[0] as [number, number]
+      L.marker(first, {
+        interactive: false,
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="
+            background:${color};color:#fff;font:800 10px/1 system-ui,sans-serif;
+            padding:4px 6px;border-radius:8px;border:1.5px solid #fff;
+            box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:nowrap;
+          ">D${day.dayIndex}</div>`,
+          iconSize: [28, 18],
+          iconAnchor: [14, 22],
+        }),
+      }).addTo(routeLayer)
+    }
+
+    if (drew && routeBounds.isValid()) {
+      map.fitBounds(routeBounds.pad(0.18), { maxZoom: 11, animate: true })
+    }
+  }, [dayRoutes, pins])
 
   const applyPick = (pin: CustomerMapPin, role: 'start' | 'end' | 'via') => {
     const pick = toPick(pin)
@@ -349,6 +470,18 @@ export function TripMapPanel({
         }}>
           {statusText}
         </div>
+        {compact && (
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            style={{ ...iconBtnStyle, width: 28, height: 28 }}
+          >
+            {theme === 'dark'
+              ? <Sun className="size-3.5" aria-hidden />
+              : <Moon className="size-3.5" aria-hidden />}
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleExpand}
@@ -426,9 +559,9 @@ export function TripMapPanel({
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-        {/* Search floats on the map so the tile area stays large on phones. */}
+        {/* Search floats on the map. Zoom is bottom-right (desktop only). */}
         <div style={{
-          position: 'absolute', left: 8, right: compact ? 52 : 8, top: 8, zIndex: 550,
+          position: 'absolute', left: 8, right: 8, top: 8, zIndex: 550,
         }}>
           <div style={{ position: 'relative' }}>
             <Search

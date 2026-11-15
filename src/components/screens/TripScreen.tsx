@@ -53,7 +53,14 @@ import { saveContactToDB } from '../../lib/supabase'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { ConfirmTripVisitsModal } from '../modals/ConfirmTripVisitsModal'
-import { TripMapPanel, type TripMapFilter, type TripMapPick, type TripMapTapMode } from '../TripMapPanel'
+import {
+  TripMapPanel,
+  TRIP_DAY_COLORS,
+  type TripMapDayRoute,
+  type TripMapFilter,
+  type TripMapPick,
+  type TripMapTapMode,
+} from '../TripMapPanel'
 import { TripHistoryPanel } from './TripHistoryPanel'
 import {
   buildItineraryDayMapsLinks,
@@ -408,12 +415,16 @@ export function TripScreen() {
     return omit
   }
 
-  const run = async (overrides?: { reuseLast?: boolean; excluded?: string[] }) => {
-    if (working) return
+  const run = async (overrides?: { reuseLast?: boolean; excluded?: string[]; quiet?: boolean }) => {
+    const quiet = Boolean(overrides?.quiet || overrides?.reuseLast)
+    if (working && !quiet) return
+    // Quiet re-plans (e.g. remove a stop) abort the in-flight run instead of ignoring the tap.
+    if (working && quiet) abortRef.current?.abort()
+
     const excludedNow = overrides?.excluded ?? excluded
 
     setError('')
-    setWorking(true)
+    if (!quiet) setWorking(true)
     setProgress(null)
     setItineraryDayProgress(null)
 
@@ -646,7 +657,12 @@ export function TripScreen() {
   const removeStop = (id: string) => {
     const next = [...excluded, id]
     setExcluded(next)
-    void run({ reuseLast: true, excluded: next })
+    // Optimistic: drop the stop immediately so the trash tap feels instant.
+    setPlan((prev) => {
+      if (!prev) return prev
+      return { ...prev, stops: prev.stops.filter((s) => s.contact.id !== id) }
+    })
+    void run({ reuseLast: true, excluded: next, quiet: true })
   }
 
   const restoreRemoved = () => {
@@ -680,6 +696,24 @@ export function TripScreen() {
     savedItinerary?.days.forEach((d) => d.stops.forEach((s) => ids.add(s.contactId)))
     return ids
   }, [plan, savedItinerary])
+
+  const dayRoutes: TripMapDayRoute[] = useMemo(() => {
+    if (savedItinerary?.days.length) {
+      return savedItinerary.days.map((d) => ({
+        dayIndex: d.dayIndex,
+        label: d.title || `Day ${d.dayIndex}`,
+        contactIds: d.stops.map((s) => s.contactId),
+      }))
+    }
+    if (plan?.stops.length) {
+      return [{
+        dayIndex: 1,
+        label: 'Today',
+        contactIds: plan.stops.map((s) => s.contact.id),
+      }]
+    }
+    return []
+  }, [savedItinerary, plan])
 
   const placeLabel = (pick: TripMapPick) => (
     pick.address ? `${pick.label} · ${pick.address}` : pick.label
@@ -811,6 +845,7 @@ export function TripScreen() {
           fill
           active={planChrome}
           compact={!isDesktop}
+          dayRoutes={dayRoutes}
         />
       </div>
 
@@ -1124,6 +1159,17 @@ export function TripScreen() {
                   label="Road trip"
                 />
               </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 4 }}>
+                {planMode === 'day' && (
+                  <>One day — best for a single city/radius: start → N nearest shops → end.</>
+                )}
+                {planMode === 'itinerary' && (
+                  <>Area days — stay in one territory for several days; each day peels a new cluster so you don’t repeat.</>
+                )}
+                {planMode === 'road' && (
+                  <>Road trip — drive city → city (VA, Charlotte, Atlanta…). Stopovers on the highway + explore days at each stop + optional return.</>
+                )}
+              </div>
               {planMode === 'itinerary' && (
                 <>
                   <SliderRow
@@ -1191,13 +1237,30 @@ export function TripScreen() {
                             type="button"
                             aria-label="Remove leg"
                             disabled={roadLegs.length <= 1}
+                            onPointerUp={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (roadLegs.length <= 1) return
+                              setRoadLegs((prev) => prev.filter((l) => l.id !== leg.id))
+                              if (roadActiveLegId === leg.id) setRoadActiveLegId(null)
+                              if (mapEndContactId === leg.dest.contactId) {
+                                setMapEndContactId(null)
+                              }
+                            }}
                             onClick={(e) => {
+                              e.preventDefault()
                               e.stopPropagation()
                               if (roadLegs.length <= 1) return
                               setRoadLegs((prev) => prev.filter((l) => l.id !== leg.id))
                               if (roadActiveLegId === leg.id) setRoadActiveLegId(null)
                             }}
-                            style={{ ...legIconBtn, opacity: roadLegs.length <= 1 ? 0.35 : 1, color: 'var(--danger)' }}
+                            style={{
+                              ...legIconBtn,
+                              width: 34, height: 34,
+                              opacity: roadLegs.length <= 1 ? 0.35 : 1,
+                              color: 'var(--danger)',
+                              touchAction: 'manipulation',
+                            }}
                           >
                             <Trash2 className="size-3.5" aria-hidden />
                           </button>
@@ -1634,21 +1697,52 @@ function ItineraryView({
           </div>
           <button
             type="button"
-            onClick={onDismiss}
+            onPointerUp={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onDismiss()
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onDismiss()
+            }}
             aria-label="Dismiss itinerary"
             style={{
               border: 'none', background: 'var(--bg3)', borderRadius: 99,
-              width: 30, height: 30, cursor: 'pointer', color: 'var(--text3)',
+              width: 40, height: 40, cursor: 'pointer', color: 'var(--text3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, touchAction: 'manipulation',
             }}
           >
-            <X className="size-3.5" aria-hidden />
+            <X className="size-4" aria-hidden />
           </button>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, lineHeight: 1.45 }}>
-          Open Maps for each day below (split into legs when Google’s waypoint limit hits).
-          Tap a day for the full stop list and to log visits so later days don’t repeat them.
+          Colors on the map match each day below. Open Maps uses shop names.
+          Tap a day for the stop list; log visits so later days don’t repeat them.
         </div>
+        {itinerary.days.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+            {itinerary.days.map((day) => {
+              const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
+              return (
+                <span
+                  key={day.dayIndex}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '4px 8px', borderRadius: 99, fontSize: 11, fontWeight: 750,
+                    background: 'var(--bg3)', color: 'var(--text2)',
+                    border: `1.5px solid ${color}`,
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: 99, background: color }} />
+                  Day {day.dayIndex}
+                </span>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1675,8 +1769,8 @@ function ItineraryView({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{
                     width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                    background: day.kind === 'travel' ? 'var(--chip-warning-bg, var(--chip-accent-bg))' : 'var(--chip-accent-bg)',
-                    color: day.kind === 'travel' ? 'var(--chip-warning-fg, var(--accent))' : 'var(--accent)',
+                    background: TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length],
+                    color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 13, fontWeight: 850,
                   }}>
@@ -1999,15 +2093,25 @@ function StopRow({ stop, index, busy, onOpen, onRemove }: {
 
       <button
         type="button"
-        onClick={onRemove}
+        onPointerUp={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!busy) onRemove()
+        }}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!busy) onRemove()
+        }}
         disabled={busy}
         title="Remove this stop and re-plan"
         aria-label={`Remove ${name} from the route`}
         style={{
-          width: 32, height: 32, borderRadius: 10, flexShrink: 0, alignSelf: 'flex-start',
-          border: 'none', background: 'var(--bg3)', color: 'var(--text3)',
+          width: 40, height: 40, borderRadius: 10, flexShrink: 0, alignSelf: 'flex-start',
+          border: 'none', background: 'var(--bg3)', color: 'var(--danger, var(--text3))',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+          touchAction: 'manipulation',
         }}
       >
         <Trash2 className="size-4" aria-hidden />

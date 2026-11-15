@@ -499,15 +499,18 @@ export function stopAddressText(stop: TripStop): string {
  * name and town, since its coordinates are only a city centre and would send
  * him to the wrong place.
  */
+/** Prefer "Shop Name, address" so Google Maps shows names, not bare coords. */
 function mapsQuery(stop: TripStop): string {
-  if (!stop.approximate) {
-    const address = stopAddressText(stop)
-    if (address) return address
-    return `${stop.point.lat},${stop.point.lng}`
-  }
-  const name = stop.contact.company || stop.contact.name
+  const name = (stop.contact.company || stop.contact.name || '').trim()
+  const address = stopAddressText(stop)
   const place = [stop.contact.city, stop.contact.state].filter(Boolean).join(', ')
-  return [name, place].filter(Boolean).join(', ') || `${stop.point.lat},${stop.point.lng}`
+
+  if (name && address) return `${name}, ${address}`
+  if (name && place) return `${name}, ${place}`
+  if (address) return address
+  if (name) return name
+  if (!stop.approximate) return `${stop.point.lat},${stop.point.lng}`
+  return place || `${stop.point.lat},${stop.point.lng}`
 }
 
 export interface MapsLink {
@@ -551,7 +554,7 @@ export function buildMapsLinks(plan: TripPlan): MapsLink[] {
   if (plan.stops.length === 0) return []
 
   const places = [
-    { label: plan.origin.label, query: `${plan.origin.point.lat},${plan.origin.point.lng}` },
+    { label: plan.origin.label, query: plan.origin.label || `${plan.origin.point.lat},${plan.origin.point.lng}` },
     ...plan.stops.map((stop, index) => ({
       label: `${index + 1}. ${stop.contact.company || stop.contact.name || 'Stop'}`,
       query: mapsQuery(stop),
@@ -560,7 +563,7 @@ export function buildMapsLinks(plan: TripPlan): MapsLink[] {
   if (plan.end) {
     places.push({
       label: plan.endsAtStart ? `Back to ${plan.end.label}` : plan.end.label,
-      query: `${plan.end.point.lat},${plan.end.point.lng}`,
+      query: plan.end.label || `${plan.end.point.lat},${plan.end.point.lng}`,
     })
   }
 
@@ -576,12 +579,18 @@ export function buildItineraryDayMapsLinks(day: {
   if (!day.stops.length) return []
 
   const stopPlace = (s: (typeof day.stops)[number], index: number) => {
-    const name = s.company || s.name || `Stop ${index + 1}`
+    const name = (s.company || s.name || `Stop ${index + 1}`).trim()
     const address = [s.address, s.city, s.state].filter(Boolean).join(', ')
     const place = [s.city, s.state].filter(Boolean).join(', ')
+    // Always lead with the shop name so Maps labels the stop clearly.
+    const query = name && address
+      ? `${name}, ${address}`
+      : name && place
+        ? `${name}, ${place}`
+        : address || name
     return {
       label: `${index + 1}. ${name}`,
-      query: address || [name, place].filter(Boolean).join(', ') || name,
+      query,
     }
   }
 

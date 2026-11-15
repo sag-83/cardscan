@@ -13,7 +13,7 @@ export function Header() {
   const activeScreen = useStore((s) => s.activeScreen)
   const isDesktop = useIsDesktop()
 
-  // Trips on phone: reclaim vertical space for the map — no title / QR / count.
+  // Trips on phone: no header at all — theme lives in the map toolbar.
   const tripsCompact = activeScreen === 'trips' && !isDesktop
 
   useEffect(() => {
@@ -25,35 +25,7 @@ export function Header() {
     }
   }, [showQr])
 
-  if (tripsCompact) {
-    return (
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          padding: '4px 10px',
-          background: 'var(--bg2)',
-          borderBottom: '1px solid var(--border2)',
-          flexShrink: 0,
-          zIndex: 50,
-        }}
-      >
-        <button
-          onClick={toggle}
-          style={{
-            width: 26, height: 26, borderRadius: '50%', border: 'none',
-            background: 'var(--bg3)', color: 'var(--text3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', flexShrink: 0,
-          }}
-          aria-label="Toggle theme"
-        >
-          {theme === 'dark' ? <Sun size={14} strokeWidth={2.25} /> : <Moon size={14} strokeWidth={2.25} />}
-        </button>
-      </header>
-    )
-  }
+  if (tripsCompact) return null
 
   return (
     <header

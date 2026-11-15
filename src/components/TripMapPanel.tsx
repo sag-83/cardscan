@@ -414,6 +414,7 @@ export function TripMapPanel({
     const routeBounds = L.latLngBounds([])
     let drew = false
     const fitKey = dayRoutes.map((d) => `${d.dayIndex}:${d.contactIds.join(',')}`).join('|')
+    let prevDayLast: L.LatLngExpression | null = null
 
     for (const day of dayRoutes) {
       const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
@@ -424,14 +425,31 @@ export function TripMapPanel({
         pts.push([pin.point.lat, pin.point.lng])
         routeBounds.extend([pin.point.lat, pin.point.lng])
       }
-      if (pts.length < 2) continue
-      drew = true
-      L.polyline(pts, {
-        color,
-        weight: 4,
-        opacity: 0.85,
-        lineJoin: 'round',
-      }).bindTooltip(day.label || `Day ${day.dayIndex}`, { sticky: true }).addTo(routeLayer)
+      if (!pts.length) continue
+
+      // Dashed link from yesterday's last stop → today's first (whole trip connected).
+      if (prevDayLast && pts[0]) {
+        L.polyline([prevDayLast, pts[0]], {
+          color: '#8e8e93',
+          weight: 3,
+          opacity: 0.55,
+          dashArray: '8 10',
+          lineJoin: 'round',
+        }).bindTooltip('Overnight → next day', { sticky: true }).addTo(routeLayer)
+        drew = true
+      }
+
+      if (pts.length >= 2) {
+        drew = true
+        L.polyline(pts, {
+          color,
+          weight: 4,
+          opacity: 0.85,
+          lineJoin: 'round',
+        }).bindTooltip(day.label || `Day ${day.dayIndex}`, { sticky: true }).addTo(routeLayer)
+      } else {
+        drew = true
+      }
 
       const first = pts[0] as [number, number]
       L.marker(first, {
@@ -447,6 +465,8 @@ export function TripMapPanel({
           iconAnchor: [14, 22],
         }),
       }).addTo(routeLayer)
+
+      prevDayLast = pts[pts.length - 1]
     }
 
     // Fit only when the planned route itself changes — not on every pin refine.

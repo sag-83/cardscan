@@ -172,8 +172,8 @@ function shortLabel(label: string): string {
 }
 
 /**
- * Density of shops within `radiusMiles` of a seed — used to prefer jewelry
- * clusters over lonely highway exits.
+ * Density of shops within `radiusMiles` of a seed — prefer jewelry packs
+ * over lonely highway exits (only inside today's corridor stretch).
  */
 function clusterDensity(seed: Located, pool: Located[], radiusMiles: number): number {
   let n = 0
@@ -184,28 +184,35 @@ function clusterDensity(seed: Located, pool: Located[], radiusMiles: number): nu
 }
 
 /**
- * Grow a tight cluster up to `limit` shops: seed the densest pocket near the
- * corridor, then repeatedly add the shop that adds the least travel to the
- * cluster (cheapest insertion into the set). Maximizes stops / mile.
+ * Pick up to `limit` shops inside today's corridor band.
+ *
+ * Like Google Maps A→B (progress is sacred) + orienteering (max prize / min
+ * detour): stay in this day's stretch of the highway, prefer a tight cluster
+ * on/near that stretch, never wander back toward the start.
  */
-function selectDenseCluster(
+function selectBandCluster(
   candidates: Located[],
   origin: GeoPoint,
   limit: number,
+  targetAlong: number,
 ): Located[] {
   if (!candidates.length || limit <= 0) return []
-  if (candidates.length <= limit) return orderLocatedStops(origin, candidates)
+  if (candidates.length <= limit) {
+    return orderLocatedTowardEnd(origin, candidates)
+  }
 
-  const RADIUS = 14
+  const RADIUS = 12
   let bestSeed = candidates[0]
   let bestScore = -Infinity
   for (const seed of candidates) {
     const dens = clusterDensity(seed, candidates, RADIUS)
-    // Density first, then priority, then stay close to the highway and to today.
-    const score = dens * 12
+    // Progress toward today's band midpoint beats a denser cluster behind us.
+    const alongPenalty = Math.abs(seed.alongMiles - targetAlong) * 0.55
+    const score = dens * 8
       + seed.score * 2
-      - seed.detourMiles * 0.4
-      - distanceBetween(origin, seed.point) * 0.08
+      - seed.detourMiles * 0.5
+      - alongPenalty
+      - distanceBetween(origin, seed.point) * 0.05
     if (score > bestScore) {
       bestScore = score
       bestSeed = seed
@@ -226,8 +233,13 @@ function selectDenseCluster(
       const c = remaining[i]
       const near = Math.min(...picked.map((p) => distanceBetween(p.point, c.point)))
       const toCentroid = distanceBetween(centroid, c.point)
-      // Prefer near-cluster adds; lightly punish far detours off the corridor.
-      const cost = near * 0.65 + toCentroid * 0.35 + c.detourMiles * 0.25 - c.score * 0.4
+      const alongDrift = Math.abs(c.alongMiles - targetAlong) * 0.4
+      // Cheap add to the cluster, still anchored to today's corridor mile.
+      const cost = near * 0.55
+        + toCentroid * 0.25
+        + c.detourMiles * 0.3
+        + alongDrift
+        - c.score * 0.35
       if (cost < bestCost) {
         bestCost = cost
         bestIdx = i
@@ -236,16 +248,30 @@ function selectDenseCluster(
     picked.push(remaining.splice(bestIdx, 1)[0])
   }
 
-  return orderLocatedStops(origin, picked)
+  return orderLocatedTowardEnd(origin, picked)
 }
 
-/** TSP order for a day's located stops (origin → stops). */
-function orderLocatedStops(origin: GeoPoint, items: Located[]): Located[] {
+/**
+ * TSP order for the day, but always finish at the stop furthest along the
+ * A→B corridor — so tomorrow morning is closer to the destination (connected trip).
+ */
+function orderLocatedTowardEnd(origin: GeoPoint, items: Located[]): Located[] {
   if (items.length <= 1) return items
 
-  const n = items.length
-  const size = n + 1
-  const pts: GeoPoint[] = [origin, ...items.map((i) => i.point)]
+  // Furthest along the highway becomes the day's "end" (pinned in the TSP).
+  let endItem = items[0]
+  for (const it of items) {
+    if (it.alongMiles > endItem.alongMiles) endItem = it
+  }
+
+  const others = items.filter((i) => i.contact.id !== endItem.contact.id)
+  if (!others.length) return [endItem]
+
+  // Matrix: 0 = morning origin, 1..n = middle stops, n+1 = day-end (furthest along).
+  const middle = others
+  const n = middle.length
+  const size = n + 2
+  const pts: GeoPoint[] = [origin, ...middle.map((i) => i.point), endItem.point]
   const matrix: CostMatrix = Array.from({ length: size }, () => Array(size).fill(0))
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
@@ -254,25 +280,24 @@ function orderLocatedStops(origin: GeoPoint, items: Located[]): Located[] {
     }
   }
 
+  const endIndex = size - 1
   const { order } = planRoute(matrix, {
-    candidates: items.map((_, i) => i + 1),
+    candidates: middle.map((_, i) => i + 1),
     limit: n,
-    endIndex: null,
+    endIndex,
   })
-  return order.slice(1).map((idx) => items[idx - 1]).filter(Boolean)
+
+  // order is [0, mid…]; append the pinned end stop.
+  const orderedMids = order.slice(1).map((idx) => middle[idx - 1]).filter(Boolean)
+  return [...orderedMids, endItem]
 }
 
 /**
  * Build an N-day itinerary that progresses from start toward end along the road.
  *
- * Algorithm (max shops, min travel):
- *  1. Shortlist shops near the A→B driving corridor
- *  2. Each day: expand a window ahead of the cursor until ≥ shops/day candidates
- *     exist (so later days still fill the quota when the corridor has shops)
- *  3. Inside the window, grow the densest geographic cluster (set cover / cheapest
- *     insertion) up to shops/day — prefer packs of stores over lonely exits
- *  4. Order that day's stops with cheapest-insertion + 2-opt TSP
- *  5. Chain: tomorrow starts where today ended
+ * Backbone = Google-Maps-style A→B progress (each day owns the next stretch).
+ * Inside a stretch = pack the densest nearby shops with a short TSP tour.
+ * Clusters never pull the trip backward or skip a whole region to jump to B.
  */
 export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   const dayCount = Math.max(1, Math.min(21, Math.round(req.dayCount)))
@@ -326,7 +351,6 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
 
     const { miles, alongMiles } = distanceToPolyline(point, path)
     if (miles > detour) continue
-    // Allow shops near the start (was skipping first 5 mi and starving day 1 density).
     if (alongMiles < 0.5) continue
 
     located.push({
@@ -342,7 +366,10 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
     `Using ${located.length} shops along the corridor (skipped ${Math.max(0, pool.length - located.length)} far away)`,
   )
 
+  // Equal corridor slices — day 1 owns the first stretch, day N the last.
+  // Soft edges let a thin band borrow a little, but never steal tomorrow's region.
   const band = Math.max(1, totalMiles / dayCount)
+  const soft = band * 0.2
   const days: TripItinerary['days'] = []
   const remaining = new Map(located.map((c) => [c.contact.id, c]))
 
@@ -353,78 +380,76 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   for (let d = 0; d < dayCount; d++) {
     throwIfAborted(req.signal)
     const isLast = d === dayCount - 1
-    const daysLeft = dayCount - d
-    req.onProgress?.(`Planning day ${d + 1} of ${dayCount} · filling ${stopsPerDay} shops…`)
+    // Hard progressive bands along A→B (the Google Maps backbone).
+    const bandLo = d * band
+    const bandHi = (d + 1) * band
+    const targetAlong = (bandLo + bandHi) / 2
+    // Soft pad for sparse stretches; last day takes everything left to the end.
+    const windowLo = Math.max(0, bandLo - soft)
+    const windowHi = isLast ? totalMiles + 1 : bandHi + soft
 
-    const available = [...remaining.values()].filter((c) => {
+    req.onProgress?.(
+      `Day ${d + 1}/${dayCount} · mile ${Math.round(bandLo)}–${Math.round(bandHi)} of the drive…`,
+    )
+
+    let poolForDay = [...remaining.values()].filter((c) => {
       if (c.contact.id === req.end.contactId && !isLast) return false
-      return c.alongMiles >= cursorAlong - 8
-    }).sort((a, b) => a.alongMiles - b.alongMiles || a.detourMiles - b.detourMiles)
+      // Must be in today's stretch (or just ahead of where we slept if behind band).
+      if (c.alongMiles < Math.min(cursorAlong - 5, windowLo)) return false
+      if (c.alongMiles > windowHi) return false
+      // Prefer not to revisit miles we already passed (stay progressive).
+      if (!isLast && c.alongMiles < bandLo - soft * 1.5 && c.alongMiles < cursorAlong - 2) {
+        return false
+      }
+      return true
+    })
 
-    if (!available.length) {
-      if (!isLast) continue
-      break
-    }
-
-    // Expand the along-corridor window until we can fill the day's quota
-    // (or we hit the end / must leave stock for later days).
-    let windowHi = cursorAlong + band * (isLast ? 99 : 1.35)
-    let window = available.filter((c) => c.alongMiles <= windowHi)
-
-    const reserveForLater = isLast ? 0 : Math.max(0, (daysLeft - 1) * Math.min(3, stopsPerDay))
-    while (
-      window.length < stopsPerDay + reserveForLater
-      && windowHi < totalMiles + 1
-      && !isLast
-    ) {
-      windowHi += band * 0.45
-      window = available.filter((c) => c.alongMiles <= windowHi)
-    }
-
-    // Don't hoard: if the window is huge but we need shops, take the densest
-    // slice — still leave a fair share for remaining days when possible.
-    let poolForDay = window
-    if (!isLast && window.length > stopsPerDay) {
-      const keepForLater = Math.min(
-        window.length - stopsPerDay,
-        Math.max(0, (daysLeft - 1) * stopsPerDay),
-      )
-      // Prefer shops closer to the cursor for today; leave farther ones for later.
-      if (keepForLater > 0 && window.length - keepForLater >= Math.min(stopsPerDay, window.length)) {
-        poolForDay = window.slice(0, window.length - keepForLater)
-        // But never leave today under-quota if shops exist in the window.
-        if (poolForDay.length < stopsPerDay) {
-          poolForDay = window.slice(0, Math.max(stopsPerDay, window.length - keepForLater))
-        }
+    // Sparse band: gently widen toward B only (never back toward A).
+    if (!isLast && poolForDay.length < stopsPerDay) {
+      let hi = windowHi
+      while (poolForDay.length < stopsPerDay && hi < bandHi + band * 0.55) {
+        hi += band * 0.15
+        poolForDay = [...remaining.values()].filter((c) => {
+          if (c.contact.id === req.end.contactId) return false
+          return c.alongMiles >= Math.min(cursorAlong - 5, windowLo)
+            && c.alongMiles <= hi
+            && c.alongMiles >= bandLo - soft * 1.5
+        })
       }
     }
 
-    if (isLast) poolForDay = available
-
-    let picked = selectDenseCluster(poolForDay, cursorPoint, stopsPerDay)
-
-    // Still short? Pull any remaining ahead shops (ignore reserve) to hit quota.
-    if (picked.length < stopsPerDay) {
-      const pickedIds = new Set(picked.map((p) => p.contact.id))
-      const extra = available.filter((c) => !pickedIds.has(c.contact.id))
-      const filled = selectDenseCluster(
-        [...picked, ...extra],
-        cursorPoint,
-        stopsPerDay,
-      )
-      picked = filled
+    if (isLast) {
+      poolForDay = [...remaining.values()].filter((c) => (
+        c.alongMiles >= Math.min(cursorAlong - 5, windowLo)
+      ))
     }
 
-    // Last day: force destination shop as final stop.
+    poolForDay.sort((a, b) => a.alongMiles - b.alongMiles || a.detourMiles - b.detourMiles)
+
+    if (!poolForDay.length) {
+      if (!isLast) {
+        // Still advance the cursor so we don't stall in PA forever.
+        cursorAlong = Math.max(cursorAlong, bandHi)
+        continue
+      }
+      break
+    }
+
+    let picked = selectBandCluster(poolForDay, cursorPoint, stopsPerDay, targetAlong)
+
+    // Last day: arrive at the destination shop.
     if (isLast && req.end.contactId) {
       const dest = remaining.get(req.end.contactId)
         ?? located.find((c) => c.contact.id === req.end.contactId)
       if (dest) {
         const without = picked.filter((p) => p.contact.id !== dest.contact.id)
-        while (without.length >= stopsPerDay) without.shift()
+        while (without.length >= stopsPerDay) {
+          // Drop the shop least along / furthest from dest area.
+          without.sort((a, b) => a.alongMiles - b.alongMiles)
+          without.shift()
+        }
         without.push(dest)
-        picked = orderLocatedStops(cursorPoint, without)
-        // Keep dest last even after TSP.
+        picked = orderLocatedTowardEnd(cursorPoint, without)
         const destIdx = picked.findIndex((p) => p.contact.id === dest.contact.id)
         if (destIdx >= 0 && destIdx !== picked.length - 1) {
           const [dStop] = picked.splice(destIdx, 1)
@@ -434,6 +459,7 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
     }
 
     if (!picked.length) {
+      cursorAlong = Math.max(cursorAlong, bandHi)
       if (!isLast) continue
       break
     }
@@ -467,7 +493,8 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
       visitMinutes: picked.length * Math.max(0, req.minutesPerStop),
     })
 
-    cursorAlong = Math.max(cursorAlong, lastStop.alongMiles)
+    // Tomorrow starts further along A→B — never teleport, never drift backward.
+    cursorAlong = Math.max(lastStop.alongMiles, bandHi * 0.85, cursorAlong)
     cursorPoint = lastStop.point
     cursorLabel = lastStop.contact.company || lastStop.contact.name || endLabel
   }

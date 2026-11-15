@@ -172,7 +172,107 @@ function shortLabel(label: string): string {
 }
 
 /**
+ * Density of shops within `radiusMiles` of a seed — used to prefer jewelry
+ * clusters over lonely highway exits.
+ */
+function clusterDensity(seed: Located, pool: Located[], radiusMiles: number): number {
+  let n = 0
+  for (const o of pool) {
+    if (distanceBetween(seed.point, o.point) <= radiusMiles) n++
+  }
+  return n
+}
+
+/**
+ * Grow a tight cluster up to `limit` shops: seed the densest pocket near the
+ * corridor, then repeatedly add the shop that adds the least travel to the
+ * cluster (cheapest insertion into the set). Maximizes stops / mile.
+ */
+function selectDenseCluster(
+  candidates: Located[],
+  origin: GeoPoint,
+  limit: number,
+): Located[] {
+  if (!candidates.length || limit <= 0) return []
+  if (candidates.length <= limit) return orderLocatedStops(origin, candidates)
+
+  const RADIUS = 14
+  let bestSeed = candidates[0]
+  let bestScore = -Infinity
+  for (const seed of candidates) {
+    const dens = clusterDensity(seed, candidates, RADIUS)
+    // Density first, then priority, then stay close to the highway and to today.
+    const score = dens * 12
+      + seed.score * 2
+      - seed.detourMiles * 0.4
+      - distanceBetween(origin, seed.point) * 0.08
+    if (score > bestScore) {
+      bestScore = score
+      bestSeed = seed
+    }
+  }
+
+  const picked: Located[] = [bestSeed]
+  const remaining = candidates.filter((c) => c.contact.id !== bestSeed.contact.id)
+
+  while (picked.length < limit && remaining.length) {
+    const centroid = {
+      lat: picked.reduce((s, p) => s + p.point.lat, 0) / picked.length,
+      lng: picked.reduce((s, p) => s + p.point.lng, 0) / picked.length,
+    }
+    let bestIdx = 0
+    let bestCost = Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i]
+      const near = Math.min(...picked.map((p) => distanceBetween(p.point, c.point)))
+      const toCentroid = distanceBetween(centroid, c.point)
+      // Prefer near-cluster adds; lightly punish far detours off the corridor.
+      const cost = near * 0.65 + toCentroid * 0.35 + c.detourMiles * 0.25 - c.score * 0.4
+      if (cost < bestCost) {
+        bestCost = cost
+        bestIdx = i
+      }
+    }
+    picked.push(remaining.splice(bestIdx, 1)[0])
+  }
+
+  return orderLocatedStops(origin, picked)
+}
+
+/** TSP order for a day's located stops (origin → stops). */
+function orderLocatedStops(origin: GeoPoint, items: Located[]): Located[] {
+  if (items.length <= 1) return items
+
+  const n = items.length
+  const size = n + 1
+  const pts: GeoPoint[] = [origin, ...items.map((i) => i.point)]
+  const matrix: CostMatrix = Array.from({ length: size }, () => Array(size).fill(0))
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      if (i === j) continue
+      matrix[i][j] = distanceBetween(pts[i], pts[j])
+    }
+  }
+
+  const { order } = planRoute(matrix, {
+    candidates: items.map((_, i) => i + 1),
+    limit: n,
+    endIndex: null,
+  })
+  return order.slice(1).map((idx) => items[idx - 1]).filter(Boolean)
+}
+
+/**
  * Build an N-day itinerary that progresses from start toward end along the road.
+ *
+ * Algorithm (max shops, min travel):
+ *  1. Shortlist shops near the A→B driving corridor
+ *  2. Each day: expand a window ahead of the cursor until ≥ shops/day candidates
+ *     exist (so later days still fill the quota when the corridor has shops)
+ *  3. Inside the window, grow the densest geographic cluster (set cover / cheapest
+ *     insertion) up to shops/day — prefer packs of stores over lonely exits
+ *  4. Order that day's stops with cheapest-insertion + 2-opt TSP
+ *  5. Chain: tomorrow starts where today ended
  */
 export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   const dayCount = Math.max(1, Math.min(21, Math.round(req.dayCount)))
@@ -189,16 +289,15 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   const totalMiles = route?.miles ?? pathLengthMiles(path) * 1.05
 
   const omit = new Set(req.omitIds)
-  if (req.end.contactId) omit.delete(req.end.contactId) // allow end shop on last day
+  if (req.end.contactId) omit.delete(req.end.contactId)
 
-  // Don't scan Texas when the drive is PA → VA: audience + corridor bounding box first.
   const bounds = pathBounds(path, detour + 40)
   const pool = req.contacts.filter((c) => (
-    ( !omit.has(c.id) || c.id === req.end.contactId )
+    (!omit.has(c.id) || c.id === req.end.contactId)
     && matchesAudience(c, req.priority, req.end.contactId)
   ))
 
-  req.onProgress?.(`Shortlisting shops near the route (not the whole country)…`)
+  req.onProgress?.('Shortlisting shops near the route (not the whole country)…')
 
   const located: Located[] = []
   let i = 0
@@ -223,12 +322,12 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
 
     const point = await locateCheap(contact)
     if (!point) continue
-    // Far from the A→B box (e.g. Texas on a PA→VA trip) — skip before corridor math.
     if (!inBounds(point, bounds)) continue
 
     const { miles, alongMiles } = distanceToPolyline(point, path)
     if (miles > detour) continue
-    if (alongMiles < 5) continue
+    // Allow shops near the start (was skipping first 5 mi and starving day 1 density).
+    if (alongMiles < 0.5) continue
 
     located.push({
       contact,
@@ -243,11 +342,9 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
     `Using ${located.length} shops along the corridor (skipped ${Math.max(0, pool.length - located.length)} far away)`,
   )
 
-  // Chain days like a real trip: day 2 starts where day 1 ended (Passaic → next),
-  // never jump ahead to a far stretch of the highway.
-  const band = totalMiles / dayCount
+  const band = Math.max(1, totalMiles / dayCount)
   const days: TripItinerary['days'] = []
-  const used = new Set<string>()
+  const remaining = new Map(located.map((c) => [c.contact.id, c]))
 
   let cursorAlong = 0
   let cursorPoint = req.start.point
@@ -256,80 +353,98 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   for (let d = 0; d < dayCount; d++) {
     throwIfAborted(req.signal)
     const isLast = d === dayCount - 1
-    // Soft ceiling so we don't burn tomorrow's corridor today — but always
-    // continue from the cursor, never teleport.
-    const targetHi = (d + 1) * band
+    const daysLeft = dayCount - d
+    req.onProgress?.(`Planning day ${d + 1} of ${dayCount} · filling ${stopsPerDay} shops…`)
 
-    req.onProgress?.(`Planning day ${d + 1} of ${dayCount}…`)
-
-    // Only shops still ahead of (or right next to) where we slept last night.
-    let ahead = located.filter((c) => {
-      if (used.has(c.contact.id)) return false
+    const available = [...remaining.values()].filter((c) => {
       if (c.contact.id === req.end.contactId && !isLast) return false
-      return c.alongMiles >= cursorAlong - 3
-    })
+      return c.alongMiles >= cursorAlong - 8
+    }).sort((a, b) => a.alongMiles - b.alongMiles || a.detourMiles - b.detourMiles)
 
-    if (!isLast) {
-      // Prefer the next stretch; allow a little overrun if the band is thin.
-      const capped = ahead.filter((c) => c.alongMiles <= targetHi + band * 0.35)
-      if (capped.length >= Math.min(3, stopsPerDay)) ahead = capped
+    if (!available.length) {
+      if (!isLast) continue
+      break
     }
 
-    // Walk the corridor in order. When two shops are close, keep the better score.
-    ahead.sort((a, b) => a.alongMiles - b.alongMiles || b.score - a.score || a.detourMiles - b.detourMiles)
+    // Expand the along-corridor window until we can fill the day's quota
+    // (or we hit the end / must leave stock for later days).
+    let windowHi = cursorAlong + band * (isLast ? 99 : 1.35)
+    let window = available.filter((c) => c.alongMiles <= windowHi)
 
-    const picked: Located[] = []
-    const minGap = 3
-    for (const cand of ahead) {
-      if (picked.length >= stopsPerDay) break
-      const tooClose = picked.some((p) => Math.abs(p.alongMiles - cand.alongMiles) < minGap)
-      if (tooClose) {
-        // Replace prior pick if this one is clearly better and almost same place.
-        const last = picked[picked.length - 1]
-        if (last && Math.abs(last.alongMiles - cand.alongMiles) < minGap && cand.score > last.score) {
-          picked[picked.length - 1] = cand
+    const reserveForLater = isLast ? 0 : Math.max(0, (daysLeft - 1) * Math.min(3, stopsPerDay))
+    while (
+      window.length < stopsPerDay + reserveForLater
+      && windowHi < totalMiles + 1
+      && !isLast
+    ) {
+      windowHi += band * 0.45
+      window = available.filter((c) => c.alongMiles <= windowHi)
+    }
+
+    // Don't hoard: if the window is huge but we need shops, take the densest
+    // slice — still leave a fair share for remaining days when possible.
+    let poolForDay = window
+    if (!isLast && window.length > stopsPerDay) {
+      const keepForLater = Math.min(
+        window.length - stopsPerDay,
+        Math.max(0, (daysLeft - 1) * stopsPerDay),
+      )
+      // Prefer shops closer to the cursor for today; leave farther ones for later.
+      if (keepForLater > 0 && window.length - keepForLater >= Math.min(stopsPerDay, window.length)) {
+        poolForDay = window.slice(0, window.length - keepForLater)
+        // But never leave today under-quota if shops exist in the window.
+        if (poolForDay.length < stopsPerDay) {
+          poolForDay = window.slice(0, Math.max(stopsPerDay, window.length - keepForLater))
         }
-        continue
       }
-      picked.push(cand)
     }
 
-    // Last day: arrive at the destination shop.
+    if (isLast) poolForDay = available
+
+    let picked = selectDenseCluster(poolForDay, cursorPoint, stopsPerDay)
+
+    // Still short? Pull any remaining ahead shops (ignore reserve) to hit quota.
+    if (picked.length < stopsPerDay) {
+      const pickedIds = new Set(picked.map((p) => p.contact.id))
+      const extra = available.filter((c) => !pickedIds.has(c.contact.id))
+      const filled = selectDenseCluster(
+        [...picked, ...extra],
+        cursorPoint,
+        stopsPerDay,
+      )
+      picked = filled
+    }
+
+    // Last day: force destination shop as final stop.
     if (isLast && req.end.contactId) {
-      const dest = located.find((c) => c.contact.id === req.end.contactId)
-      if (dest?.contact) {
+      const dest = remaining.get(req.end.contactId)
+        ?? located.find((c) => c.contact.id === req.end.contactId)
+      if (dest) {
         const without = picked.filter((p) => p.contact.id !== dest.contact.id)
         while (without.length >= stopsPerDay) without.shift()
         without.push(dest)
-        picked.length = 0
-        picked.push(...without)
+        picked = orderLocatedStops(cursorPoint, without)
+        // Keep dest last even after TSP.
+        const destIdx = picked.findIndex((p) => p.contact.id === dest.contact.id)
+        if (destIdx >= 0 && destIdx !== picked.length - 1) {
+          const [dStop] = picked.splice(destIdx, 1)
+          picked.push(dStop)
+        }
       }
     }
 
     if (!picked.length) {
       if (!isLast) continue
-      days.push({
-        dayIndex: days.length + 1,
-        kind: 'travel',
-        title: `Day ${days.length + 1} · arrive ${shortLabel(req.end.label)}`,
-        originLabel: cursorLabel,
-        endLabel: req.end.label,
-        stops: [],
-        totalMiles: Math.max(0, totalMiles - cursorAlong),
-        driveMinutes: estimateDriveMinutes(Math.max(0, totalMiles - cursorAlong) / 1.3),
-        visitMinutes: 0,
-      })
       break
     }
 
-    for (const p of picked) used.add(p.contact.id)
+    for (const p of picked) remaining.delete(p.contact.id)
 
     const lastStop = picked[picked.length - 1]
     const endLabel = isLast
       ? req.end.label
       : (lastStop.contact.company || lastStop.contact.name || lastStop.contact.city || `Day ${d + 1} end`)
 
-    // Miles from last night's end → each stop today (connected web).
     let dayMiles = 0
     let prev = cursorPoint
     for (const p of picked) {
@@ -352,8 +467,7 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
       visitMinutes: picked.length * Math.max(0, req.minutesPerStop),
     })
 
-    // Tomorrow morning starts here — where today ended.
-    cursorAlong = lastStop.alongMiles
+    cursorAlong = Math.max(cursorAlong, lastStop.alongMiles)
     cursorPoint = lastStop.point
     cursorLabel = lastStop.contact.company || lastStop.contact.name || endLabel
   }

@@ -717,8 +717,8 @@ export function TripScreen() {
         !planChrome
           ? { display: 'none' }
           : isDesktop
-            ? { flex: 1, minWidth: 0, minHeight: 0 }
-            : { flexShrink: 0, height: '52%', minHeight: 280 }
+            ? { flex: 1, minWidth: 0, minHeight: 0, touchAction: 'none' }
+            : { flexShrink: 0, height: '52%', minHeight: 280, touchAction: 'none', position: 'relative', zIndex: 2 }
       }>
         <TripMapPanel
           contacts={contacts}

@@ -121,6 +121,9 @@ export function TripMapPanel({
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const zoomCtrlRef = useRef<L.Control.Zoom | null>(null)
   const fittedRef = useRef(false)
+  /** Only auto-fit the itinerary route once per route fingerprint — never fight user zoom. */
+  const routeFitKeyRef = useRef<string>('')
+  const userInteractingRef = useRef(false)
   const contactsRef = useRef(contacts)
   contactsRef.current = contacts
   const tapModeRef = useRef(tapMode)
@@ -224,11 +227,20 @@ export function TripMapPanel({
 
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return
-    // No built-in zoom — we place it bottom-right on desktop, hide on phone
-    // (pinch-to-zoom) so it never covers the search field.
+    // Zoom control bottom-right on all sizes — pinch alone was unreliable inside
+    // the nested Trips scroll/overflow layout.
     const map = L.map(mapEl.current, {
       zoomControl: false,
       attributionControl: true,
+      dragging: true,
+      touchZoom: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      boxZoom: true,
+      keyboard: true,
+      bounceAtZoomLimits: false,
+      // Prefer canvas markers under the hood for smoother pan/zoom with hundreds of pins.
+      preferCanvas: true,
     }).setView([39.5, -98.35], 4)
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -236,12 +248,32 @@ export function TripMapPanel({
       attribution: '&copy; OpenStreetMap',
     }).addTo(map)
 
+    // Track gestures so pin/route redraws never yank the camera mid-pinch.
+    const markInteract = () => { userInteractingRef.current = true }
+    const clearInteract = () => {
+      window.setTimeout(() => { userInteractingRef.current = false }, 400)
+    }
+    map.on('zoomstart', markInteract)
+    map.on('movestart', markInteract)
+    map.on('dragstart', markInteract)
+    map.on('zoomend', clearInteract)
+    map.on('moveend', clearInteract)
+
     layerRef.current = L.layerGroup().addTo(map)
     routeLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
-    const t = window.setTimeout(() => map.invalidateSize(), 80)
+
+    zoomCtrlRef.current = L.control.zoom({ position: 'bottomright' })
+    zoomCtrlRef.current.addTo(map)
+
+    const t = window.setTimeout(() => map.invalidateSize({ pan: false }), 80)
     return () => {
       window.clearTimeout(t)
+      map.off('zoomstart', markInteract)
+      map.off('movestart', markInteract)
+      map.off('dragstart', markInteract)
+      map.off('zoomend', clearInteract)
+      map.off('moveend', clearInteract)
       map.remove()
       mapRef.current = null
       layerRef.current = null
@@ -253,11 +285,8 @@ export function TripMapPanel({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (zoomCtrlRef.current) {
-      map.removeControl(zoomCtrlRef.current)
-      zoomCtrlRef.current = null
-    }
-    if (!compact) {
+    // Always keep +/- visible — compact phones still need a reliable zoom UI.
+    if (!zoomCtrlRef.current) {
       zoomCtrlRef.current = L.control.zoom({ position: 'bottomright' })
       zoomCtrlRef.current.addTo(map)
     }
@@ -266,7 +295,7 @@ export function TripMapPanel({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const t = window.setTimeout(() => map.invalidateSize(), 180)
+    const t = window.setTimeout(() => map.invalidateSize({ pan: false }), 180)
     return () => window.clearTimeout(t)
   }, [expanded, fill, active, compact, detailContactId])
 
@@ -362,11 +391,12 @@ export function TripMapPanel({
       bounds.extend([pin.point.lat, pin.point.lng])
     }
 
-    if (bounds.isValid() && !fittedRef.current) {
-      map.fitBounds(bounds.pad(0.12), { maxZoom: 11, animate: true })
+    // Fit once when pins first appear — never again while refining or toggling
+    // highlights (that was yanking the camera mid-zoom).
+    if (bounds.isValid() && !fittedRef.current && !userInteractingRef.current) {
+      map.fitBounds(bounds.pad(0.12), { maxZoom: 11, animate: false })
       fittedRef.current = true
     }
-    window.setTimeout(() => map.invalidateSize(), 30)
   }, [visible, highlightIds, routeMarks, selectedStopIds, dayColorByContact])
 
   // Draw colored day paths once pins exist (order follows itinerary stop list).
@@ -375,11 +405,15 @@ export function TripMapPanel({
     const routeLayer = routeLayerRef.current
     if (!map || !routeLayer) return
     routeLayer.clearLayers()
-    if (!dayRoutes.length || !pins.length) return
+    if (!dayRoutes.length || !pins.length) {
+      routeFitKeyRef.current = ''
+      return
+    }
 
     const byId = new Map(pins.map((p) => [p.contactId, p]))
     const routeBounds = L.latLngBounds([])
     let drew = false
+    const fitKey = dayRoutes.map((d) => `${d.dayIndex}:${d.contactIds.join(',')}`).join('|')
 
     for (const day of dayRoutes) {
       const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
@@ -399,7 +433,6 @@ export function TripMapPanel({
         lineJoin: 'round',
       }).bindTooltip(day.label || `Day ${day.dayIndex}`, { sticky: true }).addTo(routeLayer)
 
-      // Day badge at the first stop of that day.
       const first = pts[0] as [number, number]
       L.marker(first, {
         interactive: false,
@@ -416,7 +449,14 @@ export function TripMapPanel({
       }).addTo(routeLayer)
     }
 
-    if (drew && routeBounds.isValid()) {
+    // Fit only when the planned route itself changes — not on every pin refine.
+    if (
+      drew
+      && routeBounds.isValid()
+      && fitKey !== routeFitKeyRef.current
+      && !userInteractingRef.current
+    ) {
+      routeFitKeyRef.current = fitKey
       map.fitBounds(routeBounds.pad(0.18), { maxZoom: 11, animate: true })
     }
   }, [dayRoutes, pins])
@@ -641,7 +681,15 @@ export function TripMapPanel({
           )}
         </div>
 
-        <div ref={mapEl} style={{ position: 'absolute', inset: 0 }} />
+        <div
+          ref={mapEl}
+          style={{
+            position: 'absolute', inset: 0,
+            // Keep pinch/pan on the map — don't let parent Trips scroll steal gestures.
+            touchAction: 'none',
+            zIndex: 1,
+          }}
+        />
 
         {loading && (
           <div style={{

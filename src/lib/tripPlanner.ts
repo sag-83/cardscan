@@ -36,7 +36,7 @@ import { fetchDrivingMatrix } from './osrm'
 import { ORIGIN_INDEX, planRoute, type CostMatrix } from './routeOptimizer'
 import { isStateOutOfRange } from './stateBounds'
 
-export type TripPriority = 'none' | 'customers' | 'top-rated'
+export type TripPriority = 'none' | 'customers' | 'prospects' | 'top-rated'
 
 export interface TripOptions {
   /** Only consider contacts within this many miles of the start. */
@@ -181,7 +181,11 @@ function priorityWeight(contact: Contact, priority: TripPriority): number {
   if (priority === 'customers') {
     if (contact.is_customer) return 0.65
     if (contact.is_old_customer) return 0.8
-    return 1
+    return 1.5 // deprioritize non-customers (hard-filtered in A→B journeys)
+  }
+  if (priority === 'prospects') {
+    if (!contact.is_customer) return 0.65
+    return 1.5
   }
   if (priority === 'top-rated') {
     if (contact.stars >= 4) return 0.65

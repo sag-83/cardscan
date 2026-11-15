@@ -1142,10 +1142,11 @@ export function TripScreen() {
                 value={options.priority}
                 onChange={(e) => setOptions((o) => ({ ...o, priority: e.target.value as TripOptions['priority'] }))}
                 style={{ ...dropdownStyle(options.priority !== 'none'), width: '100%', marginTop: 4 }}
-                aria-label="Which shops to favour"
+                aria-label="Which shops to include"
               >
-                <option value="none">Customers + non-customers</option>
-                <option value="customers">Customers first</option>
+                <option value="none">All shops</option>
+                <option value="customers">Customers only</option>
+                <option value="prospects">Non-customers only</option>
                 <option value="top-rated">Higher-rated first</option>
               </select>
             </Group>

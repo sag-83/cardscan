@@ -71,28 +71,70 @@ function priorityScore(c: Contact, priority: TripPriority): number {
     if (c.is_old_customer) return 2
     return 0
   }
+  if (priority === 'prospects') return c.is_customer ? 0 : 2
   if (priority === 'top-rated') return c.stars
   return c.is_customer ? 1 : 0
 }
 
-async function locateContact(c: Contact): Promise<{ point: GeoPoint } | null> {
-  const street = (c.address ?? '').trim()
-  if (street) {
-    const hit = await geocodeContactLocation(c)
-    if (hit) return { point: hit.point }
-  }
+/** Hard filter: customers only / non-customers only / everyone. */
+function matchesAudience(c: Contact, priority: TripPriority, endContactId?: string): boolean {
+  if (endContactId && c.id === endContactId) return true
+  if (priority === 'customers') return Boolean(c.is_customer || c.is_old_customer)
+  if (priority === 'prospects') return !c.is_customer
+  return true
+}
+
+/** City/ZIP only — fast enough to scan the library; street geocode is unnecessary for corridor banding. */
+async function locateCheap(c: Contact): Promise<GeoPoint | null> {
   const city = (c.city ?? '').trim()
   const state = (c.state ?? '').trim()
   if (city) {
-    const point = getCachedCityCoords(city, state) ?? await geocodeCityCoords(city, state)
-    if (point) return { point }
+    const cached = getCachedCityCoords(city, state)
+    if (cached) return cached
+    return await geocodeCityCoords(city, state)
   }
   const zip = (c.zip ?? '').trim()
-  if (zip) {
-    const point = await geocodePostalCode(zip)
-    if (point) return { point }
+  if (zip) return await geocodePostalCode(zip)
+  // Last resort: street (rare contacts with address but no city).
+  const street = (c.address ?? '').trim()
+  if (street) {
+    const hit = await geocodeContactLocation(c)
+    if (hit) return hit.point
   }
   return null
+}
+
+interface LatLngBounds {
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+function pathBounds(path: GeoPoint[], padMiles: number): LatLngBounds {
+  let minLat = Infinity
+  let maxLat = -Infinity
+  let minLng = Infinity
+  let maxLng = -Infinity
+  for (const p of path) {
+    minLat = Math.min(minLat, p.lat)
+    maxLat = Math.max(maxLat, p.lat)
+    minLng = Math.min(minLng, p.lng)
+    maxLng = Math.max(maxLng, p.lng)
+  }
+  const midLat = (minLat + maxLat) / 2
+  const padLat = padMiles / 69
+  const padLng = padMiles / Math.max(0.2, 69 * Math.cos((midLat * Math.PI) / 180))
+  return {
+    minLat: minLat - padLat,
+    maxLat: maxLat + padLat,
+    minLng: minLng - padLng,
+    maxLng: maxLng + padLng,
+  }
+}
+
+function inBounds(p: GeoPoint, b: LatLngBounds): boolean {
+  return p.lat >= b.minLat && p.lat <= b.maxLat && p.lng >= b.minLng && p.lng <= b.maxLng
 }
 
 function straightCorridor(from: GeoPoint, to: GeoPoint): GeoPoint[] {
@@ -140,14 +182,24 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
   const omit = new Set(req.omitIds)
   if (req.end.contactId) omit.delete(req.end.contactId) // allow end shop on last day
 
-  const pool = req.contacts.filter((c) => !omit.has(c.id) || c.id === req.end.contactId)
+  // Don't scan Texas when the drive is PA → VA: audience + corridor bounding box first.
+  const bounds = pathBounds(path, detour + 40)
+  const pool = req.contacts.filter((c) => (
+    ( !omit.has(c.id) || c.id === req.end.contactId )
+    && matchesAudience(c, req.priority, req.end.contactId)
+  ))
+
+  req.onProgress?.(`Shortlisting shops near the route (not the whole country)…`)
+
   const located: Located[] = []
   let i = 0
   for (const contact of pool) {
     throwIfAborted(req.signal)
     i++
-    if (i % 10 === 0) {
-      req.onProgress?.(`Finding shops along the route · ${i}/${pool.length}`)
+    if (i % 15 === 0) {
+      req.onProgress?.(
+        `Checking shops near the route · ${i}/${pool.length} (kept ${located.length})`,
+      )
     }
     if (contact.id === req.end.contactId) {
       located.push({
@@ -159,20 +211,28 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
       })
       continue
     }
-    const hit = await locateContact(contact)
-    if (!hit) continue
-    const { miles, alongMiles } = distanceToPolyline(hit.point, path)
+
+    const point = await locateCheap(contact)
+    if (!point) continue
+    // Far from the A→B box (e.g. Texas on a PA→VA trip) — skip before corridor math.
+    if (!inBounds(point, bounds)) continue
+
+    const { miles, alongMiles } = distanceToPolyline(point, path)
     if (miles > detour) continue
-    // Skip shops sitting on top of the start.
     if (alongMiles < 5) continue
+
     located.push({
       contact,
-      point: hit.point,
+      point,
       alongMiles,
       detourMiles: miles,
       score: priorityScore(contact, req.priority),
     })
   }
+
+  req.onProgress?.(
+    `Using ${located.length} shops along the corridor (skipped ${Math.max(0, pool.length - located.length)} far away)`,
+  )
 
   // Chain days like a real trip: day 2 starts where day 1 ended (Passaic → next),
   // never jump ahead to a far stretch of the highway.

@@ -49,8 +49,10 @@ import {
 } from '../../lib/tripHistory'
 import { planItinerary } from '../../lib/itineraryPlanner'
 import {
+  insertStopIntoItinerary,
   planJourney,
   planJourneyFromPicks,
+  removeStopFromItinerary,
   reorderDayStops,
   replaceJourneyStop,
 } from '../../lib/journeyPlanner'
@@ -672,8 +674,44 @@ export function TripScreen() {
     showToast('End set — choose how many days, then Build trip')
   }
 
-  /** Toggle a shop into the manual pick basket (purple pins). */
+  /**
+   * Add stop: if a trip is already built, insert into the closest day and
+   * reroute that day's trail live. Otherwise toggle into the pre-plan basket.
+   */
   const pickVia = (pick: TripMapPick) => {
+    const liveItinerary = useStore.getState().savedItinerary
+    if (liveItinerary) {
+      const onTrip = liveItinerary.days.some((d) => (
+        d.stops.some((s) => s.contactId === pick.contactId)
+      ))
+      if (onTrip) {
+        setSavedItinerary(removeStopFromItinerary(liveItinerary, pick.contactId))
+        showToast(`Removed ${pick.label} from the trip`)
+        return
+      }
+      const contact = contacts.find((c) => c.id === pick.contactId)
+      if (!contact) {
+        showToast('Could not find that shop')
+        return
+      }
+      void (async () => {
+        try {
+          const latest = useStore.getState().savedItinerary ?? liveItinerary
+          const result = await insertStopIntoItinerary({
+            itinerary: latest,
+            contact,
+            point: pick.point,
+            contacts,
+          })
+          setSavedItinerary(result.itinerary)
+          showToast(`Added ${result.shopName} → Day ${result.dayIndex}`)
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Could not add that stop')
+        }
+      })()
+      return
+    }
+
     setPlanMode('road')
     setJourneyPickSource('manual')
     setSetupOpen(true)
@@ -743,6 +781,7 @@ export function TripScreen() {
           active={planChrome}
           compact={!isDesktop}
           dayRoutes={dayRoutes}
+          routeFitToken={savedItinerary?.id ?? (plan ? `day:${plan.stops.map((s) => s.contact.id).join(',')}` : '')}
         />
       </div>
 
@@ -1567,7 +1606,7 @@ function ItineraryView({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{itinerary.label}</div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, lineHeight: 1.45 }}>
-              {itinerary.dayCount} days · {totalStops} shops · reorder with arrows · trash swaps in a nearby new shop
+              {itinerary.dayCount} days · {totalStops} shops · reorder live · Add stop on map joins the closest day · trash swaps nearby
             </div>
           </div>
           <button

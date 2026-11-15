@@ -654,6 +654,133 @@ export function reorderDayStops(
   return patchDayStops(itinerary, dayIndex, stops)
 }
 
+export interface InsertStopResult {
+  itinerary: TripItinerary
+  dayIndex: number
+  /** 0-based position in that day's list. */
+  insertedAt: number
+  shopName: string
+}
+
+/**
+ * Add a shop to an existing itinerary: pick the day whose trail is closest,
+ * then cheapest-insert into that day's order (live reroute, no full rebuild).
+ */
+export async function insertStopIntoItinerary(req: {
+  itinerary: TripItinerary
+  contact: Contact
+  point: GeoPoint
+  contacts: Contact[]
+}): Promise<InsertStopResult> {
+  const { itinerary, contact, point, contacts } = req
+  const shopName = contact.company || contact.name || 'Shop'
+
+  for (const d of itinerary.days) {
+    if (d.stops.some((s) => s.contactId === contact.id)) {
+      throw new Error(`${shopName} is already on Day ${d.dayIndex}.`)
+    }
+  }
+
+  // Resolve coords for every stop already on the trip (map pin cache first).
+  const pointById = new Map<string, GeoPoint>()
+  pointById.set(contact.id, point)
+  for (const d of itinerary.days) {
+    for (const s of d.stops) {
+      if (pointById.has(s.contactId)) continue
+      const c = contacts.find((x) => x.id === s.contactId)
+      if (!c) continue
+      const pt = await locateCheap(c)
+      if (pt) pointById.set(s.contactId, pt)
+    }
+  }
+
+  // Closest day = min distance from the new pin to any stop (or day polyline).
+  let bestDay = itinerary.days[0]?.dayIndex ?? 1
+  let bestDist = Infinity
+  for (const d of itinerary.days) {
+    const pts = d.stops
+      .map((s) => pointById.get(s.contactId))
+      .filter((p): p is GeoPoint => Boolean(p))
+    if (!pts.length) {
+      // Empty day — treat as far unless it's the only option.
+      continue
+    }
+    let dayDist = Infinity
+    for (const p of pts) {
+      dayDist = Math.min(dayDist, distanceBetween(point, p))
+    }
+    // Also score against segments of the day's trail.
+    for (let i = 0; i < pts.length - 1; i++) {
+      const { miles } = distanceToPolyline(point, [pts[i], pts[i + 1]])
+      dayDist = Math.min(dayDist, miles)
+    }
+    if (dayDist < bestDist) {
+      bestDist = dayDist
+      bestDay = d.dayIndex
+    }
+  }
+
+  const day = itinerary.days.find((d) => d.dayIndex === bestDay)
+  if (!day) throw new Error('No day to add that stop to.')
+
+  const dayPts = day.stops
+    .map((s) => pointById.get(s.contactId))
+    .filter((p): p is GeoPoint => Boolean(p))
+
+  const insertAt = cheapestInsertIndex(dayPts, point)
+  const nextStops = [...day.stops]
+  nextStops.splice(insertAt, 0, snapshot(contact))
+
+  return {
+    itinerary: patchDayStops(itinerary, bestDay, nextStops),
+    dayIndex: bestDay,
+    insertedAt: insertAt,
+    shopName,
+  }
+}
+
+/** Remove a shop from whichever day it sits on (no auto-refill — used by map toggle). */
+export function removeStopFromItinerary(
+  itinerary: TripItinerary,
+  contactId: string,
+): TripItinerary {
+  const day = itinerary.days.find((d) => d.stops.some((s) => s.contactId === contactId))
+  if (!day) return itinerary
+  const next = day.stops.filter((s) => s.contactId !== contactId)
+  return patchDayStops(itinerary, day.dayIndex, next)
+}
+
+/** Index that minimizes added trail length when inserting `newPoint` into an ordered day. */
+function cheapestInsertIndex(dayPts: GeoPoint[], newPoint: GeoPoint): number {
+  if (!dayPts.length) return 0
+  if (dayPts.length === 1) {
+    // Closer to sitting after vs before the single stop — either is fine; after keeps progress.
+    return 1
+  }
+
+  let bestIdx = dayPts.length
+  let bestDelta = distanceBetween(dayPts[dayPts.length - 1], newPoint)
+
+  // Insert before first.
+  const before = distanceBetween(newPoint, dayPts[0])
+  if (before < bestDelta) {
+    bestDelta = before
+    bestIdx = 0
+  }
+
+  for (let i = 0; i < dayPts.length - 1; i++) {
+    const was = distanceBetween(dayPts[i], dayPts[i + 1])
+    const now = distanceBetween(dayPts[i], newPoint) + distanceBetween(newPoint, dayPts[i + 1])
+    const delta = now - was
+    if (delta < bestDelta) {
+      bestDelta = delta
+      bestIdx = i + 1
+    }
+  }
+
+  return bestIdx
+}
+
 export interface ManualJourneyPick {
   contactId: string
   label: string

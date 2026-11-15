@@ -83,6 +83,11 @@ interface Props {
   compact?: boolean
   /** Planned multi-day routes — colored polylines + day badges on the map. */
   dayRoutes?: TripMapDayRoute[]
+  /**
+   * Only auto-fit the camera when this token changes (e.g. new itinerary id).
+   * Reorder / add / delete keep the live trail redraw without zooming out.
+   */
+  routeFitToken?: string
 }
 
 function toPick(pin: CustomerMapPin): TripMapPick {
@@ -113,6 +118,7 @@ export function TripMapPanel({
   active = true,
   compact = false,
   dayRoutes = [],
+  routeFitToken = '',
 }: Props) {
   const { theme, toggle: toggleTheme } = useTheme()
   const mapEl = useRef<HTMLDivElement>(null)
@@ -413,7 +419,6 @@ export function TripMapPanel({
     const byId = new Map(pins.map((p) => [p.contactId, p]))
     const routeBounds = L.latLngBounds([])
     let drew = false
-    const fitKey = dayRoutes.map((d) => `${d.dayIndex}:${d.contactIds.join(',')}`).join('|')
     let prevDayLast: L.LatLngExpression | null = null
 
     for (const day of dayRoutes) {
@@ -469,17 +474,20 @@ export function TripMapPanel({
       prevDayLast = pts[pts.length - 1]
     }
 
-    // Fit only when the planned route itself changes — not on every pin refine.
+    // Fit only when a *new* itinerary is built (token change) — never on
+    // reorder / add / delete so the live trail updates in place.
+    const token = routeFitToken || ''
     if (
       drew
       && routeBounds.isValid()
-      && fitKey !== routeFitKeyRef.current
+      && token
+      && token !== routeFitKeyRef.current
       && !userInteractingRef.current
     ) {
-      routeFitKeyRef.current = fitKey
+      routeFitKeyRef.current = token
       map.fitBounds(routeBounds.pad(0.18), { maxZoom: 11, animate: true })
     }
-  }, [dayRoutes, pins])
+  }, [dayRoutes, pins, routeFitToken])
 
   const applyPick = (pin: CustomerMapPin, role: 'start' | 'end' | 'via') => {
     const pick = toPick(pin)

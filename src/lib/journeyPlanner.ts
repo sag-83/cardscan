@@ -369,3 +369,136 @@ export async function planJourney(req: JourneyRequest): Promise<TripItinerary> {
     days,
   }
 }
+
+export interface ReplaceJourneyStopRequest {
+  itinerary: TripItinerary
+  dayIndex: number
+  removeContactId: string
+  contacts: Contact[]
+  /** Keep filling until the day has this many shops (usually itinerary.stopsPerDay). */
+  targetStopsPerDay: number
+  maxNearbyMiles: number
+  priority: TripPriority
+  signal?: AbortSignal
+}
+
+export interface ReplaceJourneyStopResult {
+  itinerary: TripItinerary
+  removedName: string
+  addedNames: string[]
+}
+
+/**
+ * Remove a shop from a day and backfill with nearby unused shops so the
+ * day's quota stays full (remove 2 of 10 → add 2 close replacements).
+ */
+export async function replaceJourneyStop(
+  req: ReplaceJourneyStopRequest,
+): Promise<ReplaceJourneyStopResult> {
+  throwIfAborted(req.signal)
+
+  const day = req.itinerary.days.find((d) => d.dayIndex === req.dayIndex)
+  if (!day) throw new Error('That day is not on this trip.')
+
+  const removeIdx = day.stops.findIndex((s) => s.contactId === req.removeContactId)
+  if (removeIdx < 0) throw new Error('That shop is not on this day.')
+
+  const removed = day.stops[removeIdx]
+  const removedName = removed.company || removed.name || 'Shop'
+
+  const used = new Set<string>()
+  for (const d of req.itinerary.days) {
+    for (const s of d.stops) used.add(s.contactId)
+  }
+  used.delete(req.removeContactId)
+
+  // Anchor = removed shop's area (or neighbors on the same day).
+  const removedContact = req.contacts.find((c) => c.id === req.removeContactId)
+  let anchor = removedContact ? await locateCheap(removedContact) : null
+  if (!anchor) {
+    const neighbor = day.stops[removeIdx - 1] || day.stops[removeIdx + 1]
+    const nc = neighbor && req.contacts.find((c) => c.id === neighbor.contactId)
+    if (nc) anchor = await locateCheap(nc)
+  }
+  if (!anchor) {
+    // Still allow remove with no refill if we can't place the area.
+    const nextStops = day.stops.filter((s) => s.contactId !== req.removeContactId)
+    return {
+      itinerary: patchDayStops(req.itinerary, req.dayIndex, nextStops),
+      removedName,
+      addedNames: [],
+    }
+  }
+
+  const need = Math.max(0, req.targetStopsPerDay - (day.stops.length - 1))
+  const added: TripStopSnapshot[] = []
+  const addedNames: string[] = []
+
+  if (need > 0) {
+    const candidates: Array<{ contact: Contact; point: GeoPoint; miles: number; score: number }> = []
+    let scanned = 0
+    for (const c of req.contacts) {
+      throwIfAborted(req.signal)
+      if (used.has(c.id)) continue
+      if (!matchesAudience(c, req.priority)) continue
+      scanned++
+      if (scanned % 40 === 0) {
+        // Keep UI responsive on large libraries — city cache hits are sync.
+      }
+      const point = await locateCheap(c)
+      if (!point) continue
+      const miles = distanceBetween(anchor, point)
+      if (miles > req.maxNearbyMiles) continue
+      candidates.push({
+        contact: c,
+        point,
+        miles,
+        score: priorityScore(c, req.priority),
+      })
+    }
+
+    candidates.sort((a, b) => b.score - a.score || a.miles - b.miles)
+
+    for (const cand of candidates) {
+      if (added.length >= need) break
+      if (used.has(cand.contact.id)) continue
+      used.add(cand.contact.id)
+      const snap = snapshot(cand.contact)
+      added.push(snap)
+      addedNames.push(snap.company || snap.name || 'Shop')
+    }
+  }
+
+  const nextStops = [...day.stops]
+  nextStops.splice(removeIdx, 1, ...added)
+
+  return {
+    itinerary: patchDayStops(req.itinerary, req.dayIndex, nextStops),
+    removedName,
+    addedNames,
+  }
+}
+
+function patchDayStops(
+  itinerary: TripItinerary,
+  dayIndex: number,
+  stops: TripStopSnapshot[],
+): TripItinerary {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((d) => {
+      if (d.dayIndex !== dayIndex) return d
+      const visitMinutes = stops.length * (d.stops.length
+        ? Math.round(d.visitMinutes / Math.max(1, d.stops.length))
+        : 30)
+      return {
+        ...d,
+        stops,
+        visitMinutes,
+        endLabel: stops.length
+          ? (stops[stops.length - 1].company || stops[stops.length - 1].name || d.endLabel)
+          : d.endLabel,
+      }
+    }),
+  }
+}

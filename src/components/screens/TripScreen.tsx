@@ -45,7 +45,7 @@ import {
   territoryProgress,
 } from '../../lib/tripHistory'
 import { planItinerary } from '../../lib/itineraryPlanner'
-import { planJourney } from '../../lib/journeyPlanner'
+import { planJourney, replaceJourneyStop } from '../../lib/journeyPlanner'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { saveContactToDB } from '../../lib/supabase'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
@@ -1219,6 +1219,29 @@ export function TripScreen() {
           itinerary={savedItinerary}
           onDismiss={() => setSavedItinerary(null)}
           onOpenContact={setDetailContactId}
+          onRemoveStop={async (dayIndex, contactId) => {
+            try {
+              const result = await replaceJourneyStop({
+                itinerary: savedItinerary,
+                dayIndex,
+                removeContactId: contactId,
+                contacts,
+                targetStopsPerDay: savedItinerary.stopsPerDay || options.maxStops,
+                maxNearbyMiles: Math.max(40, options.radiusMiles),
+                priority: options.priority,
+              })
+              setSavedItinerary(result.itinerary)
+              if (result.addedNames.length) {
+                showToast(
+                  `Removed ${result.removedName} · added ${result.addedNames.slice(0, 2).join(', ')}${result.addedNames.length > 2 ? '…' : ''}`,
+                )
+              } else {
+                showToast(`Removed ${result.removedName} · no nearby shops left to fill the quota`)
+              }
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : 'Could not update that day')
+            }
+          }}
         />
       )}
 
@@ -1391,14 +1414,26 @@ function EmptyState({ hasContacts }: { hasContacts: boolean }) {
 }
 
 function ItineraryView({
-  itinerary, onDismiss, onOpenContact,
+  itinerary, onDismiss, onOpenContact, onRemoveStop,
 }: {
   itinerary: TripItinerary
   onDismiss: () => void
   onOpenContact: (id: string) => void
+  onRemoveStop: (dayIndex: number, contactId: string) => Promise<void>
 }) {
   const [openDay, setOpenDay] = useState<number | null>(itinerary.days[0]?.dayIndex ?? null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0)
+
+  const handleRemove = async (dayIndex: number, contactId: string) => {
+    if (removingId) return
+    setRemovingId(contactId)
+    try {
+      await onRemoveStop(dayIndex, contactId)
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   return (
     <div style={{ padding: '14px 16px 8px' }}>
@@ -1411,7 +1446,7 @@ function ItineraryView({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{itinerary.label}</div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, lineHeight: 1.45 }}>
-              {itinerary.dayCount} days · {totalStops} shops · tap a day to see the route
+              {itinerary.dayCount} days · {totalStops} shops · tap a day · trash a shop to swap in a nearby one
             </div>
           </div>
           <button
@@ -1491,29 +1526,69 @@ function ItineraryView({
                     Start: {shortPlace(day.originLabel) || '—'}
                     {day.endLabel ? ` → End: ${shortPlace(day.endLabel)}` : ''}
                   </div>
-                  <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {day.stops.map((stop, idx) => {
                       const name = stop.company || stop.name || `Stop ${idx + 1}`
                       const where = [stop.address, stop.city, stop.state].filter(Boolean).join(', ')
+                      const busy = removingId === stop.contactId
                       return (
-                        <li key={`${stop.contactId}-${idx}`} style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.35 }}>
+                        <div
+                          key={`${stop.contactId}-${idx}`}
+                          style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 8,
+                            padding: '8px 10px', borderRadius: 10,
+                            background: 'var(--bg3)', border: '1px solid var(--border2)',
+                          }}
+                        >
+                          <div style={{
+                            width: 22, height: 22, borderRadius: 7, flexShrink: 0, marginTop: 1,
+                            background: color, color: '#fff', fontSize: 11, fontWeight: 850,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {idx + 1}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => onOpenContact(stop.contactId)}
+                              style={{
+                                border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                                textAlign: 'left', color: 'var(--accent)', fontWeight: 750, fontSize: 13,
+                              }}
+                            >
+                              {name}
+                            </button>
+                            {where && (
+                              <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{where}</div>
+                            )}
+                          </div>
                           <button
                             type="button"
-                            onClick={() => onOpenContact(stop.contactId)}
+                            disabled={Boolean(removingId)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleRemove(day.dayIndex, stop.contactId)
+                            }}
+                            aria-label={`Remove ${name} and add a nearby shop`}
+                            title="Remove — a nearby shop fills this slot"
                             style={{
-                              border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-                              textAlign: 'left', color: 'var(--accent)', fontWeight: 750, fontSize: 13,
+                              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                              border: 'none', background: 'var(--bg2)',
+                              color: 'var(--danger, #ff453a)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: removingId ? 'default' : 'pointer',
+                              opacity: busy ? 0.5 : 1,
+                              touchAction: 'manipulation',
                             }}
                           >
-                            {name}
+                            {busy
+                              ? <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                              : <Trash2 className="size-3.5" aria-hidden />}
                           </button>
-                          {where && (
-                            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{where}</div>
-                          )}
-                        </li>
+                        </div>
                       )
                     })}
-                  </ol>
+                  </div>
                   {dayLinks.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
                       {dayLinks.map((link, index) => (

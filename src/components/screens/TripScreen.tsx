@@ -4,7 +4,6 @@ import {
   Car,
   Check,
   ChevronDown,
-  ChevronUp,
   ClipboardCheck,
   Copy,
   Crosshair,
@@ -16,7 +15,6 @@ import {
   MapPin,
   Navigation,
   Pencil,
-  Plus,
   RefreshCw,
   Route,
   SlidersHorizontal,
@@ -47,7 +45,7 @@ import {
   territoryProgress,
 } from '../../lib/tripHistory'
 import { planItinerary } from '../../lib/itineraryPlanner'
-import { planRoadTrip } from '../../lib/roadTripPlanner'
+import { planJourney } from '../../lib/journeyPlanner'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { saveContactToDB } from '../../lib/supabase'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
@@ -179,33 +177,10 @@ function describeError(err: unknown): string {
 
 type PlanMode = 'day' | 'itinerary' | 'road'
 
-interface RoadDest {
+interface JourneyDest {
   label: string
   point?: GeoPoint
   contactId?: string
-}
-
-/** One hop on an open-ended road trip — VA, Charlotte, Atlanta, Orlando, … */
-interface RoadLegDraft {
-  id: string
-  dest: RoadDest
-  stopovers: number
-  detourMiles: number
-  exploreDays: number
-}
-
-function newRoadLegId(): string {
-  return `leg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
-}
-
-function makeRoadLeg(partial?: Partial<RoadLegDraft>): RoadLegDraft {
-  return {
-    id: partial?.id ?? newRoadLegId(),
-    dest: partial?.dest ?? { label: '' },
-    stopovers: partial?.stopovers ?? 4,
-    detourMiles: partial?.detourMiles ?? 25,
-    exploreDays: partial?.exploreDays ?? 1,
-  }
 }
 
 export function TripScreen() {
@@ -242,11 +217,9 @@ export function TripScreen() {
   const [planMode, setPlanMode] = useState<PlanMode>('day')
   const [screenTab, setScreenTab] = useState<'plan' | 'history'>('plan')
   const [itineraryDays, setItineraryDays] = useState(3)
-  const [roadLegs, setRoadLegs] = useState<RoadLegDraft[]>(() => [
-    makeRoadLeg({ exploreDays: 3, stopovers: 4, detourMiles: 25 }),
-  ])
-  const [roadReturn, setRoadReturn] = useState(true)
-  const [roadActiveLegId, setRoadActiveLegId] = useState<string | null>(null)
+  /** A → B multi-day journey destination (e.g. Diamond Concepts, VA). */
+  const [journeyDest, setJourneyDest] = useState<JourneyDest>({ label: '' })
+  const [journeyDays, setJourneyDays] = useState(5)
   const [skipLogged, setSkipLogged] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [itineraryDayProgress, setItineraryDayProgress] = useState<{ day: number; total: number } | null>(null)
@@ -455,64 +428,27 @@ export function TripScreen() {
       }
 
       if (planMode === 'road' && !overrides?.reuseLast) {
-        const filled = roadLegs.filter((l) => l.dest.label.trim())
-        if (!filled.length) {
-          throw new TripPlanError('Add at least one destination (city, address, or customer) for the road trip.')
+        if (!journeyDest.label.trim()) {
+          throw new TripPlanError('Pick where the trip ends (tap End on the map, or type a shop / city).')
         }
-
-        const resolvedLegs = []
-        const nextRoadLegs = [...roadLegs]
-        for (let i = 0; i < filled.length; i++) {
-          const draft = filled[i]
-          const point = draft.dest.point ?? await geocodePlace(draft.dest.label.trim())
-          if (!point) {
-            throw new TripPlanError(`Could not find destination "${draft.dest.label}".`)
-          }
-          const idx = nextRoadLegs.findIndex((l) => l.id === draft.id)
-          if (idx >= 0) {
-            nextRoadLegs[idx] = {
-              ...nextRoadLegs[idx],
-              dest: { ...nextRoadLegs[idx].dest, point },
-            }
-          }
-          resolvedLegs.push({
-            destination: {
-              label: draft.dest.label.trim(),
-              point,
-              contactId: draft.dest.contactId,
-            },
-            maxStopovers: draft.stopovers,
-            maxDetourMiles: draft.detourMiles,
-            exploreDays: draft.exploreDays,
-            exploreStopsPerDay: options.maxStops,
-            exploreRadiusMiles: options.radiusMiles,
-            exploreMinutesPerStop: options.minutesPerStop,
-            priority: options.priority,
-          })
+        const endPoint = journeyDest.point ?? await geocodePlace(journeyDest.label.trim())
+        if (!endPoint) {
+          throw new TripPlanError(`Could not find "${journeyDest.label}".`)
         }
-        setRoadLegs(nextRoadLegs)
+        setJourneyDest((d) => ({ ...d, point: endPoint }))
 
-        // Optional return: stopovers on the corridor back to start (no explore).
-        if (roadReturn) {
-          const lastDraft = filled[filled.length - 1]
-          resolvedLegs.push({
-            destination: {
-              label: origin.label,
-              point: origin.point,
-            },
-            maxStopovers: lastDraft.stopovers,
-            maxDetourMiles: lastDraft.detourMiles,
-            exploreDays: 0,
-            exploreStopsPerDay: options.maxStops,
-            exploreRadiusMiles: options.radiusMiles,
-            exploreMinutesPerStop: options.minutesPerStop,
-            priority: options.priority,
-          })
-        }
-
-        const itinerary = await planRoadTrip({
+        const itinerary = await planJourney({
           start: origin,
-          legs: resolvedLegs,
+          end: {
+            label: journeyDest.label.trim(),
+            point: endPoint,
+            contactId: journeyDest.contactId,
+          },
+          dayCount: journeyDays,
+          stopsPerDay: options.maxStops,
+          maxDetourMiles: Math.max(25, options.radiusMiles),
+          minutesPerStop: options.minutesPerStop,
+          priority: options.priority,
           contacts: pool,
           omitIds: new Set(),
           filterState,
@@ -532,7 +468,9 @@ export function TripScreen() {
           city: filterCity,
           originLabel: origin.label,
         })
-        showToast(`Road trip ready · ${itinerary.dayCount} day${itinerary.dayCount === 1 ? '' : 's'} · ${itinerary.days.reduce((n, d) => n + d.stops.length, 0)} stops`)
+        showToast(
+          `${itinerary.dayCount}-day trip ready · ${itinerary.days.reduce((n, d) => n + d.stops.length, 0)} stops · tap a day below`,
+        )
         return
       }
 
@@ -621,39 +559,6 @@ export function TripScreen() {
     setScreenTab('history')
   }
 
-  const openItineraryDay = async (itinerary: TripItinerary, dayIndex: number) => {
-    const day = itinerary.days.find((d) => d.dayIndex === dayIndex)
-    if (!day) return
-    const ids = new Set(day.stops.map((s) => s.contactId))
-    const pool = contacts.filter((c) => ids.has(c.id))
-    if (!pool.length) {
-      showToast('Those contacts are no longer in the library')
-      return
-    }
-    setWorking(true)
-    setError('')
-    try {
-      const origin = lastRun?.origin ?? (await resolveOrigin())
-      const end = lastRun ? lastRun.end : await resolveEnd(origin)
-      setLastRun({ origin, end })
-      const result = await planTrip(
-        pool,
-        origin,
-        end,
-        { ...options, maxStops: pool.length },
-        setProgress,
-      )
-      setPlan(result)
-      setExcluded([])
-      showToast(`Day ${dayIndex} ready — log visits when you're done`)
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setWorking(false)
-      setProgress(null)
-    }
-  }
-
   const removeStop = (id: string) => {
     const next = [...excluded, id]
     setExcluded(next)
@@ -719,73 +624,21 @@ export function TripScreen() {
     pick.address ? `${pick.label} · ${pick.address}` : pick.label
   )
 
-  const destFromPick = (pick: TripMapPick): RoadDest => ({
-    label: placeLabel(pick),
-    point: pick.point,
-    contactId: pick.contactId,
-  })
-
-  /** End here — sets / replaces the trip's final destination leg. */
   const pickEnd = (pick: TripMapPick) => {
     setPlanMode('road')
     setSetupOpen(true)
-    const dest = destFromPick(pick)
-    setMapEndContactId(pick.contactId)
-    const empty = roadLegs.find((l) => !l.dest.label.trim())
-    if (empty) {
-      updateRoadLeg(empty.id, { dest })
-      setRoadActiveLegId(empty.id)
-    } else if (roadLegs.length === 1) {
-      updateRoadLeg(roadLegs[0].id, { dest })
-      setRoadActiveLegId(roadLegs[0].id)
-    } else {
-      const last = roadLegs[roadLegs.length - 1]
-      updateRoadLeg(last.id, { dest })
-      setRoadActiveLegId(last.id)
-    }
-    showToast('End set from map')
-  }
-
-  /** Add stop — appends another destination leg (VA → Charlotte → Atlanta…). */
-  const pickVia = (pick: TripMapPick) => {
-    setPlanMode('road')
-    setSetupOpen(true)
-    const dest = destFromPick(pick)
-    const empty = roadLegs.find((l) => !l.dest.label.trim())
-    if (empty) {
-      updateRoadLeg(empty.id, { dest })
-      setRoadActiveLegId(empty.id)
-      setMapEndContactId(pick.contactId)
-    } else {
-      const last = roadLegs[roadLegs.length - 1]
-      const added = makeRoadLeg({
-        dest,
-        stopovers: last?.stopovers ?? 4,
-        detourMiles: last?.detourMiles ?? 25,
-        exploreDays: 1,
-      })
-      setRoadLegs((prev) => [...prev, added])
-      setRoadActiveLegId(added.id)
-      setMapEndContactId(pick.contactId)
-    }
-    showToast('Stop added — tap more pins or Build road trip')
-  }
-
-  const updateRoadLeg = (id: string, patchLeg: Partial<RoadLegDraft>) => {
-    setRoadLegs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patchLeg } : l)))
-  }
-
-  const moveRoadLeg = (id: string, dir: -1 | 1) => {
-    setRoadLegs((prev) => {
-      const i = prev.findIndex((l) => l.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= prev.length) return prev
-      const next = [...prev]
-      const tmp = next[i]
-      next[i] = next[j]
-      next[j] = tmp
-      return next
+    setJourneyDest({
+      label: placeLabel(pick),
+      point: pick.point,
+      contactId: pick.contactId,
     })
+    setMapEndContactId(pick.contactId)
+    showToast('End set — choose how many days, then Build trip')
+  }
+
+  /** Same as End for A→B trips (kept so map “+ Stop” still does something useful). */
+  const pickVia = (pick: TripMapPick) => {
+    pickEnd(pick)
   }
 
   const pickStart = (pick: TripMapPick) => {
@@ -796,14 +649,6 @@ export function TripScreen() {
     setSetupOpen(true)
     showToast('Start set from map')
   }
-
-  const routeViaIds = useMemo(
-    () => roadLegs
-      .slice(0, -1)
-      .map((l) => l.dest.contactId)
-      .filter((id): id is string => Boolean(id)),
-    [roadLegs],
-  )
 
   const planChrome = screenTab === 'plan'
 
@@ -836,7 +681,7 @@ export function TripScreen() {
           routeMarks={{
             startId: mapStartContactId,
             endId: mapEndContactId,
-            viaIds: routeViaIds,
+            viaIds: [],
           }}
           tapMode={mapTapMode}
           onTapModeChange={setMapTapMode}
@@ -1150,24 +995,23 @@ export function TripScreen() {
                   active={planMode === 'itinerary'}
                   onClick={() => setPlanMode('itinerary')}
                   icon={<CalendarRange className="size-3.5 shrink-0" aria-hidden />}
-                  label="Area days"
+                  label="Same area"
                 />
                 <SegButton
                   active={planMode === 'road'}
                   onClick={() => setPlanMode('road')}
                   icon={<Navigation className="size-3.5 shrink-0" aria-hidden />}
-                  label="Road trip"
+                  label="A → B trip"
                 />
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 4 }}>
-                {planMode === 'day' && (
-                  <>One day — best for a single city/radius: start → N nearest shops → end.</>
-                )}
-                {planMode === 'itinerary' && (
-                  <>Area days — stay in one territory for several days; each day peels a new cluster so you don’t repeat.</>
-                )}
+              <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.45, marginTop: 6 }}>
+                {planMode === 'day' && <>One day around where you start.</>}
+                {planMode === 'itinerary' && <>Several days in one region (not driving to a far end).</>}
                 {planMode === 'road' && (
-                  <>Road trip — drive city → city (VA, Charlotte, Atlanta…). Stopovers on the highway + explore days at each stop + optional return.</>
+                  <>
+                    Multi-day drive from your start to one end (e.g. Waleska → Diamond Concepts).
+                    Day 1 covers the first stretch, day 2 the next… last day arrives at the end.
+                  </>
                 )}
               </div>
               {planMode === 'itinerary' && (
@@ -1176,182 +1020,59 @@ export function TripScreen() {
                     label="How many days"
                     value={itineraryDays}
                     min={2}
-                    max={10}
+                    max={14}
                     step={1}
                     format={(v) => `${v} day${v === 1 ? '' : 's'}`}
                     onChange={setItineraryDays}
                   />
                   <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 2 }}>
                     {emptyItineraryHint(progressStats, options.maxStops, itineraryDays)
-                      || 'Same territory for several days — peels closest clusters first so you don’t repeat.'}
+                      || 'Each day works a new cluster so you don’t repeat shops.'}
                   </div>
                 </>
               )}
               {planMode === 'road' && (
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45 }}>
-                    Chain any number of destinations — Virginia, Charlotte, Atlanta, Orlando, Jacksonville…
-                    Each leg gets stopovers on the drive in, optional explore days there, then the next hop.
-                    Map pin → fills the highlighted leg (or adds a new one).
-                  </div>
-                  {roadLegs.map((leg, index) => {
-                    const active = (roadActiveLegId ?? roadLegs[0]?.id) === leg.id
-                    return (
-                      <div
-                        key={leg.id}
-                        onClick={() => setRoadActiveLegId(leg.id)}
-                        style={{
-                          padding: 12, borderRadius: 12,
-                          border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border2)'}`,
-                          background: active ? 'var(--chip-accent-bg)' : 'var(--bg3)',
-                          display: 'flex', flexDirection: 'column', gap: 8,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{
-                            fontSize: 11, fontWeight: 800, color: 'var(--accent)',
-                            letterSpacing: 0.3, flex: 1,
-                          }}>
-                            LEG {index + 1}
-                            {index === 0 ? ' · from start' : ` · after leg ${index}`}
-                          </div>
-                          <button
-                            type="button"
-                            aria-label="Move leg up"
-                            disabled={index === 0}
-                            onClick={(e) => { e.stopPropagation(); moveRoadLeg(leg.id, -1) }}
-                            style={{ ...legIconBtn, opacity: index === 0 ? 0.35 : 1 }}
-                          >
-                            <ChevronUp className="size-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Move leg down"
-                            disabled={index === roadLegs.length - 1}
-                            onClick={(e) => { e.stopPropagation(); moveRoadLeg(leg.id, 1) }}
-                            style={{ ...legIconBtn, opacity: index === roadLegs.length - 1 ? 0.35 : 1 }}
-                          >
-                            <ChevronDown className="size-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Remove leg"
-                            disabled={roadLegs.length <= 1}
-                            onPointerUp={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              if (roadLegs.length <= 1) return
-                              setRoadLegs((prev) => prev.filter((l) => l.id !== leg.id))
-                              if (roadActiveLegId === leg.id) setRoadActiveLegId(null)
-                              if (mapEndContactId === leg.dest.contactId) {
-                                setMapEndContactId(null)
-                              }
-                            }}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              if (roadLegs.length <= 1) return
-                              setRoadLegs((prev) => prev.filter((l) => l.id !== leg.id))
-                              if (roadActiveLegId === leg.id) setRoadActiveLegId(null)
-                            }}
-                            style={{
-                              ...legIconBtn,
-                              width: 34, height: 34,
-                              opacity: roadLegs.length <= 1 ? 0.35 : 1,
-                              color: 'var(--danger)',
-                              touchAction: 'manipulation',
-                            }}
-                          >
-                            <Trash2 className="size-3.5" aria-hidden />
-                          </button>
-                        </div>
-                        <AddressAutocomplete
-                          value={leg.dest.label}
-                          locked={Boolean(leg.dest.point)}
-                          onChange={(label) => updateRoadLeg(leg.id, {
-                            dest: { label },
-                          })}
-                          onResolve={(hit) => updateRoadLeg(leg.id, {
-                            dest: hit
-                              ? { label: hit.label, point: hit.point, contactId: hit.contactId }
-                              : { label: leg.dest.label },
-                          })}
-                          contacts={contacts}
-                          placeholder="City, state, or customer (VA · Charlotte · Atlanta…)"
-                          ariaLabel={`Road trip leg ${index + 1} destination`}
-                        />
-                        <SliderRow
-                          label="Stopovers on the drive in"
-                          value={leg.stopovers}
-                          min={0}
-                          max={12}
-                          step={1}
-                          format={(v) => (v === 0 ? 'none' : `${v}`)}
-                          onChange={(stopovers) => updateRoadLeg(leg.id, { stopovers })}
-                        />
-                        <SliderRow
-                          label="Max detour off highway"
-                          value={leg.detourMiles}
-                          min={5}
-                          max={60}
-                          step={5}
-                          format={(v) => `${v} mi`}
-                          onChange={(detourMiles) => updateRoadLeg(leg.id, { detourMiles })}
-                        />
-                        <SliderRow
-                          label="Explore days here"
-                          value={leg.exploreDays}
-                          min={0}
-                          max={7}
-                          step={1}
-                          format={(v) => (v === 0 ? 'pass through' : `${v} day${v === 1 ? '' : 's'}`)}
-                          onChange={(exploreDays) => updateRoadLeg(leg.id, { exploreDays })}
-                        />
-                      </div>
-                    )
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const last = roadLegs[roadLegs.length - 1]
-                      const added = makeRoadLeg({
-                        stopovers: last?.stopovers ?? 4,
-                        detourMiles: last?.detourMiles ?? 25,
-                        exploreDays: 1,
-                      })
-                      setRoadLegs((prev) => [...prev, added])
-                      setRoadActiveLegId(added.id)
-                    }}
-                    style={{
-                      alignSelf: 'stretch', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-                      border: '1.5px dashed var(--border)', background: 'transparent',
-                      color: 'var(--accent)', fontSize: 12.5, fontWeight: 750,
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}
-                  >
-                    <Plus className="size-3.5" aria-hidden />
-                    Add destination (Charlotte, Atlanta, Orlando…)
-                  </button>
-                  <label style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    padding: '10px 12px', borderRadius: 10, background: 'var(--bg3)',
-                    border: '1px solid var(--border2)', cursor: 'pointer',
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={roadReturn}
-                      onChange={(e) => setRoadReturn(e.target.checked)}
-                      style={{ marginTop: 2 }}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 750, color: 'var(--text2)', marginBottom: 4 }}>
+                      Where the trip ends
+                    </div>
+                    <AddressAutocomplete
+                      value={journeyDest.label}
+                      locked={Boolean(journeyDest.point)}
+                      onChange={(label) => {
+                        setJourneyDest({ label })
+                        setMapEndContactId(null)
+                      }}
+                      onResolve={(hit) => {
+                        if (hit) {
+                          setJourneyDest({
+                            label: hit.label,
+                            point: hit.point,
+                            contactId: hit.contactId,
+                          })
+                          if (hit.contactId) setMapEndContactId(hit.contactId)
+                        } else {
+                          setJourneyDest((d) => ({ label: d.label }))
+                        }
+                      }}
+                      contacts={contacts}
+                      placeholder="Diamond Concepts · city · or tap End on map"
+                      ariaLabel="Trip end destination"
                     />
-                    <span>
-                      <span style={{ display: 'block', fontSize: 13, fontWeight: 750, color: 'var(--text)' }}>
-                        Return to start with stopovers
-                      </span>
-                      <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.4 }}>
-                        After the last destination, plan the drive home with shops along that corridor too.
-                      </span>
-                    </span>
-                  </label>
+                  </div>
+                  <SliderRow
+                    label="Trip length"
+                    value={journeyDays}
+                    min={1}
+                    max={14}
+                    step={1}
+                    format={(v) => `${v} day${v === 1 ? '' : 's'}`}
+                    onChange={setJourneyDays}
+                  />
+                  <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.4 }}>
+                    Example: 5 days from Pennsylvania to Virginia — each day moves you closer to the end shop.
+                  </div>
                 </div>
               )}
               <label style={{
@@ -1376,7 +1097,7 @@ export function TripScreen() {
               </label>
             </Group>
 
-            <Group label="Trip shape">
+            <Group label={planMode === 'road' ? 'Each day' : 'Trip shape'}>
               {planMode !== 'road' && (
                 <SliderRow
                   label="Search radius"
@@ -1388,19 +1109,19 @@ export function TripScreen() {
                   onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
                 />
               )}
-              {planMode === 'road' && roadLegs.some((l) => l.exploreDays > 0) && (
+              {planMode === 'road' && (
                 <SliderRow
-                  label="Explore radius at each stay"
+                  label="How far off the highway"
                   value={options.radiusMiles}
-                  min={5}
-                  max={250}
+                  min={15}
+                  max={80}
                   step={5}
                   format={(v) => `${v} mi`}
                   onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
                 />
               )}
               <SliderRow
-                label={planMode === 'day' ? 'Stops to visit' : planMode === 'road' ? 'Stops per explore day' : 'Stops per day'}
+                label="Shops per day"
                 value={options.maxStops}
                 min={2}
                 max={30}
@@ -1409,23 +1130,23 @@ export function TripScreen() {
                 onChange={(maxStops) => setOptions((o) => ({ ...o, maxStops }))}
               />
               <SliderRow
-                label="Time at each stop"
+                label="Minutes at each shop"
                 value={options.minutesPerStop}
                 min={0}
                 max={120}
                 step={5}
-                format={(v) => (v === 0 ? 'none' : `${v} min`)}
+                format={(v) => (v === 0 ? 'skip' : `${v} min`)}
                 onChange={(minutesPerStop) => setOptions((o) => ({ ...o, minutesPerStop }))}
               />
               <select
                 value={options.priority}
                 onChange={(e) => setOptions((o) => ({ ...o, priority: e.target.value as TripOptions['priority'] }))}
                 style={{ ...dropdownStyle(options.priority !== 'none'), width: '100%', marginTop: 4 }}
-                aria-label="Which stops to favour"
+                aria-label="Which shops to favour"
               >
-                <option value="none">No preference</option>
-                <option value="customers">Favour customers</option>
-                <option value="top-rated">Favour top-rated</option>
+                <option value="none">Customers + non-customers</option>
+                <option value="customers">Customers first</option>
+                <option value="top-rated">Higher-rated first</option>
               </select>
             </Group>
 
@@ -1446,9 +1167,9 @@ export function TripScreen() {
                 {working
                   ? <><Loader2 className="size-4 animate-spin" aria-hidden />Planning…</>
                   : planMode === 'itinerary'
-                    ? <><CalendarRange className="size-4 shrink-0" aria-hidden />Build itinerary</>
+                    ? <><CalendarRange className="size-4 shrink-0" aria-hidden />Build area days</>
                     : planMode === 'road'
-                      ? <><Navigation className="size-4 shrink-0" aria-hidden />Build road trip</>
+                      ? <><Navigation className="size-4 shrink-0" aria-hidden />Build {journeyDays}-day trip</>
                       : <><Route className="size-4 shrink-0" aria-hidden />Plan my route</>}
               </button>
               {working && (
@@ -1495,9 +1216,8 @@ export function TripScreen() {
       {savedItinerary && !working && (
         <ItineraryView
           itinerary={savedItinerary}
-          busy={working}
-          onOpenDay={(dayIndex) => void openItineraryDay(savedItinerary, dayIndex)}
           onDismiss={() => setSavedItinerary(null)}
+          onOpenContact={setDetailContactId}
         />
       )}
 
@@ -1670,13 +1390,13 @@ function EmptyState({ hasContacts }: { hasContacts: boolean }) {
 }
 
 function ItineraryView({
-  itinerary, busy, onOpenDay, onDismiss,
+  itinerary, onDismiss, onOpenContact,
 }: {
   itinerary: TripItinerary
-  busy: boolean
-  onOpenDay: (dayIndex: number) => void
   onDismiss: () => void
+  onOpenContact: (id: string) => void
 }) {
+  const [openDay, setOpenDay] = useState<number | null>(itinerary.days[0]?.dayIndex ?? null)
   const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0)
 
   return (
@@ -1690,24 +1410,13 @@ function ItineraryView({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{itinerary.label}</div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, lineHeight: 1.45 }}>
-              {itinerary.dayCount} day{itinerary.dayCount === 1 ? '' : 's'} · {totalStops} stops ·
-              {' '}start {shortPlace(itinerary.originLabel)}
-              {itinerary.endLabel ? ` · end ${shortPlace(itinerary.endLabel)}` : ''}
+              {itinerary.dayCount} days · {totalStops} shops · tap a day to see the route
             </div>
           </div>
           <button
             type="button"
-            onPointerUp={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onDismiss()
-            }}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onDismiss()
-            }}
-            aria-label="Dismiss itinerary"
+            onClick={(e) => { e.stopPropagation(); onDismiss() }}
+            aria-label="Close trip"
             style={{
               border: 'none', background: 'var(--bg3)', borderRadius: 99,
               width: 40, height: 40, cursor: 'pointer', color: 'var(--text3)',
@@ -1718,103 +1427,113 @@ function ItineraryView({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, lineHeight: 1.45 }}>
-          Colors on the map match each day below. Open Maps uses shop names.
-          Tap a day for the stop list; log visits so later days don’t repeat them.
-        </div>
-        {itinerary.days.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-            {itinerary.days.map((day) => {
-              const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
-              return (
-                <span
-                  key={day.dayIndex}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '4px 8px', borderRadius: 99, fontSize: 11, fontWeight: 750,
-                    background: 'var(--bg3)', color: 'var(--text2)',
-                    border: `1.5px solid ${color}`,
-                  }}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: 99, background: color }} />
-                  Day {day.dayIndex}
-                </span>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {itinerary.days.map((day) => {
+          const color = TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length]
+          const expanded = openDay === day.dayIndex
           const dayLinks = buildItineraryDayMapsLinks(day)
           return (
             <div
               key={day.dayIndex}
               style={{
-                padding: '14px 14px', borderRadius: 14,
-                border: '1.5px solid var(--border)', background: 'var(--bg2)',
+                borderRadius: 14,
+                border: `1.5px solid ${expanded ? color : 'var(--border)'}`,
+                background: 'var(--bg2)',
+                overflow: 'hidden',
               }}
             >
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => onOpenDay(day.dayIndex)}
+                onClick={() => setOpenDay(expanded ? null : day.dayIndex)}
                 style={{
-                  width: '100%', textAlign: 'left', padding: 0, border: 'none',
-                  background: 'transparent', cursor: busy ? 'default' : 'pointer',
-                  opacity: busy ? 0.6 : 1,
+                  width: '100%', textAlign: 'left', padding: '14px', border: 'none',
+                  background: 'transparent', cursor: 'pointer', touchAction: 'manipulation',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{
-                    width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                    background: TRIP_DAY_COLORS[(day.dayIndex - 1) % TRIP_DAY_COLORS.length],
-                    color: '#fff',
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    background: color, color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 13, fontWeight: 850,
                   }}>
-                    {day.kind === 'travel' ? '→' : `D${day.dayIndex}`}
+                    D{day.dayIndex}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
-                      {day.title || `Day ${day.dayIndex}`}
-                      {!day.title ? ` · ${day.stops.length} stop${day.stops.length === 1 ? '' : 's'}` : ''}
+                      Day {day.dayIndex}
+                      {day.title ? ` · ${day.title.replace(/^Day \d+ · /, '')}` : ''}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                      {day.stops.length} stop{day.stops.length === 1 ? '' : 's'}
-                      {' · '}{formatMiles(day.totalMiles)} · {formatDuration(day.driveMinutes + day.visitMinutes)}
-                      {day.stops.length > 0 ? ` · ${day.stops.slice(0, 2).map((s) => s.company || s.name || 'Stop').join(', ')}` : ''}
-                      {day.stops.length > 2 ? '…' : ''}
+                      {day.stops.length} shop{day.stops.length === 1 ? '' : 's'}
+                      {' · '}{formatMiles(day.totalMiles)}
+                      {day.endLabel ? ` · ends near ${shortPlace(day.endLabel)}` : ''}
                     </div>
                   </div>
                   <ChevronDown
                     className="size-4 shrink-0"
-                    style={{ color: 'var(--text3)', transform: 'rotate(-90deg)' }}
+                    style={{
+                      color: 'var(--text3)',
+                      transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.15s',
+                    }}
                     aria-hidden
                   />
                 </div>
               </button>
-              {dayLinks.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  {dayLinks.map((link, index) => (
-                    <a
-                      key={`${day.dayIndex}-${index}`}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        padding: '7px 10px', borderRadius: 9, textDecoration: 'none',
-                        border: '1.5px solid var(--border)', background: 'var(--bg3)',
-                        color: 'var(--accent)', fontSize: 11.5, fontWeight: 750,
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                      }}
-                    >
-                      <ExternalLink className="size-3 shrink-0" aria-hidden />
-                      {dayLinks.length > 1 ? `Maps leg ${index + 1}` : 'Open in Maps'}
-                    </a>
-                  ))}
+
+              {expanded && (
+                <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border2)' }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--text3)', margin: '10px 0 8px', lineHeight: 1.4 }}>
+                    Start: {shortPlace(day.originLabel) || '—'}
+                    {day.endLabel ? ` → End: ${shortPlace(day.endLabel)}` : ''}
+                  </div>
+                  <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {day.stops.map((stop, idx) => {
+                      const name = stop.company || stop.name || `Stop ${idx + 1}`
+                      const where = [stop.address, stop.city, stop.state].filter(Boolean).join(', ')
+                      return (
+                        <li key={`${stop.contactId}-${idx}`} style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.35 }}>
+                          <button
+                            type="button"
+                            onClick={() => onOpenContact(stop.contactId)}
+                            style={{
+                              border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                              textAlign: 'left', color: 'var(--accent)', fontWeight: 750, fontSize: 13,
+                            }}
+                          >
+                            {name}
+                          </button>
+                          {where && (
+                            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{where}</div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                  {dayLinks.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                      {dayLinks.map((link, index) => (
+                        <a
+                          key={`${day.dayIndex}-m-${index}`}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            padding: '9px 12px', borderRadius: 10, textDecoration: 'none',
+                            border: 'none', background: 'var(--accent)',
+                            color: '#fff', fontSize: 12.5, fontWeight: 750,
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                          }}
+                        >
+                          <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+                          {dayLinks.length > 1 ? `Maps part ${index + 1}` : 'Open Day in Maps'}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2351,10 +2070,4 @@ function dropdownStyle(active: boolean): CSSProperties {
     backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
     paddingRight: 22,
   }
-}
-
-const legIconBtn: CSSProperties = {
-  width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)',
-  background: 'var(--bg2)', color: 'var(--text2)', cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }

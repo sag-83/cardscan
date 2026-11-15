@@ -549,13 +549,6 @@ export function TripMapPanel({
           compact={compact}
           onClick={() => onTapModeChange('end')}
         />
-        <ModeChip
-          active={tapMode === 'via'}
-          label="+ Stop"
-          color={VIA_COLOR}
-          compact={compact}
-          onClick={() => onTapModeChange('via')}
-        />
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
@@ -703,16 +696,6 @@ export function TripMapPanel({
                 >
                   <Flag className="size-3.5 shrink-0" aria-hidden />
                   End here
-                </button>
-              )}
-              {onPickVia && (
-                <button
-                  type="button"
-                  onClick={() => applyPick(selected, 'via')}
-                  style={actionBtn(false)}
-                >
-                  <Plus className="size-3.5 shrink-0" aria-hidden />
-                  Add stop
                 </button>
               )}
               <button

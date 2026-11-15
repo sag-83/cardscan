@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarRange,
   Car,
   Check,
@@ -9,6 +11,7 @@ import {
   Crosshair,
   ExternalLink,
   Flag,
+  GripVertical,
   House,
   Info,
   Loader2,
@@ -45,7 +48,12 @@ import {
   territoryProgress,
 } from '../../lib/tripHistory'
 import { planItinerary } from '../../lib/itineraryPlanner'
-import { planJourney, replaceJourneyStop } from '../../lib/journeyPlanner'
+import {
+  planJourney,
+  planJourneyFromPicks,
+  reorderDayStops,
+  replaceJourneyStop,
+} from '../../lib/journeyPlanner'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { saveContactToDB } from '../../lib/supabase'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
@@ -220,6 +228,11 @@ export function TripScreen() {
   /** A → B multi-day journey destination (e.g. Diamond Concepts, VA). */
   const [journeyDest, setJourneyDest] = useState<JourneyDest>({ label: '' })
   const [journeyDays, setJourneyDays] = useState(5)
+  /** Auto = app picks corridor shops; manual = only shops tapped on the map. */
+  const [journeyPickSource, setJourneyPickSource] = useState<'auto' | 'manual'>('auto')
+  const [manualStops, setManualStops] = useState<TripMapPick[]>([])
+  /** Shops dismissed from an itinerary this session — never refill with these. */
+  const [dismissedIds, setDismissedIds] = useState<string[]>([])
   const [skipLogged, setSkipLogged] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [itineraryDayProgress, setItineraryDayProgress] = useState<{ day: number; total: number } | null>(null)
@@ -437,29 +450,52 @@ export function TripScreen() {
         }
         setJourneyDest((d) => ({ ...d, point: endPoint }))
 
-        const itinerary = await planJourney({
-          start: origin,
-          end: {
-            label: journeyDest.label.trim(),
-            point: endPoint,
-            contactId: journeyDest.contactId,
-          },
-          dayCount: journeyDays,
-          stopsPerDay: options.maxStops,
-          maxDetourMiles: Math.max(25, options.radiusMiles),
-          minutesPerStop: options.minutesPerStop,
-          priority: options.priority,
-          contacts: pool,
-          omitIds: new Set(),
-          filterState,
-          filterCity,
-          filterArea,
-          onProgress: (label, p) => {
-            setRoadStatus(label)
-            if (p) setProgress(p)
-          },
-          signal: controller.signal,
-        })
+        const endSpec = {
+          label: journeyDest.label.trim(),
+          point: endPoint,
+          contactId: journeyDest.contactId,
+        }
+
+        const itinerary = journeyPickSource === 'manual'
+          ? await planJourneyFromPicks({
+              start: origin,
+              end: endSpec,
+              dayCount: journeyDays,
+              stopsPerDay: options.maxStops,
+              minutesPerStop: options.minutesPerStop,
+              picks: manualStops.map((p) => ({
+                contactId: p.contactId,
+                label: p.label,
+                point: p.point,
+                address: p.address,
+              })),
+              contacts,
+              filterState,
+              filterCity,
+              filterArea,
+              onProgress: (label) => setRoadStatus(label),
+              signal: controller.signal,
+            })
+          : await planJourney({
+              start: origin,
+              end: endSpec,
+              dayCount: journeyDays,
+              stopsPerDay: options.maxStops,
+              maxDetourMiles: Math.max(25, options.radiusMiles),
+              minutesPerStop: options.minutesPerStop,
+              priority: options.priority,
+              contacts: pool,
+              omitIds: new Set(),
+              filterState,
+              filterCity,
+              filterArea,
+              onProgress: (label, p) => {
+                setRoadStatus(label)
+                if (p) setProgress(p)
+              },
+              signal: controller.signal,
+            })
+        setDismissedIds([])
         setSavedItinerary(itinerary)
         setPlan(null)
         setSetupOpen(false)
@@ -636,9 +672,19 @@ export function TripScreen() {
     showToast('End set — choose how many days, then Build trip')
   }
 
-  /** Same as End for A→B trips (kept so map “+ Stop” still does something useful). */
+  /** Toggle a shop into the manual pick basket (purple pins). */
   const pickVia = (pick: TripMapPick) => {
-    pickEnd(pick)
+    setPlanMode('road')
+    setJourneyPickSource('manual')
+    setSetupOpen(true)
+    setManualStops((prev) => {
+      if (prev.some((p) => p.contactId === pick.contactId)) {
+        showToast(`Removed ${pick.label}`)
+        return prev.filter((p) => p.contactId !== pick.contactId)
+      }
+      showToast(`Added ${pick.label} · ${prev.length + 1} picked`)
+      return [...prev, pick]
+    })
   }
 
   const pickStart = (pick: TripMapPick) => {
@@ -649,6 +695,11 @@ export function TripScreen() {
     setSetupOpen(true)
     showToast('Start set from map')
   }
+
+  const selectedStopIds = useMemo(
+    () => new Set(manualStops.map((p) => p.contactId)),
+    [manualStops],
+  )
 
   const planChrome = screenTab === 'plan'
 
@@ -678,10 +729,11 @@ export function TripScreen() {
           onPickEnd={pickEnd}
           onPickVia={pickVia}
           highlightIds={highlightIds}
+          selectedStopIds={selectedStopIds}
           routeMarks={{
             startId: mapStartContactId,
             endId: mapEndContactId,
-            viaIds: [],
+            viaIds: manualStops.map((p) => p.contactId),
           }}
           tapMode={mapTapMode}
           onTapModeChange={setMapTapMode}
@@ -1035,6 +1087,55 @@ export function TripScreen() {
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 750, color: 'var(--text2)', marginBottom: 4 }}>
+                      Who picks the shops
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <SegButton
+                        active={journeyPickSource === 'auto'}
+                        onClick={() => setJourneyPickSource('auto')}
+                        icon={<Route className="size-3.5 shrink-0" aria-hidden />}
+                        label="App picks"
+                      />
+                      <SegButton
+                        active={journeyPickSource === 'manual'}
+                        onClick={() => {
+                          setJourneyPickSource('manual')
+                          setMapTapMode('via')
+                        }}
+                        icon={<MapPin className="size-3.5 shrink-0" aria-hidden />}
+                        label={manualStops.length ? `My picks (${manualStops.length})` : 'I pick on map'}
+                      />
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.4, marginTop: 6 }}>
+                      {journeyPickSource === 'auto'
+                        ? 'App fills each day along the corridor. Or switch to “I pick” and tap shops on the map.'
+                        : 'Tap Add stop on the map for every shop you want. Then set days + shops/day and Build — we order the efficient route.'}
+                    </div>
+                    {journeyPickSource === 'manual' && manualStops.length > 0 && (
+                      <div style={{
+                        marginTop: 8, padding: '8px 10px', borderRadius: 10,
+                        background: 'var(--bg3)', border: '1px solid var(--border2)',
+                        display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+                      }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 750, color: 'var(--text2)' }}>
+                          {manualStops.length} selected
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setManualStops([])}
+                          style={{
+                            marginLeft: 'auto', border: 'none', background: 'transparent',
+                            color: 'var(--danger, #ff453a)', fontSize: 11.5, fontWeight: 750,
+                            cursor: 'pointer', padding: '4px 6px',
+                          }}
+                        >
+                          Clear picks
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 750, color: 'var(--text2)', marginBottom: 4 }}>
                       Where the trip ends
                     </div>
                     <AddressAutocomplete
@@ -1071,7 +1172,7 @@ export function TripScreen() {
                     onChange={setJourneyDays}
                   />
                   <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.4 }}>
-                    Example: 5 days from Pennsylvania to Virginia — each day moves you closer to the end shop.
+                    Example: 5 days · 7 shops/day — set Start + End on the map, then Build.
                   </div>
                 </div>
               )}
@@ -1170,7 +1271,13 @@ export function TripScreen() {
                   : planMode === 'itinerary'
                     ? <><CalendarRange className="size-4 shrink-0" aria-hidden />Build area days</>
                     : planMode === 'road'
-                      ? <><Navigation className="size-4 shrink-0" aria-hidden />Build {journeyDays}-day trip</>
+                      ? (
+                          <><Navigation className="size-4 shrink-0" aria-hidden />
+                          {journeyPickSource === 'manual'
+                            ? `Build from ${manualStops.length || 'my'} picks`
+                            : `Build ${journeyDays}-day trip`}
+                          </>
+                        )
                       : <><Route className="size-4 shrink-0" aria-hidden />Plan my route</>}
               </button>
               {working && (
@@ -1217,10 +1324,18 @@ export function TripScreen() {
       {savedItinerary && !working && (
         <ItineraryView
           itinerary={savedItinerary}
-          onDismiss={() => setSavedItinerary(null)}
+          onDismiss={() => {
+            setSavedItinerary(null)
+            setDismissedIds([])
+          }}
           onOpenContact={setDetailContactId}
+          onReorderStop={(dayIndex, fromIndex, toIndex) => {
+            setSavedItinerary(reorderDayStops(savedItinerary, dayIndex, fromIndex, toIndex))
+          }}
           onRemoveStop={async (dayIndex, contactId) => {
             try {
+              const banned = new Set(dismissedIds)
+              banned.add(contactId)
               const result = await replaceJourneyStop({
                 itinerary: savedItinerary,
                 dayIndex,
@@ -1229,7 +1344,11 @@ export function TripScreen() {
                 targetStopsPerDay: savedItinerary.stopsPerDay || options.maxStops,
                 maxNearbyMiles: Math.max(40, options.radiusMiles),
                 priority: options.priority,
+                bannedIds: banned,
               })
+              setDismissedIds((prev) => (
+                prev.includes(contactId) ? prev : [...prev, contactId]
+              ))
               setSavedItinerary(result.itinerary)
               if (result.addedNames.length) {
                 showToast(
@@ -1414,15 +1533,17 @@ function EmptyState({ hasContacts }: { hasContacts: boolean }) {
 }
 
 function ItineraryView({
-  itinerary, onDismiss, onOpenContact, onRemoveStop,
+  itinerary, onDismiss, onOpenContact, onRemoveStop, onReorderStop,
 }: {
   itinerary: TripItinerary
   onDismiss: () => void
   onOpenContact: (id: string) => void
   onRemoveStop: (dayIndex: number, contactId: string) => Promise<void>
+  onReorderStop: (dayIndex: number, fromIndex: number, toIndex: number) => void
 }) {
   const [openDay, setOpenDay] = useState<number | null>(itinerary.days[0]?.dayIndex ?? null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [dragFrom, setDragFrom] = useState<{ dayIndex: number; index: number } | null>(null)
   const totalStops = itinerary.days.reduce((n, d) => n + d.stops.length, 0)
 
   const handleRemove = async (dayIndex: number, contactId: string) => {
@@ -1446,7 +1567,7 @@ function ItineraryView({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{itinerary.label}</div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, lineHeight: 1.45 }}>
-              {itinerary.dayCount} days · {totalStops} shops · tap a day · trash a shop to swap in a nearby one
+              {itinerary.dayCount} days · {totalStops} shops · reorder with arrows · trash swaps in a nearby new shop
             </div>
           </div>
           <button
@@ -1531,15 +1652,46 @@ function ItineraryView({
                       const name = stop.company || stop.name || `Stop ${idx + 1}`
                       const where = [stop.address, stop.city, stop.state].filter(Boolean).join(', ')
                       const busy = removingId === stop.contactId
+                      const dragging = dragFrom?.dayIndex === day.dayIndex && dragFrom.index === idx
                       return (
                         <div
                           key={`${stop.contactId}-${idx}`}
+                          draggable={!removingId}
+                          onDragStart={(e) => {
+                            setDragFrom({ dayIndex: day.dayIndex, index: idx })
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', String(idx))
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            if (dragFrom && dragFrom.dayIndex === day.dayIndex) {
+                              onReorderStop(day.dayIndex, dragFrom.index, idx)
+                            }
+                            setDragFrom(null)
+                          }}
+                          onDragEnd={() => setDragFrom(null)}
                           style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 8,
-                            padding: '8px 10px', borderRadius: 10,
-                            background: 'var(--bg3)', border: '1px solid var(--border2)',
+                            display: 'flex', alignItems: 'flex-start', gap: 6,
+                            padding: '8px 8px', borderRadius: 10,
+                            background: dragging ? 'var(--chip-accent-bg)' : 'var(--bg3)',
+                            border: `1px solid ${dragging ? color : 'var(--border2)'}`,
+                            opacity: dragging ? 0.85 : 1,
+                            cursor: 'grab',
                           }}
                         >
+                          <div
+                            style={{
+                              color: 'var(--text3)', display: 'flex', alignItems: 'center',
+                              paddingTop: 8, flexShrink: 0,
+                            }}
+                            aria-hidden
+                          >
+                            <GripVertical className="size-3.5" />
+                          </div>
                           <div style={{
                             width: 22, height: 22, borderRadius: 7, flexShrink: 0, marginTop: 1,
                             background: color, color: '#fff', fontSize: 11, fontWeight: 850,
@@ -1562,6 +1714,32 @@ function ItineraryView({
                               <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{where}</div>
                             )}
                           </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              disabled={idx === 0 || Boolean(removingId)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onReorderStop(day.dayIndex, idx, idx - 1)
+                              }}
+                              aria-label={`Move ${name} up`}
+                              style={reorderBtnStyle(idx === 0 || Boolean(removingId))}
+                            >
+                              <ArrowUp className="size-3" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === day.stops.length - 1 || Boolean(removingId)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onReorderStop(day.dayIndex, idx, idx + 1)
+                              }}
+                              aria-label={`Move ${name} down`}
+                              style={reorderBtnStyle(idx === day.stops.length - 1 || Boolean(removingId))}
+                            >
+                              <ArrowDown className="size-3" aria-hidden />
+                            </button>
+                          </div>
                           <button
                             type="button"
                             disabled={Boolean(removingId)}
@@ -1570,7 +1748,7 @@ function ItineraryView({
                               void handleRemove(day.dayIndex, stop.contactId)
                             }}
                             aria-label={`Remove ${name} and add a nearby shop`}
-                            title="Remove — a nearby shop fills this slot"
+                            title="Remove — a different nearby shop fills this slot"
                             style={{
                               width: 36, height: 36, borderRadius: 10, flexShrink: 0,
                               border: 'none', background: 'var(--bg2)',
@@ -2145,5 +2323,16 @@ function dropdownStyle(active: boolean): CSSProperties {
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e93' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
     backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
     paddingRight: 22,
+  }
+}
+
+function reorderBtnStyle(disabled: boolean): CSSProperties {
+  return {
+    width: 28, height: 18, borderRadius: 6, border: '1px solid var(--border2)',
+    background: 'var(--bg2)', color: 'var(--text2)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.35 : 1,
+    padding: 0, touchAction: 'manipulation',
   }
 }

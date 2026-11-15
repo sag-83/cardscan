@@ -63,12 +63,14 @@ interface Props {
   onPickEnd?: (pick: TripMapPick) => void
   /** Start from here. */
   onPickStart?: (pick: TripMapPick) => void
-  /** Add as another stop/leg on the road trip (Charlotte after VA, etc.). */
+  /** Toggle a shop into the manual “my picks” basket. */
   onPickVia?: (pick: TripMapPick) => void
   /** Planned stop ids — drawn thicker / blue ring. */
   highlightIds?: Set<string>
   /** Contact ids currently chosen as start / end / mid stops (map rings). */
   routeMarks?: { startId?: string | null; endId?: string | null; viaIds?: string[] }
+  /** Shops the user added by hand (purple rings). */
+  selectedStopIds?: Set<string>
   tapMode: TripMapTapMode
   onTapModeChange: (mode: TripMapTapMode) => void
   filter: TripMapFilter
@@ -102,6 +104,7 @@ export function TripMapPanel({
   onPickVia,
   highlightIds,
   routeMarks,
+  selectedStopIds,
   tapMode,
   onTapModeChange,
   filter,
@@ -286,7 +289,10 @@ export function TripMapPanel({
     layer.clearLayers()
     if (!visible.length) return
 
-    const viaSet = new Set(routeMarks?.viaIds ?? [])
+    const viaSet = new Set([
+      ...(routeMarks?.viaIds ?? []),
+      ...(selectedStopIds ? [...selectedStopIds] : []),
+    ])
     const bounds = L.latLngBounds([])
     for (const pin of visible) {
       const isStart = routeMarks?.startId === pin.contactId
@@ -320,7 +326,7 @@ export function TripMapPanel({
         : isEnd
           ? `END · ${pin.label}`
           : isVia
-            ? `STOP · ${pin.label}`
+            ? `PICKED · ${pin.label}`
             : dayMeta
               ? `Day ${dayMeta.dayIndex} · ${pin.label}`
               : pin.label
@@ -345,9 +351,9 @@ export function TripMapPanel({
         }
         if (mode === 'via' && h.onPickVia) {
           h.onPickVia(pick)
+          // Stay in Add mode so the rep can keep tapping shops.
           setSelected(null)
           setQuery('')
-          if (h.expanded) h.onToggleExpand()
           return
         }
         setSelected(pin)
@@ -361,7 +367,7 @@ export function TripMapPanel({
       fittedRef.current = true
     }
     window.setTimeout(() => map.invalidateSize(), 30)
-  }, [visible, highlightIds, routeMarks, dayColorByContact])
+  }, [visible, highlightIds, routeMarks, selectedStopIds, dayColorByContact])
 
   // Draw colored day paths once pins exist (order follows itinerary stop list).
   useEffect(() => {
@@ -422,7 +428,8 @@ export function TripMapPanel({
     else onPickVia?.(pick)
     setSelected(null)
     setQuery('')
-    if (expanded) onToggleExpand()
+    // Keep the map open when adding stops so the rep can keep tapping.
+    if (role !== 'via' && expanded) onToggleExpand()
   }
 
   const focusPin = (pin: CustomerMapPin) => {
@@ -549,6 +556,15 @@ export function TripMapPanel({
           compact={compact}
           onClick={() => onTapModeChange('end')}
         />
+        {onPickVia && (
+          <ModeChip
+            active={tapMode === 'via'}
+            label={selectedStopIds?.size ? `Add (${selectedStopIds.size})` : 'Add stop'}
+            color={VIA_COLOR}
+            compact={compact}
+            onClick={() => onTapModeChange('via')}
+          />
+        )}
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
@@ -696,6 +712,16 @@ export function TripMapPanel({
                 >
                   <Flag className="size-3.5 shrink-0" aria-hidden />
                   End here
+                </button>
+              )}
+              {onPickVia && (
+                <button
+                  type="button"
+                  onClick={() => applyPick(selected, 'via')}
+                  style={actionBtn(false)}
+                >
+                  <Plus className="size-3.5 shrink-0" aria-hidden />
+                  {selectedStopIds?.has(selected.contactId) ? 'Remove stop' : 'Add stop'}
                 </button>
               )}
               <button

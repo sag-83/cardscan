@@ -271,6 +271,13 @@ export async function resolveCustomerMapPins(
   return [...byId.values()]
 }
 
+/** Street-level (or last refined) coords from the map pin cache — preferred for routing. */
+export function getCachedPinPoint(contact: Contact): { point: GeoPoint; exact: boolean } | null {
+  const cached = pinCache.get(cacheKey(contact))
+  if (!cached) return null
+  return { point: { lat: cached.lat, lng: cached.lng }, exact: Boolean(cached.exact) }
+}
+
 export function googleMapsSearchUrl(pin: CustomerMapPin): string {
   const q = pin.address || `${pin.point.lat},${pin.point.lng}`
   return `https://maps.google.com/?q=${encodeURIComponent(q)}`

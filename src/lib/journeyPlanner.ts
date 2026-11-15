@@ -8,6 +8,7 @@
 
 import type { Contact } from '../types/contact'
 import type { TripItinerary, TripStopSnapshot } from '../types/trip'
+import { getCachedPinPoint } from './customerMapPins'
 import {
   distanceBetween,
   distanceToPolyline,
@@ -22,6 +23,7 @@ import {
 } from './geocode'
 import { newTripId } from './tripHistory'
 import { fetchDrivingRoute } from './osrm'
+import { planRoute, type CostMatrix } from './routeOptimizer'
 import type { TripOrigin, TripPriority, TripProgress } from './tripPlanner'
 
 export interface JourneyRequest {
@@ -84,18 +86,25 @@ function matchesAudience(c: Contact, priority: TripPriority, endContactId?: stri
   return true
 }
 
-/** City/ZIP only — fast enough to scan the library; street geocode is unnecessary for corridor banding. */
+/**
+ * Prefer street pin cache (same coords the map shows), then city/ZIP.
+ * Keeps itinerary geometry aligned with what the rep sees on the map.
+ */
 async function locateCheap(c: Contact): Promise<GeoPoint | null> {
+  const pin = getCachedPinPoint(c)
+  if (pin?.exact) return pin.point
+
   const city = (c.city ?? '').trim()
   const state = (c.state ?? '').trim()
   if (city) {
     const cached = getCachedCityCoords(city, state)
-    if (cached) return cached
-    return await geocodeCityCoords(city, state)
+    if (cached) return pin?.point ?? cached
+    const cityPt = await geocodeCityCoords(city, state)
+    if (cityPt) return pin?.point ?? cityPt
   }
+  if (pin?.point) return pin.point
   const zip = (c.zip ?? '').trim()
   if (zip) return await geocodePostalCode(zip)
-  // Last resort: street (rare contacts with address but no city).
   const street = (c.address ?? '').trim()
   if (street) {
     const hit = await geocodeContactLocation(c)
@@ -379,6 +388,11 @@ export interface ReplaceJourneyStopRequest {
   targetStopsPerDay: number
   maxNearbyMiles: number
   priority: TripPriority
+  /**
+   * Shops the user already dismissed this trip — never put them back as
+   * replacements (includes the shop being removed).
+   */
+  bannedIds?: Set<string>
   signal?: AbortSignal
 }
 
@@ -390,7 +404,8 @@ export interface ReplaceJourneyStopResult {
 
 /**
  * Remove a shop from a day and backfill with nearby unused shops so the
- * day's quota stays full (remove 2 of 10 → add 2 close replacements).
+ * day's quota stays full (remove 2 of 10 → add 2 *different* nearby shops).
+ * The removed shop is never put back.
  */
 export async function replaceJourneyStop(
   req: ReplaceJourneyStopRequest,
@@ -406,13 +421,14 @@ export async function replaceJourneyStop(
   const removed = day.stops[removeIdx]
   const removedName = removed.company || removed.name || 'Shop'
 
-  const used = new Set<string>()
+  // Already on the trip OR previously dismissed — never re-use as a refill.
+  const blocked = new Set<string>(req.bannedIds)
+  blocked.add(req.removeContactId)
   for (const d of req.itinerary.days) {
-    for (const s of d.stops) used.add(s.contactId)
+    for (const s of d.stops) blocked.add(s.contactId)
   }
-  used.delete(req.removeContactId)
 
-  // Anchor = removed shop's area (or neighbors on the same day).
+  // Anchor near the removed shop (or a neighbor) so the replacement stays local.
   const removedContact = req.contacts.find((c) => c.id === req.removeContactId)
   let anchor = removedContact ? await locateCheap(removedContact) : null
   if (!anchor) {
@@ -421,7 +437,6 @@ export async function replaceJourneyStop(
     if (nc) anchor = await locateCheap(nc)
   }
   if (!anchor) {
-    // Still allow remove with no refill if we can't place the area.
     const nextStops = day.stops.filter((s) => s.contactId !== req.removeContactId)
     return {
       itinerary: patchDayStops(req.itinerary, req.dayIndex, nextStops),
@@ -436,15 +451,10 @@ export async function replaceJourneyStop(
 
   if (need > 0) {
     const candidates: Array<{ contact: Contact; point: GeoPoint; miles: number; score: number }> = []
-    let scanned = 0
     for (const c of req.contacts) {
       throwIfAborted(req.signal)
-      if (used.has(c.id)) continue
+      if (blocked.has(c.id)) continue
       if (!matchesAudience(c, req.priority)) continue
-      scanned++
-      if (scanned % 40 === 0) {
-        // Keep UI responsive on large libraries — city cache hits are sync.
-      }
       const point = await locateCheap(c)
       if (!point) continue
       const miles = distanceBetween(anchor, point)
@@ -457,12 +467,13 @@ export async function replaceJourneyStop(
       })
     }
 
-    candidates.sort((a, b) => b.score - a.score || a.miles - b.miles)
+    // Closest first, then audience score — user wants exposure nearby, not the same shop.
+    candidates.sort((a, b) => a.miles - b.miles || b.score - a.score)
 
     for (const cand of candidates) {
       if (added.length >= need) break
-      if (used.has(cand.contact.id)) continue
-      used.add(cand.contact.id)
+      if (blocked.has(cand.contact.id)) continue
+      blocked.add(cand.contact.id)
       const snap = snapshot(cand.contact)
       added.push(snap)
       addedNames.push(snap.company || snap.name || 'Shop')
@@ -479,6 +490,269 @@ export async function replaceJourneyStop(
   }
 }
 
+/** Reorder stops within a day (drag / move up-down). */
+export function reorderDayStops(
+  itinerary: TripItinerary,
+  dayIndex: number,
+  fromIndex: number,
+  toIndex: number,
+): TripItinerary {
+  const day = itinerary.days.find((d) => d.dayIndex === dayIndex)
+  if (!day) return itinerary
+  if (
+    fromIndex < 0 || toIndex < 0
+    || fromIndex >= day.stops.length
+    || toIndex >= day.stops.length
+    || fromIndex === toIndex
+  ) {
+    return itinerary
+  }
+  const stops = [...day.stops]
+  const [moved] = stops.splice(fromIndex, 1)
+  stops.splice(toIndex, 0, moved)
+  return patchDayStops(itinerary, dayIndex, stops)
+}
+
+export interface ManualJourneyPick {
+  contactId: string
+  label: string
+  point: GeoPoint
+  address?: string
+}
+
+export interface PlanJourneyFromPicksRequest {
+  start: TripOrigin
+  end: { label: string; point: GeoPoint; contactId?: string }
+  dayCount: number
+  stopsPerDay: number
+  minutesPerStop: number
+  picks: ManualJourneyPick[]
+  contacts: Contact[]
+  filterState: string
+  filterCity: string
+  filterArea: string
+  onProgress?: (label: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * User picked the shops on the map. Split them into an efficient N-day
+ * corridor itinerary from start → end (respecting shops/day).
+ */
+export async function planJourneyFromPicks(
+  req: PlanJourneyFromPicksRequest,
+): Promise<TripItinerary> {
+  const dayCount = Math.max(1, Math.min(21, Math.round(req.dayCount)))
+  const stopsPerDay = Math.max(1, Math.min(30, Math.round(req.stopsPerDay)))
+
+  throwIfAborted(req.signal)
+  if (!req.picks.length) {
+    throw new Error('Tap shops on the map (Add stop) before building from your picks.')
+  }
+
+  req.onProgress?.('Routing start → destination…')
+  const route = await fetchDrivingRoute(req.start.point, req.end.point, req.signal)
+  const path = route?.geometry?.length
+    ? route.geometry
+    : straightCorridor(req.start.point, req.end.point)
+  const totalMiles = route?.miles ?? pathLengthMiles(path) * 1.05
+
+  const byId = new Map(req.contacts.map((c) => [c.id, c]))
+  type Ranked = { pick: ManualJourneyPick; contact: Contact | null; alongMiles: number; point: GeoPoint }
+  const ranked: Ranked[] = []
+
+  for (const pick of req.picks) {
+    throwIfAborted(req.signal)
+    if (req.end.contactId && pick.contactId === req.end.contactId) continue
+    const { alongMiles } = distanceToPolyline(pick.point, path)
+    ranked.push({
+      pick,
+      contact: byId.get(pick.contactId) ?? null,
+      alongMiles,
+      point: pick.point,
+    })
+  }
+
+  ranked.sort((a, b) => a.alongMiles - b.alongMiles)
+  // User chose these shops deliberately — use all of them.
+  const use = ranked
+
+  req.onProgress?.(`Ordering ${use.length} shops across ${dayCount} days…`)
+
+  // Slice the corridor into day bands by along-miles, then pack ≤ stopsPerDay each.
+  const band = Math.max(1, totalMiles / dayCount)
+  const buckets: Ranked[][] = Array.from({ length: dayCount }, () => [])
+
+  for (const item of use) {
+    let day = Math.min(dayCount - 1, Math.max(0, Math.floor(item.alongMiles / band)))
+    // Prefer an earlier day if this band is full.
+    while (day < dayCount - 1 && buckets[day].length >= stopsPerDay) day++
+    // If last day is full too, still append (user selected these shops).
+    if (buckets[day].length >= stopsPerDay && day > 0) {
+      // Try previous days with space.
+      let placed = false
+      for (let d = 0; d < dayCount; d++) {
+        if (buckets[d].length < stopsPerDay) {
+          buckets[d].push(item)
+          placed = true
+          break
+        }
+      }
+      if (!placed) buckets[day].push(item)
+    } else {
+      buckets[day].push(item)
+    }
+  }
+
+  // Fold empty early days forward so we don't emit blank days in the middle.
+  const nonEmpty = buckets.filter((b) => b.length > 0)
+  if (!nonEmpty.length && !req.end.contactId) {
+    throw new Error('Could not place your picks on this route.')
+  }
+  while (nonEmpty.length < dayCount && req.end.contactId) {
+    // Keep day count if end shop will land on the last day alone.
+    break
+  }
+
+  const days: TripItinerary['days'] = []
+  let cursorPoint = req.start.point
+  let cursorLabel = req.start.label
+
+  const daySlices = nonEmpty.length ? nonEmpty : [[]]
+  // Ensure we have at least `min(dayCount, picks)` day slots; pad last with end.
+  const finalDayCount = Math.min(dayCount, Math.max(1, daySlices.length))
+
+  for (let d = 0; d < finalDayCount; d++) {
+    throwIfAborted(req.signal)
+    const isLast = d === finalDayCount - 1
+    let items = [...(daySlices[d] || [])]
+
+    if (isLast && req.end.contactId) {
+      const endContact = byId.get(req.end.contactId)
+      if (endContact && !items.some((i) => i.pick.contactId === req.end.contactId)) {
+        items = items.filter((i) => i.pick.contactId !== req.end.contactId)
+        items.push({
+          pick: {
+            contactId: req.end.contactId,
+            label: req.end.label,
+            point: req.end.point,
+          },
+          contact: endContact,
+          alongMiles: totalMiles,
+          point: req.end.point,
+        })
+      }
+    }
+
+    // Efficient visit order within the day (straight-line TSP heuristic).
+    const ordered = orderDayStops(cursorPoint, items, isLast && req.end.contactId ? req.end.point : null)
+
+    let dayMiles = 0
+    let prev = cursorPoint
+    for (const item of ordered) {
+      dayMiles += distanceBetween(prev, item.point) * 1.25
+      prev = item.point
+    }
+
+    const stops: TripStopSnapshot[] = ordered.map((item) => (
+      item.contact
+        ? snapshot(item.contact)
+        : {
+            contactId: item.pick.contactId,
+            name: item.pick.label,
+            company: item.pick.label,
+            city: '',
+            state: '',
+            address: item.pick.address || '',
+          }
+    ))
+
+    const last = ordered[ordered.length - 1]
+    const endLabel = isLast
+      ? req.end.label
+      : (last?.contact?.company || last?.contact?.name || last?.pick.label || `Day ${d + 1} end`)
+
+    const dayIndex = days.length + 1
+    days.push({
+      dayIndex,
+      kind: 'travel',
+      title: isLast
+        ? `Day ${dayIndex} · arrive ${shortLabel(req.end.label)}`
+        : `Day ${dayIndex} · from ${shortLabel(cursorLabel)}`,
+      originLabel: cursorLabel,
+      endLabel,
+      stops,
+      totalMiles: dayMiles,
+      driveMinutes: estimateDriveMinutes(dayMiles / 1.25),
+      visitMinutes: stops.length * Math.max(0, req.minutesPerStop),
+    })
+
+    if (last) {
+      cursorPoint = last.point
+      cursorLabel = last.contact?.company || last.contact?.name || last.pick.label || endLabel
+    }
+  }
+
+  if (!days.length) {
+    throw new Error('Could not build a trip from your picks.')
+  }
+
+  return {
+    id: newTripId('journey-picks'),
+    created_at: new Date().toISOString(),
+    label: `${shortLabel(req.start.label)} → ${shortLabel(req.end.label)} · ${days.length} day${days.length === 1 ? '' : 's'} (your picks)`,
+    dayCount: days.length,
+    stopsPerDay,
+    originLabel: req.start.label,
+    endLabel: req.end.label,
+    filterState: req.filterState,
+    filterCity: req.filterCity,
+    filterArea: req.filterArea,
+    days,
+  }
+}
+
+type RankedPick = {
+  pick: ManualJourneyPick
+  contact: Contact | null
+  alongMiles: number
+  point: GeoPoint
+}
+
+function orderDayStops(
+  origin: GeoPoint,
+  items: RankedPick[],
+  endPoint: GeoPoint | null,
+): RankedPick[] {
+  if (items.length <= 1) return items
+
+  // Matrix: 0 = day start, 1..n = stops, optionally n+1 = end (not visited as stop).
+  const n = items.length
+  const hasEnd = Boolean(endPoint)
+  const size = n + 1 + (hasEnd ? 1 : 0)
+  const pts: GeoPoint[] = [origin, ...items.map((i) => i.point)]
+  if (hasEnd && endPoint) pts.push(endPoint)
+
+  const matrix: CostMatrix = Array.from({ length: size }, () => Array(size).fill(0))
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      if (i === j) continue
+      matrix[i][j] = distanceBetween(pts[i], pts[j])
+    }
+  }
+
+  const endIndex = hasEnd ? size - 1 : null
+  const candidates = items.map((_, i) => i + 1)
+  const { order } = planRoute(matrix, {
+    candidates,
+    limit: n,
+    endIndex,
+  })
+
+  // order is [0, stopIdx…]; drop origin
+  return order.slice(1).map((idx) => items[idx - 1]).filter(Boolean)
+}
+
 function patchDayStops(
   itinerary: TripItinerary,
   dayIndex: number,
@@ -488,13 +762,13 @@ function patchDayStops(
     ...itinerary,
     days: itinerary.days.map((d) => {
       if (d.dayIndex !== dayIndex) return d
-      const visitMinutes = stops.length * (d.stops.length
+      const perStop = d.stops.length
         ? Math.round(d.visitMinutes / Math.max(1, d.stops.length))
-        : 30)
+        : 30
       return {
         ...d,
         stops,
-        visitMinutes,
+        visitMinutes: stops.length * perStop,
         endLabel: stops.length
           ? (stops[stops.length - 1].company || stops[stops.length - 1].name || d.endLabel)
           : d.endLabel,

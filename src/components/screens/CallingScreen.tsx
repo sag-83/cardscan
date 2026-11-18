@@ -963,14 +963,18 @@ function CallCard({
           <textarea
             value={callScript}
             onChange={(event) => onCallScript(event.target.value)}
-            placeholder="Paste your pitch here — intro, ask, close. It stays on every call so you don’t flip between apps."
-            rows={callScript.trim() ? Math.min(10, Math.max(4, callScript.split('\n').length + 1)) : 4}
+            placeholder={"Paste your full pitch here — intro, ask, close, last resort.\nIt stays open on every call so you can read it without scrolling away."}
+            rows={Math.max(14, Math.min(22, (callScript.match(/\n/g)?.length ?? 0) + 3))}
             aria-label="Call script"
             style={{
-              width: '100%', padding: '8px 2px', borderRadius: 0, resize: 'vertical',
+              width: '100%', padding: '6px 2px 10px', borderRadius: 0, resize: 'vertical',
               background: 'transparent', border: 'none', outline: 'none',
-              fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5,
-              fontFamily: 'inherit', minHeight: 88,
+              fontSize: 14, color: 'var(--text)', lineHeight: 1.55,
+              fontFamily: 'inherit',
+              // Tall enough for a full pitch on one glance; still stretchable.
+              minHeight: 280,
+              maxHeight: '55vh',
+              overflowY: 'auto',
             }}
           />
         </div>

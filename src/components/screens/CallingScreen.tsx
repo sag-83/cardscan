@@ -18,6 +18,7 @@ import {
   PhoneCall,
   PhoneOff,
   RefreshCw,
+  ScrollText,
   Search,
   SkipForward,
   SlidersHorizontal,
@@ -70,6 +71,15 @@ function parkedToQueueEntry(entry: ParkedEntry): QueueEntry {
 }
 
 const FILTERS_KEY = 'cs_call_filters_v1'
+const SCRIPT_KEY = 'cs_call_script_v1'
+
+function loadCallScript(): string {
+  try {
+    return localStorage.getItem(SCRIPT_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
 
 /** Default gap before a promised callback, used to pre-fill the date box. */
 const DEFAULT_CALLBACK_DAYS = 7
@@ -117,6 +127,8 @@ export function CallingScreen() {
   const [focusedId, setFocusedId] = useState<string | null>(null)
 
   const [note, setNote] = useState('')
+  /** Shared pitch script — stays on every call card, editable anytime. */
+  const [callScript, setCallScript] = useState(loadCallScript)
   const [pendingOutcome, setPendingOutcome] = useState<CallOutcome | null>(null)
   const [callbackDate, setCallbackDate] = useState(defaultCallbackDate)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -137,6 +149,10 @@ export function CallingScreen() {
   useEffect(() => {
     try { localStorage.setItem(FILTERS_KEY, JSON.stringify(filters)) } catch {}
   }, [filters])
+
+  useEffect(() => {
+    try { localStorage.setItem(SCRIPT_KEY, callScript) } catch {}
+  }, [callScript])
 
   useEffect(() => {
     writeSkippedCalls(skipped)
@@ -433,6 +449,8 @@ export function CallingScreen() {
           entry={active}
           note={note}
           onNote={setNote}
+          callScript={callScript}
+          onCallScript={setCallScript}
           pendingOutcome={pendingOutcome}
           onPendingOutcome={setPendingOutcome}
           callbackDate={callbackDate}
@@ -795,12 +813,15 @@ function TallyBar({ stats, remaining }: {
 // ─── The card being called ──────────────────────────────────────────────────
 
 function CallCard({
-  entry, note, onNote, pendingOutcome, onPendingOutcome, callbackDate, onCallbackDate,
+  entry, note, onNote, callScript, onCallScript,
+  pendingOutcome, onPendingOutcome, callbackDate, onCallbackDate,
   historyOpen, onToggleHistory, onLog, onSkip, onOpenContact,
 }: {
   entry: QueueEntry
   note: string
   onNote: (value: string) => void
+  callScript: string
+  onCallScript: (value: string) => void
   pendingOutcome: CallOutcome | null
   onPendingOutcome: (outcome: CallOutcome | null) => void
   callbackDate: string
@@ -909,11 +930,50 @@ function CallCard({
             marginTop: 12, padding: '10px 12px', borderRadius: 10,
             background: 'var(--bg3)', fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.5,
           }}>
+            <div style={{
+              fontSize: 10.5, fontWeight: 800, color: 'var(--text3)',
+              letterSpacing: 0.4, marginBottom: 5, textTransform: 'uppercase',
+            }}>
+              Store notes
+            </div>
             {cardNotes.map((text, index) => (
               <div key={index} style={{ marginTop: index === 0 ? 0 : 6 }}>{text}</div>
             ))}
           </div>
         )}
+
+        <div style={{
+          marginTop: 12, padding: '10px 12px', borderRadius: 10,
+          background: 'var(--bg3)', border: '1px solid var(--border2)',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+          }}>
+            <ScrollText className="size-3.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+            <div style={{
+              flex: 1, fontSize: 10.5, fontWeight: 800, color: 'var(--text3)',
+              letterSpacing: 0.4, textTransform: 'uppercase',
+            }}>
+              Your script
+            </div>
+            <span style={{ fontSize: 10.5, color: 'var(--text3)', fontWeight: 650 }}>
+              Editable · saved here
+            </span>
+          </div>
+          <textarea
+            value={callScript}
+            onChange={(event) => onCallScript(event.target.value)}
+            placeholder="Paste your pitch here — intro, ask, close. It stays on every call so you don’t flip between apps."
+            rows={callScript.trim() ? Math.min(10, Math.max(4, callScript.split('\n').length + 1)) : 4}
+            aria-label="Call script"
+            style={{
+              width: '100%', padding: '8px 2px', borderRadius: 0, resize: 'vertical',
+              background: 'transparent', border: 'none', outline: 'none',
+              fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5,
+              fontFamily: 'inherit', minHeight: 88,
+            }}
+          />
+        </div>
 
         {history.attempts > 0 && (
           <div style={{ marginTop: 12 }}>

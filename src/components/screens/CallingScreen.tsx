@@ -11,6 +11,7 @@ import {
   History,
   ListChecks,
   Loader2,
+  Mail,
   MapPin,
   MessageSquare,
   Package,
@@ -1122,6 +1123,7 @@ const OUTCOME_ICON: Record<CallOutcome, ReactNode> = {
   'not-interested': <ThumbsDown className="size-3.5 shrink-0" aria-hidden />,
   'bad-number': <PhoneOff className="size-3.5 shrink-0" aria-hidden />,
   'do-not-call': <Ban className="size-3.5 shrink-0" aria-hidden />,
+  brochure: <Mail className="size-3.5 shrink-0" aria-hidden />,
 }
 
 function OutcomeButton({ outcome, active, onClick }: {

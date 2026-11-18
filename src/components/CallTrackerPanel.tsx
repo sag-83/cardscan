@@ -67,6 +67,7 @@ type TrackerStats = {
   notInterested: number
   badNumber: number
   doNotCall: number
+  brochure: number
   uniqueShops: number
   withNotes: number
   byOutcome: Record<CallOutcome, number>
@@ -96,6 +97,7 @@ function buildStats(logs: CallLog[]): TrackerStats {
     notInterested: byOutcome['not-interested'],
     badNumber: byOutcome['bad-number'],
     doNotCall: byOutcome['do-not-call'],
+    brochure: byOutcome.brochure ?? 0,
     uniqueShops: shops.size,
     withNotes,
     byOutcome,
@@ -257,6 +259,7 @@ export function CallTrackerPanel({
               <MiniStat value={stats.notInterested} label="Not interested" />
               <MiniStat value={stats.badNumber} label="Wrong #" />
               <MiniStat value={stats.doNotCall} label="Do not call" />
+              <MiniStat value={stats.brochure} label="Brochure" />
               <MiniStat value={stats.withNotes} label="With notes" />
             </div>
 

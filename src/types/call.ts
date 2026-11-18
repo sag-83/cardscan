@@ -15,6 +15,8 @@ export type CallOutcome =
   | 'not-interested'
   | 'bad-number'
   | 'do-not-call'
+  /** Last-resort pitch: brochure sent by email/text; wait for them to reach back. */
+  | 'brochure'
 
 export interface CallLog {
   id: string
@@ -92,6 +94,14 @@ export const CALL_OUTCOMES: Record<CallOutcome, OutcomeMeta> = {
     closes: true,
     retry: false,
   },
+  brochure: {
+    label: 'Emailed brochure',
+    short: 'Brochure',
+    tone: 'info',
+    reached: true,
+    closes: true,
+    retry: false,
+  },
 }
 
 export const CALL_OUTCOME_ORDER: CallOutcome[] = [
@@ -101,4 +111,5 @@ export const CALL_OUTCOME_ORDER: CallOutcome[] = [
   'not-interested',
   'bad-number',
   'do-not-call',
+  'brochure',
 ]

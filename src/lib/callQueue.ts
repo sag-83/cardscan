@@ -246,7 +246,7 @@ export function buildCallQueue(
     if (filters.audience === 'convert' && !(contact.visited && !contact.is_customer)) continue
     if (filters.state && normalizeStateValue(contact.state) !== filters.state) continue
     if (filters.city && contact.city !== filters.city) continue
-    if (filters.area && contact.area !== filters.area) continue
+    if (filters.area && (contact.area ?? '').trim() !== filters.area.trim()) continue
     if (filters.minStars > 0 && (contact.stars ?? 0) < filters.minStars) continue
 
     const history = histories.get(contact.id) ?? EMPTY_HISTORY

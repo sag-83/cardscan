@@ -34,7 +34,7 @@ import {
 import { useStore } from '../../store/useStore'
 import { phoneKey, uid } from '../../lib/utils'
 import { normalizeStateValue } from '../../lib/usStates'
-import { deleteCallLogFromDB, saveContactToDB } from '../../lib/supabase'
+import { deleteCallLogFromDB, getLastSupabaseError, saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { pushCallLog, syncCallLogs } from '../../lib/callSync'
 import { LAST_TRIP_SCOPE_EVENT, loadLastTripScope, scopeLabel, type LastTripScope } from '../../lib/lastTripScope'
@@ -88,7 +88,16 @@ const DEFAULT_CALLBACK_DAYS = 7
 function loadFilters(): CallFilters {
   try {
     const raw = localStorage.getItem(FILTERS_KEY)
-    if (raw) return { ...DEFAULT_CALL_FILTERS, ...(JSON.parse(raw) as Partial<CallFilters>) }
+    if (raw) {
+      const parsed = { ...DEFAULT_CALL_FILTERS, ...(JSON.parse(raw) as Partial<CallFilters>) }
+      // Territory areas (Long Island, Staten Island…) conflict with state —
+      // keeping both (e.g. NJ + Long Island) empties the queue. Prefer area.
+      if ((parsed.area ?? '').trim()) {
+        parsed.state = ''
+        parsed.city = ''
+      }
+      return parsed
+    }
   } catch {}
   return DEFAULT_CALL_FILTERS
 }
@@ -173,21 +182,24 @@ export function CallingScreen() {
     [contacts],
   )
   const cities = useMemo(() => {
-    const source = filters.state
-      ? contacts.filter((c) => normalizeStateValue(c.state) === filters.state)
-      : contacts
+    let source = contacts
+    if (filters.area) source = source.filter((c) => c.area === filters.area)
+    else if (filters.state) {
+      source = source.filter((c) => normalizeStateValue(c.state) === filters.state)
+    }
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
-  }, [contacts, filters.state])
+  }, [contacts, filters.state, filters.area])
 
   const areas = useMemo(
-    () => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(),
+    () => [...new Set(contacts.map((c) => (c.area ?? '').trim()).filter(Boolean))].sort(),
     [contacts],
   )
   const areaCounts = useMemo(() => {
     const counts = new Map<string, number>()
     contacts.forEach((contact) => {
-      if (!contact.area) return
-      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
+      const area = (contact.area ?? '').trim()
+      if (!area) return
+      counts.set(area, (counts.get(area) ?? 0) + 1)
     })
     return counts
   }, [contacts])
@@ -211,7 +223,7 @@ export function CallingScreen() {
     for (const entry of pool) {
       if (hits.length >= 12) break
       const c = entry.contact
-      const hay = [c.name, c.company, c.city, c.email, c.phone_mobile, c.phone_work]
+      const hay = [c.name, c.company, c.city, c.state, c.area, c.email, c.phone_mobile, c.phone_work]
         .join(' ')
         .toLowerCase()
       const textMatch = hay.includes(q)
@@ -271,7 +283,18 @@ export function CallingScreen() {
     setHistoryOpen(false)
   }, [activeId])
 
-  const patchFilters = (next: Partial<CallFilters>) => setFilters((f) => ({ ...f, ...next }))
+  const patchFilters = (next: Partial<CallFilters>) => setFilters((f) => {
+    const merged = { ...f, ...next }
+    // Area XOR state/city — Long Island is NY; pairing it with NJ yields zero shops.
+    if (next.area !== undefined && next.area.trim()) {
+      merged.state = ''
+      merged.city = ''
+    }
+    if (next.state !== undefined && next.state.trim()) {
+      merged.area = ''
+    }
+    return merged
+  })
 
   const clearSearchFocus = () => {
     setFocusedId(null)
@@ -340,9 +363,10 @@ export function CallingScreen() {
     setSyncing(true)
     const result = await syncCallLogs(useStore.getState().callLogs, syncHandles.current)
     setSyncing(false)
+    const cloudErr = getLastSupabaseError()
     showToast(
       result.failed > 0
-        ? `${result.failed} call${result.failed === 1 ? '' : 's'} still not saved to the cloud`
+        ? `${result.failed} call${result.failed === 1 ? '' : 's'} still not in the cloud${cloudErr ? ` — ${cloudErr}` : ''}`
         : 'Call log is up to date',
     )
   }
@@ -454,8 +478,15 @@ export function CallingScreen() {
           {syncing
             ? <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
             : <CloudOff className="size-4 shrink-0" aria-hidden />}
-          <span style={{ flex: 1 }}>
-            {unsyncedCount} call{unsyncedCount === 1 ? '' : 's'} saved on this device only — tap to retry
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block' }}>
+              {unsyncedCount} call{unsyncedCount === 1 ? '' : 's'} saved on this device only — tap to retry
+            </span>
+            {getLastSupabaseError() && (
+              <span style={{ display: 'block', fontSize: 11, fontWeight: 650, opacity: 0.9, marginTop: 3 }}>
+                {getLastSupabaseError()}
+              </span>
+            )}
           </span>
         </button>
       )}
@@ -486,7 +517,9 @@ export function CallingScreen() {
         <QueueEmpty
           stats={queue.stats}
           skippedCount={skipped.length}
+          filters={filters}
           onRestoreSkipped={() => setSkipped([])}
+          onClearLocation={() => patchFilters({ state: '', city: '', area: '' })}
         />
       )}
 
@@ -769,6 +802,10 @@ function SetupPanel({
                 ))}
               </select>
             )}
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, lineHeight: 1.45 }}>
+              Pick an area (Long Island, etc.) or a state — not both. Areas only list shops that have
+              Area filled on the business card.
+            </div>
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>
@@ -1186,12 +1223,16 @@ function OutcomeButton({ outcome, active, onClick }: {
 
 // ─── Supporting sections ────────────────────────────────────────────────────
 
-function QueueEmpty({ stats, skippedCount, onRestoreSkipped }: {
+function QueueEmpty({ stats, skippedCount, filters, onRestoreSkipped, onClearLocation }: {
   stats: ReturnType<typeof buildCallQueue>['stats']
   skippedCount: number
+  filters: CallFilters
   onRestoreSkipped: () => void
+  onClearLocation: () => void
 }) {
   const nothingInScope = stats.callable === 0
+  const locationClash = Boolean(filters.area && (filters.state || filters.city))
+  const hasLocation = Boolean(filters.area || filters.state || filters.city)
 
   return (
     <div style={{ textAlign: 'center', padding: '48px 28px', color: 'var(--text3)' }}>
@@ -1205,9 +1246,24 @@ function QueueEmpty({ stats, skippedCount, onRestoreSkipped }: {
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 330, margin: '0 auto' }}>
         {nothingInScope
-          ? 'No contacts match these filters, or none of them have a phone number saved. Widen the area or switch to Everyone.'
+          ? (locationClash
+            ? `${filters.state || filters.city} + ${filters.area} don’t overlap — clear the state or the area so Long Island / Staten Island can show.`
+            : 'No contacts match these filters, or none of them have a phone number saved. Widen the location or switch Who to call.')
           : `Every number in this area has been worked through. ${stats.callbacksLater} callback${stats.callbacksLater === 1 ? ' is' : 's are'} booked for later.`}
       </div>
+      {nothingInScope && hasLocation && (
+        <button
+          type="button"
+          onClick={onClearLocation}
+          style={{
+            marginTop: 14, padding: '10px 16px', borderRadius: 999, cursor: 'pointer',
+            border: '1.5px solid var(--accent)', background: 'var(--chip-accent-bg)',
+            color: 'var(--accent)', fontSize: 13, fontWeight: 800,
+          }}
+        >
+          Clear location filters
+        </button>
+      )}
       {skippedCount > 0 && (
         <button
           type="button"

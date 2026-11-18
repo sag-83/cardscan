@@ -83,6 +83,9 @@ function priorityScore(c: Contact, priority: TripPriority): number {
     if (c.is_old_customer) return 2
     return 0
   }
+  if (priority === 'prospects') return c.is_customer ? 0 : 2
+  if (priority === 'goods-shown') return c.visited ? 3 : 0
+  if (priority === 'convert') return c.visited && !c.is_customer ? 3 + c.stars : 0
   if (priority === 'top-rated') return c.stars
   return c.is_customer ? 1 : 0
 }

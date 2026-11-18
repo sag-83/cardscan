@@ -316,6 +316,8 @@ export function TripScreen() {
     if (filterArea && c.area !== filterArea) return false
     if (filterType === 'customer' && !c.is_customer) return false
     if (filterType === 'goods_shown' && !c.visited) return false
+    // Main conversion list: shown goods, but not a customer yet.
+    if (filterType === 'goods_shown_prospects' && !(c.visited && !c.is_customer)) return false
     if (filterType === 'not_visited' && c.visited) return false
     if (filterType === 'call_interested' && !interestedIds.has(c.id)) return false
     if (minStars > 0 && c.stars < minStars) return false
@@ -392,12 +394,22 @@ export function TripScreen() {
 
   const omitIdsForPlan = (extraExcluded: string[]) => {
     const omit = new Set(extraExcluded)
+    // When the user is targeting goods-shown / convert lists, do NOT strip
+    // visited contacts — that would empty the audience they just selected.
+    const targetingGoodsShown = (
+      filterType === 'goods_shown'
+      || filterType === 'goods_shown_prospects'
+      || options.priority === 'goods-shown'
+      || options.priority === 'convert'
+    )
     if (skipLogged) {
       for (const id of loggedVisited) omit.add(id)
-      // Also honour the contact.visited "goods shown" flag so old work
-      // before trip logs still stays out of the funnel.
-      for (const c of contacts) {
-        if (c.visited) omit.add(c.id)
+      if (!targetingGoodsShown) {
+        // Honour the contact.visited "goods shown" flag so old work
+        // before trip logs still stays out of a cold-call funnel.
+        for (const c of contacts) {
+          if (c.visited) omit.add(c.id)
+        }
       }
     }
     return omit
@@ -1059,6 +1071,7 @@ export function TripScreen() {
                   <option value="customer">Customers only</option>
                   <option value="call_interested">Interested on the phone</option>
                   <option value="goods_shown">Goods shown</option>
+                  <option value="goods_shown_prospects">Goods shown · not customers</option>
                   <option value="not_visited">Not visited yet</option>
                 </select>
                 <select
@@ -1231,7 +1244,10 @@ export function TripScreen() {
                     Skip logged visits
                   </span>
                   <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.4 }}>
-                    Omit stops you’ve already confirmed on a trip (and anyone marked goods shown).
+                    {(filterType === 'goods_shown' || filterType === 'goods_shown_prospects'
+                      || options.priority === 'goods-shown' || options.priority === 'convert')
+                      ? 'Omits shops already logged on a trip — keeps goods-shown contacts since that’s your audience.'
+                      : 'Omit stops you’ve already confirmed on a trip (and anyone marked goods shown).'}
                   </span>
                 </span>
               </label>
@@ -1287,6 +1303,8 @@ export function TripScreen() {
                 <option value="none">All shops</option>
                 <option value="customers">Customers only</option>
                 <option value="prospects">Non-customers only</option>
+                <option value="goods-shown">Goods shown</option>
+                <option value="convert">Goods shown · not customers</option>
                 <option value="top-rated">Higher-rated first</option>
               </select>
             </Group>

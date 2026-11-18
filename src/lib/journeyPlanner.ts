@@ -24,7 +24,12 @@ import {
 import { newTripId } from './tripHistory'
 import { fetchDrivingRoute } from './osrm'
 import { planRoute, type CostMatrix } from './routeOptimizer'
-import type { TripOrigin, TripPriority, TripProgress } from './tripPlanner'
+import {
+  matchesTripAudience,
+  type TripOrigin,
+  type TripPriority,
+  type TripProgress,
+} from './tripPlanner'
 
 export interface JourneyRequest {
   start: TripOrigin
@@ -74,16 +79,20 @@ function priorityScore(c: Contact, priority: TripPriority): number {
     return 0
   }
   if (priority === 'prospects') return c.is_customer ? 0 : 2
+  if (priority === 'goods-shown') return c.visited ? 3 : 0
+  if (priority === 'convert') {
+    // Shown goods, no sale yet — conversion targets.
+    if (c.visited && !c.is_customer) return 3 + c.stars
+    return 0
+  }
   if (priority === 'top-rated') return c.stars
   return c.is_customer ? 1 : 0
 }
 
-/** Hard filter: customers only / non-customers only / everyone. */
+/** Hard audience filter (end shop always allowed). */
 function matchesAudience(c: Contact, priority: TripPriority, endContactId?: string): boolean {
   if (endContactId && c.id === endContactId) return true
-  if (priority === 'customers') return Boolean(c.is_customer || c.is_old_customer)
-  if (priority === 'prospects') return !c.is_customer
-  return true
+  return matchesTripAudience(c, priority)
 }
 
 /**

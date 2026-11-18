@@ -36,7 +36,26 @@ import { fetchDrivingMatrix } from './osrm'
 import { ORIGIN_INDEX, planRoute, type CostMatrix } from './routeOptimizer'
 import { isStateOutOfRange } from './stateBounds'
 
-export type TripPriority = 'none' | 'customers' | 'prospects' | 'top-rated'
+/**
+ * Who to put on the route.
+ * - convert = goods shown but not a customer yet (main conversion audience)
+ */
+export type TripPriority =
+  | 'none'
+  | 'customers'
+  | 'prospects'
+  | 'top-rated'
+  | 'goods-shown'
+  | 'convert'
+
+/** Hard audience gate used by day plans and A→B journeys. */
+export function matchesTripAudience(contact: Contact, priority: TripPriority): boolean {
+  if (priority === 'customers') return Boolean(contact.is_customer || contact.is_old_customer)
+  if (priority === 'prospects') return !contact.is_customer
+  if (priority === 'goods-shown') return Boolean(contact.visited)
+  if (priority === 'convert') return Boolean(contact.visited) && !contact.is_customer
+  return true
+}
 
 export interface TripOptions {
   /** Only consider contacts within this many miles of the start. */
@@ -181,11 +200,20 @@ function priorityWeight(contact: Contact, priority: TripPriority): number {
   if (priority === 'customers') {
     if (contact.is_customer) return 0.65
     if (contact.is_old_customer) return 0.8
-    return 1.5 // deprioritize non-customers (hard-filtered in A→B journeys)
+    return 1.5
   }
   if (priority === 'prospects') {
     if (!contact.is_customer) return 0.65
     return 1.5
+  }
+  if (priority === 'goods-shown') {
+    return contact.visited ? 0.65 : 1.5
+  }
+  if (priority === 'convert') {
+    // Already hard-filtered; prefer higher stars among conversion targets.
+    if (contact.stars >= 4) return 0.6
+    if (contact.stars >= 3) return 0.75
+    return 0.85
   }
   if (priority === 'top-rated') {
     if (contact.stars >= 4) return 0.65
@@ -270,7 +298,18 @@ export async function planTrip(
 ): Promise<TripPlan> {
   const skipped: TripSkipped = { noAddress: 0, outOfRadius: 0, unresolved: 0, overCap: 0 }
 
-  const addressable = contacts.filter((contact) => {
+  const audience = contacts.filter((contact) => matchesTripAudience(contact, options.priority))
+  if (audience.length === 0) {
+    throw new TripPlanError(
+      options.priority === 'convert'
+        ? 'No shops match “goods shown · not customers yet”. Mark visits as goods shown first.'
+        : options.priority === 'goods-shown'
+          ? 'No shops marked goods shown in this set.'
+          : 'No shops match that audience filter.',
+    )
+  }
+
+  const addressable = audience.filter((contact) => {
     if (hasAnyLocation(contact)) return true
     skipped.noAddress++
     return false

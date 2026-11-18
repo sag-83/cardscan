@@ -13,6 +13,7 @@ import {
   Loader2,
   MapPin,
   MessageSquare,
+  Package,
   Phone,
   PhoneCall,
   PhoneOff,
@@ -39,6 +40,7 @@ import { readSkippedCalls, writeSkippedCalls } from '../../lib/callSession'
 import {
   buildCallQueue,
   buildHistories,
+  callAudienceLabel,
   contactPhone,
   DEFAULT_CALL_FILTERS,
   describeWhen,
@@ -638,7 +640,7 @@ function SetupPanel({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Call list</div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
-            {filters.audience === 'prospects' ? 'Non-customers' : 'Everyone'} · {scope}
+            {callAudienceLabel(filters.audience)} · {scope}
             {' · '}{stats.dueNow} ready to call
           </div>
         </div>
@@ -657,7 +659,7 @@ function SetupPanel({
         <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <FieldLabel>Who to call</FieldLabel>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               <SegButton
                 active={filters.audience === 'prospects'}
                 onClick={() => onChange({ audience: 'prospects' })}
@@ -669,6 +671,18 @@ function SetupPanel({
                 onClick={() => onChange({ audience: 'everyone' })}
                 icon={<UserRound className="size-3.5 shrink-0" aria-hidden />}
                 label="Everyone"
+              />
+              <SegButton
+                active={filters.audience === 'goods-shown'}
+                onClick={() => onChange({ audience: 'goods-shown' })}
+                icon={<Package className="size-3.5 shrink-0" aria-hidden />}
+                label="Goods shown"
+              />
+              <SegButton
+                active={filters.audience === 'convert'}
+                onClick={() => onChange({ audience: 'convert' })}
+                icon={<ThumbsUp className="size-3.5 shrink-0" aria-hidden />}
+                label="Shown · not customers"
               />
             </div>
           </div>
@@ -709,8 +723,14 @@ function SetupPanel({
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>
-            Not customers hides anyone marked a customer or an old customer.
-            Due callbacks come first, then numbers that rang out and have rested a few days,
+            {filters.audience === 'convert'
+              ? 'Shown · not customers = goods shown, but not a customer yet — your conversion follow-ups.'
+              : filters.audience === 'goods-shown'
+                ? 'Goods shown = anyone marked visited / goods shown, customers included.'
+                : filters.audience === 'prospects'
+                  ? 'Not customers hides anyone marked a customer or an old customer.'
+                  : 'Everyone includes customers, old customers, and prospects.'}
+            {' '}Due callbacks come first, then numbers that rang out and have rested a few days,
             then names never tried — higher-rated shops first.
           </div>
         </div>

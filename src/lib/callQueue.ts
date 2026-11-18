@@ -98,12 +98,33 @@ export interface ParkedEntry {
   reason: ParkedReason
 }
 
+export type CallAudience =
+  | 'prospects'
+  | 'everyone'
+  /** Anyone marked goods shown. */
+  | 'goods-shown'
+  /** Goods shown but not a customer yet — conversion follow-ups. */
+  | 'convert'
+
 export interface CallFilters {
-  /** 'prospects' hides current customers and old customers — true cold calls only. */
-  audience: 'prospects' | 'everyone'
+  /**
+   * Who appears on the dial list.
+   * - prospects: hide customers + old customers
+   * - goods-shown: only visited / goods shown
+   * - convert: goods shown and not a customer (main conversion list)
+   * - everyone: no audience cut
+   */
+  audience: CallAudience
   state: string
   city: string
   minStars: number
+}
+
+export function callAudienceLabel(audience: CallAudience): string {
+  if (audience === 'prospects') return 'Non-customers'
+  if (audience === 'goods-shown') return 'Goods shown'
+  if (audience === 'convert') return 'Shown · not customers'
+  return 'Everyone'
 }
 
 export const DEFAULT_CALL_FILTERS: CallFilters = {
@@ -218,6 +239,8 @@ export function buildCallQueue(
 
   for (const contact of contacts) {
     if (filters.audience === 'prospects' && (contact.is_customer || contact.is_old_customer)) continue
+    if (filters.audience === 'goods-shown' && !contact.visited) continue
+    if (filters.audience === 'convert' && !(contact.visited && !contact.is_customer)) continue
     if (filters.state && normalizeStateValue(contact.state) !== filters.state) continue
     if (filters.city && contact.city !== filters.city) continue
     if (filters.minStars > 0 && (contact.stars ?? 0) < filters.minStars) continue

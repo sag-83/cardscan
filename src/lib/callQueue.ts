@@ -117,6 +117,8 @@ export interface CallFilters {
   audience: CallAudience
   state: string
   city: string
+  /** Contact.area — Long Island, Staten Island, etc. */
+  area: string
   minStars: number
 }
 
@@ -131,6 +133,7 @@ export const DEFAULT_CALL_FILTERS: CallFilters = {
   audience: 'prospects',
   state: '',
   city: '',
+  area: '',
   minStars: 0,
 }
 
@@ -243,6 +246,7 @@ export function buildCallQueue(
     if (filters.audience === 'convert' && !(contact.visited && !contact.is_customer)) continue
     if (filters.state && normalizeStateValue(contact.state) !== filters.state) continue
     if (filters.city && contact.city !== filters.city) continue
+    if (filters.area && contact.area !== filters.area) continue
     if (filters.minStars > 0 && (contact.stars ?? 0) < filters.minStars) continue
 
     const history = histories.get(contact.id) ?? EMPTY_HISTORY

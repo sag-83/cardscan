@@ -179,6 +179,19 @@ export function CallingScreen() {
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filters.state])
 
+  const areas = useMemo(
+    () => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(),
+    [contacts],
+  )
+  const areaCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    contacts.forEach((contact) => {
+      if (!contact.area) return
+      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
+    })
+    return counts
+  }, [contacts])
+
   const queue = useMemo(
     () => buildCallQueue(contacts, callLogs, filters),
     [contacts, callLogs, filters],
@@ -343,6 +356,8 @@ export function CallingScreen() {
         onChange={patchFilters}
         states={states}
         cities={cities}
+        areas={areas}
+        areaCounts={areaCounts}
         stats={queue.stats}
       />
 
@@ -629,7 +644,7 @@ type ContactLike = { name?: string; company?: string }
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
 function SetupPanel({
-  open, onToggle, filters, onChange, states, cities, stats,
+  open, onToggle, filters, onChange, states, cities, areas, areaCounts, stats,
 }: {
   open: boolean
   onToggle: () => void
@@ -637,10 +652,12 @@ function SetupPanel({
   onChange: (next: Partial<CallFilters>) => void
   states: string[]
   cities: string[]
+  areas: string[]
+  areaCounts: Map<string, number>
   stats: ReturnType<typeof buildCallQueue>['stats']
 }) {
-  const scope = filters.state || filters.city
-    ? [filters.city, filters.state].filter(Boolean).join(', ')
+  const scope = filters.area || filters.state || filters.city
+    ? [filters.area, filters.city, filters.state].filter(Boolean).join(' · ')
     : 'everywhere'
 
   return (
@@ -707,7 +724,7 @@ function SetupPanel({
           </div>
 
           <div>
-            <FieldLabel>Area</FieldLabel>
+            <FieldLabel>Where</FieldLabel>
             <div style={{ display: 'flex', gap: 6 }}>
               <select
                 value={filters.state}
@@ -739,6 +756,19 @@ function SetupPanel({
                 <option value={4}>4★</option>
               </select>
             </div>
+            {areas.length > 0 && (
+              <select
+                value={filters.area}
+                onChange={(e) => onChange({ area: e.target.value })}
+                style={{ ...dropdownStyle(!!filters.area), width: '100%', marginTop: 6 }}
+                aria-label="Territory area"
+              >
+                <option value="">All areas (Long Island, Staten Island…)</option>
+                {areas.map((a) => (
+                  <option key={a} value={a}>{a} ({areaCounts.get(a) ?? 0})</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>

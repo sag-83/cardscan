@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Check, Copy, Mail, MessageSquare, Send, X } from 'lucide-react'
+import { Check, Copy, Mail, MessageSquare, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { IS_DEMO_MODE } from '../../lib/demo'
 import { normalizeStateValue } from '../../lib/usStates'
 import { buildContactFilterFacets } from '../../lib/contactFilterFacets'
 import {
   loadBulkEmailBody,
   loadBulkEmailSubject,
   loadBulkSmsBody,
-  openGmailCompose,
   saveBulkEmailBody,
   saveBulkEmailSubject,
   saveBulkSmsBody,
@@ -218,34 +216,16 @@ function OutreachSheet({
 
   const phoneListText = phoneRows.map((r) => `${r.label}\t${r.phone}`).join('\n')
   const phoneOnlyText = phoneRows.map((r) => r.phone).join('\n')
+  /** Comma-separated — paste straight into Gmail Bcc / Cc. */
+  const emailPasteText = emailList.join(', ')
 
   const hasFilters = filterStars > 0 || !!filterState || !!filterCity || !!filterArea || !!filterType
 
-  const openEmail = async () => {
-    if (!emailList.length) {
-      showToast('No emails in this filter — shops without email are skipped')
-      return
-    }
-    if (IS_DEMO_MODE) {
-      showToast(`Demo mode: would open Gmail for ${emailList.length} address(es)`)
-      return
-    }
-    const result = await openGmailCompose({
-      emails: emailList,
-      subject: subject.trim() || 'AK Gems',
-      body: emailBody,
-    })
-    if (result === 'copied-bcc') {
-      showToast(
-        `Gmail opened · ${emailList.length} emails copied — paste into Bcc, attach brochure, send`,
-        6000,
-      )
-    } else {
-      showToast(`Gmail opened · ${emailList.length} in Bcc — attach brochure, then send`, 5000)
-    }
-  }
-
   const copyText = async (text: string, ok: string) => {
+    if (!text.trim()) {
+      showToast('Nothing to copy')
+      return
+    }
     try {
       await navigator.clipboard.writeText(text)
       showToast(ok)
@@ -287,9 +267,8 @@ function OutreachSheet({
                 {selectedCount
                   ? `Starting from ${selectedCount} selected · `
                   : 'All contacts · '}
-                same filters as Contacts. {mode === 'email'
-                  ? 'Only shops with an email are included.'
-                  : 'Copy numbers for your phone — bulk SMS is not reliable.'}
+                same filters as Contacts. Copy each piece, then paste into Gmail or iMessage yourself
+                (works with multiple accounts).
               </div>
             </div>
             <button
@@ -406,27 +385,77 @@ function OutreachSheet({
 
           {mode === 'email' ? (
             <>
-              <label style={labelStyle}>Subject</label>
-              <input
-                value={subject}
-                onChange={(e) => onSubject(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 11 }}
+              <CopyBlock
+                label={`Bcc / Cc emails (${emailList.length})`}
+                copyLabel="Copy all emails"
+                hint="Paste into Bcc in the Gmail account you want"
+                preview={emailPasteText || 'No emails in this filter'}
+                previewMaxLines={5}
+                disabled={!emailList.length}
+                onCopy={() => void copyText(
+                  emailPasteText,
+                  `${emailList.length} email${emailList.length === 1 ? '' : 's'} copied — paste into Bcc`,
+                )}
               />
-              <label style={labelStyle}>Email body · saved · attach brochure in Gmail</label>
+
+              <div style={{
+                borderRadius: 12, border: '1px solid var(--border2)', overflow: 'hidden',
+                maxHeight: 160, overflowY: 'auto', background: 'var(--bg3)', marginBottom: 12,
+              }}>
+                {emailList.length === 0 ? (
+                  <div style={{ padding: 14, fontSize: 13, color: 'var(--text3)' }}>
+                    No emails in this filter — shops without email are skipped.
+                  </div>
+                ) : emailList.map((email) => (
+                  <div
+                    key={email}
+                    style={{
+                      padding: '8px 12px', borderBottom: '1px solid var(--border2)',
+                      fontSize: 13, fontWeight: 650, color: 'var(--accent)',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {email}
+                  </div>
+                ))}
+              </div>
+
+              <label style={labelStyle}>Subject · saved</label>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 11 }}>
+                <input
+                  value={subject}
+                  onChange={(e) => onSubject(e.target.value)}
+                  style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void copyText(subject, 'Subject copied')}
+                  style={{ ...iconCopyBtn }}
+                  aria-label="Copy subject"
+                >
+                  <Copy size={16} strokeWidth={2.25} />
+                </button>
+              </div>
+
+              <label style={labelStyle}>Body · saved · attach brochure after you paste</label>
               <textarea
                 value={emailBody}
                 onChange={(e) => onEmailBody(e.target.value)}
-                rows={10}
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 180, marginBottom: 12 }}
+                rows={8}
+                style={{ ...inputStyle, resize: 'vertical', minHeight: 140, marginBottom: 8 }}
               />
-              <button type="button" onClick={() => void openEmail()} style={primaryBtn}>
-                <Send size={18} strokeWidth={2} aria-hidden />
-                Open Gmail with these emails
+              <button
+                type="button"
+                onClick={() => void copyText(emailBody, 'Body copied — paste into Gmail, attach brochure')}
+                style={{ ...secondaryBtn, marginBottom: 4 }}
+              >
+                <Copy size={16} strokeWidth={2.25} aria-hidden />
+                Copy body
               </button>
             </>
           ) : (
             <>
-              <label style={labelStyle}>iMessage text · saved · copy then paste on your phone</label>
+              <label style={labelStyle}>iMessage text · saved</label>
               <textarea
                 value={smsBody}
                 onChange={(e) => onSmsBody(e.target.value)}
@@ -442,16 +471,17 @@ function OutreachSheet({
                 Copy message text
               </button>
 
+              <CopyBlock
+                label={`Phone numbers (${phoneRows.length})`}
+                copyLabel="Copy all numbers"
+                hint="Paste into a note or Messages on your phone"
+                preview={phoneOnlyText || 'No numbers in this filter'}
+                previewMaxLines={4}
+                disabled={!phoneRows.length}
+                onCopy={() => void copyText(phoneOnlyText, `${phoneRows.length} number${phoneRows.length === 1 ? '' : 's'} copied`)}
+              />
+
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => void copyText(phoneOnlyText, `${phoneRows.length} number(s) copied`)}
-                  disabled={!phoneRows.length}
-                  style={{ ...secondaryBtn, flex: 1, opacity: phoneRows.length ? 1 : 0.5 }}
-                >
-                  <Copy size={16} strokeWidth={2.25} aria-hidden />
-                  Copy numbers only
-                </button>
                 <button
                   type="button"
                   onClick={() => void copyText(phoneListText, 'Name + number list copied')}
@@ -494,11 +524,7 @@ function OutreachSheet({
                       type="button"
                       onClick={() => void copyText(row.phone, 'Number copied')}
                       aria-label={`Copy ${row.phone}`}
-                      style={{
-                        width: 34, height: 34, borderRadius: 10, border: '1px solid var(--border)',
-                        background: 'var(--bg2)', color: 'var(--text2)', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      style={iconCopyBtn}
                     >
                       <Copy size={14} strokeWidth={2.25} />
                     </button>
@@ -513,10 +539,56 @@ function OutreachSheet({
             display: 'flex', alignItems: 'flex-start', gap: 6,
           }}>
             <Check size={14} strokeWidth={2.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-            Edits to the message stay saved after refresh until you change them again.
+            Copy → open the right Gmail/iMessage account yourself → paste → attach brochure → send.
+            Message edits stay saved after refresh.
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function CopyBlock({
+  label,
+  copyLabel,
+  hint,
+  preview,
+  previewMaxLines = 4,
+  disabled,
+  onCopy,
+}: {
+  label: string
+  copyLabel: string
+  hint: string
+  preview: string
+  previewMaxLines?: number
+  disabled?: boolean
+  onCopy: () => void
+}) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+        <label style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
+        <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>{hint}</span>
+      </div>
+      <div style={{
+        padding: '10px 12px', borderRadius: 10, marginBottom: 8,
+        background: 'var(--bg3)', border: '1.5px solid var(--border)',
+        fontSize: 12.5, color: disabled ? 'var(--text3)' : 'var(--text)',
+        lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        maxHeight: previewMaxLines * 18 + 20, overflowY: 'auto',
+      }}>
+        {preview}
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        disabled={disabled}
+        style={{ ...secondaryBtn, opacity: disabled ? 0.5 : 1 }}
+      >
+        <Copy size={16} strokeWidth={2.25} aria-hidden />
+        {copyLabel}
+      </button>
     </div>
   )
 }
@@ -552,16 +624,15 @@ const inputStyle: CSSProperties = {
   color: 'var(--text)', fontSize: 15, fontFamily: 'inherit',
 }
 
-const primaryBtn: CSSProperties = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  gap: 7, padding: '13px 18px', borderRadius: 10, border: 'none',
-  background: 'var(--accent)', color: '#fff', fontWeight: 700,
-  fontSize: 15, cursor: 'pointer', width: '100%',
-}
-
 const secondaryBtn: CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   gap: 7, padding: '11px 14px', borderRadius: 10,
   border: '1.5px solid var(--border)', background: 'var(--bg3)',
   color: 'var(--text)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', width: '100%',
+}
+
+const iconCopyBtn: CSSProperties = {
+  width: 44, height: 44, borderRadius: 10, border: '1px solid var(--border)',
+  background: 'var(--bg3)', color: 'var(--text2)', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }

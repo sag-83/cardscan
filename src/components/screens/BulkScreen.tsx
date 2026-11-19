@@ -149,7 +149,7 @@ export function BulkScreen() {
         onClick={handleSendToSheets}
         disabled={isSendingSheets}
       />
-      <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (filter → Gmail)" onClick={() => setBulkMessageType('email')} />
+      <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (copy list)" onClick={() => setBulkMessageType('email')} />
       <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk numbers (copy for iMessage)" onClick={() => setBulkMessageType('sms')} />
 
       <div style={{
@@ -161,7 +161,7 @@ export function BulkScreen() {
           <Mail className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
           Outreach tips
         </div>
-        Use the same filters as Contacts (state, area, customers, goods shown…). Email opens Gmail with Bcc + your saved pitch — attach the brochure, then send. Numbers give a copyable list for iMessage on your phone.
+        Filter the pool (state, area, customers, goods shown…). Then copy emails / subject / body (or numbers + text) and paste into the Gmail or iMessage account you want — attach the brochure, send.
       </div>
 
       <div style={{

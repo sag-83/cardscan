@@ -76,35 +76,3 @@ export function loadCallScript(): string {
 export function saveCallScript(value: string) {
   write(CALL_SCRIPT_KEY, value)
 }
-
-/** Open Gmail compose; copy Bcc when the URL would be too long for browsers. */
-export async function openGmailCompose(opts: {
-  emails: string[]
-  subject: string
-  body: string
-}): Promise<'opened' | 'copied-bcc'> {
-  const bcc = opts.emails.join(', ')
-  const base = 'https://mail.google.com/mail/?view=cm&fs=1'
-  const withAll =
-    `${base}`
-    + `&bcc=${encodeURIComponent(bcc)}`
-    + `&su=${encodeURIComponent(opts.subject)}`
-    + `&body=${encodeURIComponent(opts.body)}`
-
-  if (withAll.length < 1800) {
-    window.open(withAll, '_blank', 'noopener,noreferrer')
-    return 'opened'
-  }
-
-  try {
-    await navigator.clipboard.writeText(bcc)
-  } catch {
-    /* fall through — still open compose */
-  }
-  const withoutBcc =
-    `${base}`
-    + `&su=${encodeURIComponent(opts.subject)}`
-    + `&body=${encodeURIComponent(opts.body)}`
-  window.open(withoutBcc, '_blank', 'noopener,noreferrer')
-  return 'copied-bcc'
-}

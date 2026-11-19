@@ -8,7 +8,14 @@ import type { TripItinerary, TripLog } from '../types/trip'
 import { mergeTripLogs } from '../lib/tripHistory'
 import { dedupeContacts, normalizeContact, sortContactsAlphabetically } from '../lib/utils'
 import { IS_DEMO_MODE } from '../lib/demo'
-import { debouncedPersistStorage } from '../lib/debouncedStorage'
+import { writeCallLogBackup } from '../lib/callLogBackup'
+import { debouncedPersistStorage, flushPersistedStore } from '../lib/debouncedStorage'
+
+function persistCallLogsNow(logs: CallLog[]) {
+  writeCallLogBackup(logs)
+  // Don't wait for the 400ms debounce — call history must survive a kill.
+  flushPersistedStore()
+}
 
 interface EditModalState {
   contact: Contact
@@ -132,7 +139,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // ─── Contacts ──────────────────────────────────────────────
       contacts: [],
 
@@ -164,7 +171,13 @@ export const useStore = create<AppState>()(
 
       callLogs: [],
 
-      addCallLog: (log) => set((s) => ({ callLogs: [log, ...s.callLogs] })),
+      addCallLog: (log) =>
+        set((s) => {
+          const callLogs = [log, ...s.callLogs]
+          // Defer flush until after Zustand persist queues this write.
+          void Promise.resolve().then(() => persistCallLogsNow(get().callLogs))
+          return { callLogs }
+        }),
 
       mergeCallLogs: (incoming) =>
         set((s) => {
@@ -190,21 +203,26 @@ export const useStore = create<AppState>()(
             changed = true
           }
           if (!changed) return s
-          return {
-            callLogs: [...merged.values()].sort((a, b) => b.called_at.localeCompare(a.called_at)),
-          }
+          const callLogs = [...merged.values()].sort((a, b) => b.called_at.localeCompare(a.called_at))
+          void Promise.resolve().then(() => persistCallLogsNow(get().callLogs))
+          return { callLogs }
         }),
 
       markCallLogSynced: (id) =>
         set((s) => {
           const current = s.callLogs.find((log) => log.id === id)
           if (!current || current.synced) return s
-          return {
-            callLogs: s.callLogs.map((log) => (log.id === id ? { ...log, synced: true } : log)),
-          }
+          const callLogs = s.callLogs.map((log) => (log.id === id ? { ...log, synced: true } : log))
+          void Promise.resolve().then(() => persistCallLogsNow(get().callLogs))
+          return { callLogs }
         }),
 
-      deleteCallLog: (id) => set((s) => ({ callLogs: s.callLogs.filter((log) => log.id !== id) })),
+      deleteCallLog: (id) =>
+        set((s) => {
+          const callLogs = s.callLogs.filter((log) => log.id !== id)
+          void Promise.resolve().then(() => persistCallLogsNow(get().callLogs))
+          return { callLogs }
+        }),
 
       tripLogs: [],
       addTripLog: (log) => set((s) => ({ tripLogs: [log, ...s.tripLogs] })),

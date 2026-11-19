@@ -1,16 +1,9 @@
 /**
  * Builds the cold-calling worklist.
  *
- * The point of this is that 600-odd prospects is not a list anyone works
- * through by scrolling. Given the call history, this decides who is worth
- * dialling right now and in what order, so the screen can just hand over the
- * next card.
- *
- * Priority runs: promised callbacks that are due, then numbers that rang out
- * and have had time to cool off, then everyone never tried — best prospects
- * first. Anything settled (not interested, wrong number, do not call) and
- * anyone already interested drops out, because re-calling them is at best
- * wasted time and at worst how a prospect becomes a complaint.
+ * Priority: due callbacks first, then never-called prospects. Anyone already
+ * dialled stays out of the active deck (history / Call log keeps the record)
+ * so the same Long Island list doesn’t reset every morning.
  */
 
 import type { Contact } from '../types/contact'
@@ -76,6 +69,8 @@ export type ParkedReason =
   | 'callback-later'
   /** Settled: not interested, wrong number, do not call, or already interested. */
   | 'closed'
+  /** Already dialled — stay out of the active list (history keeps the record). */
+  | 'already-called'
   /** Rang out, but too recently to try again. */
   | 'resting'
   /** Rang out too many times. */
@@ -294,27 +289,24 @@ export function buildCallQueue(
       continue
     }
 
-    if (meta?.retry) {
-      const noAnswers = history.logs.filter((log) => log.outcome === 'no-answer').length
-      if (noAnswers >= MAX_NO_ANSWER_ATTEMPTS) {
-        parked.push({ contact, history, reason: 'exhausted' })
-        continue
+    // Once dialled, stay out of the active deck. History + Call log keep the
+    // record for conversion tracking; "Work again" can pull someone back.
+    // (Callbacks due today already continued above.)
+    if (history.attempts > 0) {
+      if (meta?.retry) {
+        const noAnswers = history.logs.filter((log) => log.outcome === 'no-answer').length
+        if (noAnswers >= MAX_NO_ANSWER_ATTEMPTS) {
+          parked.push({ contact, history, reason: 'exhausted' })
+          continue
+        }
+        const lastMs = Date.parse(history.lastCalledAt ?? '')
+        const restedDays = Number.isFinite(lastMs) ? (nowMs - lastMs) / DAY_MS : Infinity
+        if (restedDays < NO_ANSWER_COOLDOWN_DAYS) {
+          parked.push({ contact, history, reason: 'resting' })
+          continue
+        }
       }
-      const lastMs = Date.parse(history.lastCalledAt ?? '')
-      const restedDays = Number.isFinite(lastMs) ? (nowMs - lastMs) / DAY_MS : Infinity
-      if (restedDays < NO_ANSWER_COOLDOWN_DAYS) {
-        parked.push({ contact, history, reason: 'resting' })
-        continue
-      }
-      due.push({
-        contact,
-        history,
-        // Above fresh names: he has already paid the cost of finding the
-        // number, and a rung-out line usually just means bad timing.
-        reason: 'retry',
-        score: 50_000 - noAnswers * 100 + freshScore(contact),
-        overdueDays: 0,
-      })
+      parked.push({ contact, history, reason: 'already-called' })
       continue
     }
 
@@ -356,6 +348,7 @@ export function reasonLabel(entry: QueueEntry): string {
 export function parkedReasonLabel(reason: ParkedReason): string {
   if (reason === 'callback-later') return 'Callback booked for later'
   if (reason === 'closed') return 'Settled'
+  if (reason === 'already-called') return 'Already called — see Call log'
   if (reason === 'resting') return 'Resting before the next try'
   if (reason === 'exhausted') return 'Rang out too many times'
   return 'No phone number'

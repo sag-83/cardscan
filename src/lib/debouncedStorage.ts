@@ -83,6 +83,11 @@ function ensureLifecycleFlush(): void {
   })
 }
 
+/** Flush any pending persist write now — use after call logs so a kill can't drop them. */
+export function flushPersistedStore(): void {
+  flush()
+}
+
 export const debouncedPersistStorage: PersistStorage<any> = {
   getItem: (name) => {
     try {

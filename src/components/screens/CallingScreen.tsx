@@ -36,7 +36,9 @@ import { phoneKey, uid } from '../../lib/utils'
 import { normalizeStateValue } from '../../lib/usStates'
 import { deleteCallLogFromDB, getLastSupabaseError, saveContactToDB } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
+import { recoverLocalCallLogs, writeCallLogBackup } from '../../lib/callLogBackup'
 import { pushCallLog, syncCallLogs } from '../../lib/callSync'
+import { flushPersistedStore } from '../../lib/debouncedStorage'
 import { LAST_TRIP_SCOPE_EVENT, loadLastTripScope, scopeLabel, type LastTripScope } from '../../lib/lastTripScope'
 import { readSkippedCalls, writeSkippedCalls } from '../../lib/callSession'
 import {
@@ -168,14 +170,28 @@ export function CallingScreen() {
     writeSkippedCalls(skipped)
   }, [skipped])
 
-  // One reconcile on arrival: push anything stranded offline, then pull.
+  // Recover any locally stranded dials, then push/pull the cloud copy.
   const synced = useRef(false)
   useEffect(() => {
     if (synced.current) return
     synced.current = true
-    const logs = useStore.getState().callLogs
-    void syncCallLogs(logs, syncHandles.current)
-  }, [])
+    const before = useStore.getState().callLogs
+    const recovered = recoverLocalCallLogs(before)
+    if (recovered) {
+      useStore.getState().mergeCallLogs(recovered)
+      writeCallLogBackup(recovered)
+      flushPersistedStore()
+      showToast(`Restored ${recovered.length - before.length} call${recovered.length - before.length === 1 ? '' : 's'} from this device`)
+    }
+    void (async () => {
+      const result = await syncCallLogs(useStore.getState().callLogs, syncHandles.current)
+      writeCallLogBackup(useStore.getState().callLogs)
+      flushPersistedStore()
+      if (result.pulled > 0) {
+        showToast(`Loaded ${result.pulled} call${result.pulled === 1 ? '' : 's'} from the cloud`)
+      }
+    })()
+  }, [showToast])
 
   const states = useMemo(
     () => [...new Set(contacts.map((c) => normalizeStateValue(c.state)).filter(Boolean))].sort(),
@@ -327,6 +343,8 @@ export function CallingScreen() {
     }
 
     addCallLog(log)
+    writeCallLogBackup(useStore.getState().callLogs)
+    flushPersistedStore()
     void pushCallLog(log, syncHandles.current)
     clearSearchFocus()
 
@@ -361,14 +379,24 @@ export function CallingScreen() {
 
   const resync = async () => {
     setSyncing(true)
+    const before = useStore.getState().callLogs.length
+    const recovered = recoverLocalCallLogs(useStore.getState().callLogs)
+    if (recovered) useStore.getState().mergeCallLogs(recovered)
     const result = await syncCallLogs(useStore.getState().callLogs, syncHandles.current)
+    writeCallLogBackup(useStore.getState().callLogs)
+    flushPersistedStore()
     setSyncing(false)
+    const after = useStore.getState().callLogs.length
     const cloudErr = getLastSupabaseError()
-    showToast(
-      result.failed > 0
-        ? `${result.failed} call${result.failed === 1 ? '' : 's'} still not in the cloud${cloudErr ? ` — ${cloudErr}` : ''}`
-        : 'Call log is up to date',
-    )
+    if (result.failed > 0) {
+      showToast(
+        `${result.failed} call${result.failed === 1 ? '' : 's'} still not in the cloud${cloudErr ? ` — ${cloudErr}` : ''}`,
+      )
+    } else if (after > before || result.pulled > 0) {
+      showToast(`Call history restored · ${after} total logged`)
+    } else {
+      showToast(`Call log is up to date · ${after} total`)
+    }
   }
 
   return (

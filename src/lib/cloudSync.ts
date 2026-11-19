@@ -16,7 +16,7 @@ import {
   getDeletedInvoiceIds,
   reconcileInvoiceDeletions,
 } from './invoiceSync'
-import { stripGenericFollowups } from './followupCleanup'
+import { stripCallDerivedFollowups, stripGenericFollowups } from './followupCleanup'
 import { dedupeContacts, mergeContact, normalizeContact } from './utils'
 
 const POLL_MS = 30_000
@@ -130,12 +130,18 @@ export async function pullAndMergeFromCloud(store: CloudSyncStore): Promise<{
   let mergedContacts = mergeCloudAndLocalContacts(localContacts, cloudContacts)
   const mergedInvoices = mergeCloudAndLocalInvoices(localInvoices, cloudInvoices)
 
-  // Cloud may still hold the old bulk "Follow up" stamps — strip them here
-  // so a pull can't put ~700 reminders back after local cleanup.
+  // Cloud may still hold bulk stamps or call-note reminders — strip them so a
+  // pull can't put them back into Reminders after local cleanup.
   const cleaned = stripGenericFollowups(mergedContacts)
   if (cleaned.clearedCount > 0) {
     mergedContacts = cleaned.contacts
     const cleared = cleaned.contacts.filter((c) => cleaned.clearedIds.includes(c.id))
+    void saveContactsToDB(cleared, { skipDedupe: true })
+  }
+  const fromCalls = stripCallDerivedFollowups(mergedContacts, store.getCallLogs())
+  if (fromCalls.clearedCount > 0) {
+    mergedContacts = fromCalls.contacts
+    const cleared = fromCalls.contacts.filter((c) => fromCalls.clearedIds.includes(c.id))
     void saveContactsToDB(cleared, { skipDedupe: true })
   }
 

@@ -149,8 +149,20 @@ export function BulkScreen() {
         onClick={handleSendToSheets}
         disabled={isSendingSheets}
       />
-      <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (BCC)" onClick={() => setBulkMessageType('email')} />
-      <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk SMS" onClick={() => setBulkMessageType('sms')} />
+      <ActionButton icon={<Mail className="size-[18px] shrink-0" />} label="Bulk Email (filter → Gmail)" onClick={() => setBulkMessageType('email')} />
+      <ActionButton icon={<MessageSquare className="size-[18px] shrink-0" />} label="Bulk numbers (copy for iMessage)" onClick={() => setBulkMessageType('sms')} />
+
+      <div style={{
+        marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+        background: 'var(--bg3)', border: '1px solid var(--border2)',
+        fontSize: 12.5, color: 'var(--text3)', lineHeight: 1.5,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: 'var(--text2)', marginBottom: 4 }}>
+          <Mail className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
+          Outreach tips
+        </div>
+        Use the same filters as Contacts (state, area, customers, goods shown…). Email opens Gmail with Bcc + your saved pitch — attach the brochure, then send. Numbers give a copyable list for iMessage on your phone.
+      </div>
 
       <div style={{
         marginBottom: 14, padding: '12px 14px', borderRadius: 12,
@@ -174,9 +186,9 @@ export function BulkScreen() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: 'var(--text2)', marginBottom: 4 }}>
           <Bell className="size-4 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden />
-          Follow-ups are per contact
+          Reminders are manual only
         </div>
-        Open a contact → set Follow-up (or log a Call back). The old “set 30 days for everyone” action was removed — it created hundreds of identical reminders.
+        Open a contact → set Follow-up. Call notes and “call back later” stay in the Calls tab — they no longer create Reminders.
       </div>
 
       {IS_DEMO_MODE && <SheetsPreview contacts={targetContacts} />}

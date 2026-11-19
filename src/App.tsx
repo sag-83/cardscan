@@ -6,8 +6,11 @@ import { startCloudRealtimeSync } from './lib/cloudSync'
 import { loadImages } from './lib/imageStore'
 import { DEMO_CONTACTS, IS_DEMO_MODE } from './lib/demo'
 import {
+  hasRunCallDerivedFollowupCleanup,
   hasRunGenericFollowupCleanup,
+  markCallDerivedFollowupCleanupDone,
   markGenericFollowupCleanupDone,
+  stripCallDerivedFollowups,
   stripGenericFollowups,
 } from './lib/followupCleanup'
 import {
@@ -167,19 +170,20 @@ export default function App() {
     void (async () => {
       await registerReminderServiceWorker()
 
-      // Strip mass "Follow up" stamps (Bulk used to set every contact).
-      // Re-runs if cloud sync brings the junk back; toast only the first time.
+      // Strip mass "Follow up" stamps and call-note reminders that belong in Calls.
+      // Re-runs if cloud sync brings junk back; toast only the first time each.
       if (!IS_DEMO_MODE) {
         const before = useStore.getState()
-        const result = stripGenericFollowups(before.contacts)
-        if (result.clearedCount > 0) {
-          setContacts(result.contacts)
-          const cleared = result.contacts.filter((c) => result.clearedIds.includes(c.id))
+        let contacts = before.contacts
+        const generic = stripGenericFollowups(contacts)
+        if (generic.clearedCount > 0) {
+          contacts = generic.contacts
+          const cleared = contacts.filter((c) => generic.clearedIds.includes(c.id))
           void saveContactsToDB(cleared, { skipDedupe: true })
           if (!hasRunGenericFollowupCleanup()) {
             showToast(
-              `Cleared ${result.clearedCount} bulk follow-up${result.clearedCount === 1 ? '' : 's'}`
-              + (result.keptCount ? ` · kept ${result.keptCount} real one${result.keptCount === 1 ? '' : 's'}` : ''),
+              `Cleared ${generic.clearedCount} bulk follow-up${generic.clearedCount === 1 ? '' : 's'}`
+              + (generic.keptCount ? ` · kept ${generic.keptCount} real one${generic.keptCount === 1 ? '' : 's'}` : ''),
               5000,
             )
           }
@@ -187,6 +191,25 @@ export default function App() {
         } else if (!hasRunGenericFollowupCleanup()) {
           markGenericFollowupCleanupDone()
         }
+
+        const fromCalls = stripCallDerivedFollowups(contacts, before.callLogs)
+        if (fromCalls.clearedCount > 0) {
+          contacts = fromCalls.contacts
+          const cleared = contacts.filter((c) => fromCalls.clearedIds.includes(c.id))
+          void saveContactsToDB(cleared, { skipDedupe: true })
+          if (!hasRunCallDerivedFollowupCleanup()) {
+            showToast(
+              `Moved ${fromCalls.clearedCount} call note${fromCalls.clearedCount === 1 ? '' : 's'} out of Reminders`
+              + (fromCalls.keptCount ? ` · ${fromCalls.keptCount} manual reminder${fromCalls.keptCount === 1 ? '' : 's'} kept` : ''),
+              6000,
+            )
+          }
+          markCallDerivedFollowupCleanupDone()
+        } else if (!hasRunCallDerivedFollowupCleanup()) {
+          markCallDerivedFollowupCleanupDone()
+        }
+
+        if (contacts !== before.contacts) setContacts(contacts)
       }
 
       const state = useStore.getState()

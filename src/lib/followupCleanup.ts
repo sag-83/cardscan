@@ -1,14 +1,20 @@
 /**
  * Strip mass-created follow-ups (Bulk → "Set 30-Day Follow-up" on every contact)
- * while keeping intentional ones: custom notes, call-back promises, etc.
+ * and call-log notes that were wrongly written into Reminders.
+ * Manual Follow-up reminders (set on the contact card) are kept.
  */
 
+import type { CallLog } from '../types/call'
 import type { Contact } from '../types/contact'
 
 const CLEANUP_FLAG = 'cs_cleared_generic_followups_v1'
+const CALL_DERIVED_FLAG = 'cs_cleared_call_derived_followups_v1'
 
 /** Default note stamped by the bulk 30-day action. */
 const GENERIC_NOTE = /^(follow[\s\-]?ups?|)$/i
+
+/** Auto note written when Calls used to stamp a reminder for "Call back later". */
+const AUTO_CALLBACK_NOTE = /^call back\s*[—–-]/i
 
 /** Same calendar minute → almost certainly one bulk write. */
 function minuteBucket(iso: string): string {
@@ -53,7 +59,62 @@ export function stripGenericFollowups(contacts: Contact[]): {
   clearedCount: number
   keptCount: number
 } {
-  const clearIds = new Set(findGenericFollowupIds(contacts))
+  return applyClearIds(contacts, findGenericFollowupIds(contacts))
+}
+
+/**
+ * Reminders that came from logging a call (callback stamp or the call note
+ * copied onto followup_note). Those belong in Calls, not Reminders.
+ */
+export function findCallDerivedFollowupIds(
+  contacts: Contact[],
+  callLogs: CallLog[],
+): string[] {
+  const logsByContact = new Map<string, CallLog[]>()
+  for (const log of callLogs) {
+    const list = logsByContact.get(log.contact_id)
+    if (list) list.push(log)
+    else logsByContact.set(log.contact_id, [log])
+  }
+
+  const cleared: string[] = []
+  for (const c of contacts) {
+    if (!c.followup_at) continue
+    const note = (c.followup_note || '').trim()
+    const logs = logsByContact.get(c.id) ?? []
+
+    if (AUTO_CALLBACK_NOTE.test(note)) {
+      cleared.push(c.id)
+      continue
+    }
+
+    const matched = logs.some((log) => {
+      const logNote = (log.note || '').trim()
+      if (log.callback_at && minuteBucket(log.callback_at) === minuteBucket(c.followup_at!)) {
+        return true
+      }
+      if (logNote && note && logNote === note) return true
+      return false
+    })
+    if (matched) cleared.push(c.id)
+  }
+  return cleared
+}
+
+export function stripCallDerivedFollowups(
+  contacts: Contact[],
+  callLogs: CallLog[],
+): {
+  contacts: Contact[]
+  clearedIds: string[]
+  clearedCount: number
+  keptCount: number
+} {
+  return applyClearIds(contacts, findCallDerivedFollowupIds(contacts, callLogs))
+}
+
+function applyClearIds(contacts: Contact[], ids: string[]) {
+  const clearIds = new Set(ids)
   if (!clearIds.size) {
     return {
       contacts,
@@ -97,6 +158,30 @@ export function markGenericFollowupCleanupDone(): void {
 export function resetGenericFollowupCleanupFlag(): void {
   try {
     localStorage.removeItem(CLEANUP_FLAG)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hasRunCallDerivedFollowupCleanup(): boolean {
+  try {
+    return localStorage.getItem(CALL_DERIVED_FLAG) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markCallDerivedFollowupCleanupDone(): void {
+  try {
+    localStorage.setItem(CALL_DERIVED_FLAG, '1')
+  } catch {
+    /* private mode */
+  }
+}
+
+export function resetCallDerivedFollowupCleanupFlag(): void {
+  try {
+    localStorage.removeItem(CALL_DERIVED_FLAG)
   } catch {
     /* ignore */
   }

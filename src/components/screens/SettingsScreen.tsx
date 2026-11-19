@@ -56,8 +56,11 @@ import {
   syncFollowupReminders,
 } from '../../lib/reminderNotifications'
 import {
+  findCallDerivedFollowupIds,
   findGenericFollowupIds,
+  markCallDerivedFollowupCleanupDone,
   markGenericFollowupCleanupDone,
+  stripCallDerivedFollowups,
   stripGenericFollowups,
 } from '../../lib/followupCleanup'
 import {
@@ -1007,11 +1010,13 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
   showToast: (msg: string) => void
 }) {
   const invoices = useStore((s) => s.invoices)
+  const callLogs = useStore((s) => s.callLogs)
   const setContacts = useStore((s) => s.setContacts)
   const status = getReminderPushStatus(contacts, invoices)
   const ready = status.enabled && status.permission === 'granted'
   const genericCount = findGenericFollowupIds(contacts).length
-  const realFollowupCount = contacts.filter((c) => c.followup_at).length - genericCount
+  const callDerivedCount = findCallDerivedFollowupIds(contacts, callLogs).length
+  const realFollowupCount = contacts.filter((c) => c.followup_at).length - genericCount - callDerivedCount
 
   const statusLine = !status.supported
     ? 'Not supported in this browser'
@@ -1098,24 +1103,25 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
         </div>
       )}
 
-      {(genericCount > 0 || contacts.some((c) => c.followup_at)) && (
+      {(genericCount > 0 || callDerivedCount > 0 || contacts.some((c) => c.followup_at)) && (
         <div style={{
           width: '100%', marginTop: 4, paddingTop: 10,
           borderTop: '1px solid var(--border2)',
           fontSize: 12, color: 'var(--text3)', lineHeight: 1.5,
         }}>
-          {genericCount > 0
-            ? `${genericCount} look like bulk/mass follow-ups`
-              + (realFollowupCount > 0 ? ` · ${realFollowupCount} look intentional` : '')
-            : `${realFollowupCount} intentional follow-up${realFollowupCount === 1 ? '' : 's'} (no mass stamps detected)`}
-          {genericCount > 0 && (
-            <div style={{ marginTop: 8 }}>
+          {[
+            genericCount > 0 ? `${genericCount} mass follow-up${genericCount === 1 ? '' : 's'}` : '',
+            callDerivedCount > 0 ? `${callDerivedCount} from call notes` : '',
+            realFollowupCount > 0 ? `${realFollowupCount} manual` : '',
+          ].filter(Boolean).join(' · ') || 'No follow-ups'}
+          <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            {genericCount > 0 && (
               <button
                 type="button"
                 onClick={() => {
                   if (!confirm(
                     `Clear ${genericCount} mass follow-up${genericCount === 1 ? '' : 's'}?\n\n`
-                    + 'Keeps ones with a real note (e.g. “Call back — …”). Removes empty / “Follow up” stamps that share the same time.',
+                    + 'Removes empty / “Follow up” stamps that share the same time.',
                   )) return
                   const result = stripGenericFollowups(contacts)
                   setContacts(result.contacts)
@@ -1136,8 +1142,36 @@ function ReminderNotificationsPanel({ contacts, showToast }: {
               >
                 Clear mass follow-ups
               </button>
-            </div>
-          )}
+            )}
+            {callDerivedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm(
+                    `Clear ${callDerivedCount} reminder${callDerivedCount === 1 ? '' : 's'} that came from call notes?\n\n`
+                    + 'Those notes stay in Calls. Manual Follow-ups you set on a contact card are kept.',
+                  )) return
+                  const result = stripCallDerivedFollowups(contacts, callLogs)
+                  setContacts(result.contacts)
+                  const cleared = result.contacts.filter((c) => result.clearedIds.includes(c.id))
+                  void saveContactsToDB(cleared, { skipDedupe: true })
+                  void syncFollowupReminders(result.contacts, invoices)
+                  markCallDerivedFollowupCleanupDone()
+                  showToast(
+                    result.clearedCount
+                      ? `Cleared ${result.clearedCount} call notes from Reminders · ${result.keptCount} manual kept`
+                      : 'Nothing to clear',
+                  )
+                }}
+                style={{
+                  fontSize: 12, fontWeight: 700, color: '#ff3b30',
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                }}
+              >
+                Clear call-note reminders
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

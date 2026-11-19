@@ -39,7 +39,6 @@ import {
   deleteCallLogFromDB,
   getLastSupabaseError,
   isMissingCallLogsTableError,
-  saveContactToDB,
 } from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { recoverLocalCallLogs, writeCallLogBackup } from '../../lib/callLogBackup'
@@ -47,6 +46,7 @@ import { pushCallLog, syncCallLogs } from '../../lib/callSync'
 import { flushPersistedStore } from '../../lib/debouncedStorage'
 import { LAST_TRIP_SCOPE_EVENT, loadLastTripScope, scopeLabel, type LastTripScope } from '../../lib/lastTripScope'
 import { readSkippedCalls, writeSkippedCalls } from '../../lib/callSession'
+import { loadCallScript, saveCallScript } from '../../lib/outreachTemplates'
 import {
   buildCallQueue,
   buildHistories,
@@ -80,15 +80,6 @@ function parkedToQueueEntry(entry: ParkedEntry): QueueEntry {
 }
 
 const FILTERS_KEY = 'cs_call_filters_v1'
-const SCRIPT_KEY = 'cs_call_script_v1'
-
-function loadCallScript(): string {
-  try {
-    return localStorage.getItem(SCRIPT_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
 
 /** Default gap before a promised callback, used to pre-fill the date box. */
 const DEFAULT_CALLBACK_DAYS = 7
@@ -129,7 +120,6 @@ export function CallingScreen() {
   const mergeCallLogs = useStore((s) => s.mergeCallLogs)
   const markCallLogSynced = useStore((s) => s.markCallLogSynced)
   const deleteCallLog = useStore((s) => s.deleteCallLog)
-  const updateContact = useStore((s) => s.updateContact)
   const setDetailContactId = useStore((s) => s.setDetailContactId)
   const showToast = useStore((s) => s.showToast)
 
@@ -169,7 +159,7 @@ export function CallingScreen() {
   }, [filters])
 
   useEffect(() => {
-    try { localStorage.setItem(SCRIPT_KEY, callScript) } catch {}
+    saveCallScript(callScript)
   }, [callScript])
 
   useEffect(() => {
@@ -354,25 +344,14 @@ export function CallingScreen() {
     void pushCallLog(log, syncHandles.current)
     clearSearchFocus()
 
-    // A promised callback is also a reminder the client wants on his phone,
-    // and the app already pushes notifications for contact follow-ups — so the
-    // promise is written there too rather than inventing a second mechanism.
-    if (wantsCallback && log.callback_at) {
-      const followup = {
-        followup_at: log.callback_at,
-        followup_note: log.note || `Call back — ${contact.company || contact.name}`,
-      }
-      updateContact(contact.id, followup)
-      if (!IS_DEMO_MODE) {
-        const fresh = useStore.getState().contacts.find((c) => c.id === contact.id)
-        if (fresh) void saveContactToDB(fresh)
-      }
-    }
-
+    // Call notes / "call back later" stay in Calls (call_logs + due-callback
+    // queue). Reminders are only for manually set Follow-ups on the contact card.
     if (outcome === 'interested') {
       showToast('Interested — they show up in Trips → Interested on the phone')
+    } else if (wantsCallback) {
+      showToast(`${CALL_OUTCOMES[outcome].short} — saved in Call log (not Reminders)`)
     } else {
-      showToast(`${CALL_OUTCOMES[outcome].short} — logged${wantsCallback ? ' with a reminder' : ''}`)
+      showToast(`${CALL_OUTCOMES[outcome].short} — logged`)
     }
   }
 

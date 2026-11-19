@@ -34,7 +34,13 @@ import {
 import { useStore } from '../../store/useStore'
 import { phoneKey, uid } from '../../lib/utils'
 import { normalizeStateValue } from '../../lib/usStates'
-import { deleteCallLogFromDB, getLastSupabaseError, saveContactToDB } from '../../lib/supabase'
+import {
+  CALL_LOGS_SCHEMA_SQL,
+  deleteCallLogFromDB,
+  getLastSupabaseError,
+  isMissingCallLogsTableError,
+  saveContactToDB,
+} from '../../lib/supabase'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { recoverLocalCallLogs, writeCallLogBackup } from '../../lib/callLogBackup'
 import { pushCallLog, syncCallLogs } from '../../lib/callSync'
@@ -492,31 +498,62 @@ export function CallingScreen() {
       />
 
       {unsyncedCount > 0 && (
-        <button
-          type="button"
-          onClick={() => void resync()}
-          disabled={syncing}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 9, width: 'calc(100% - 32px)',
-            margin: '12px 16px 0', padding: '10px 13px', borderRadius: 12, textAlign: 'left',
-            background: 'var(--chip-warning-bg)', color: 'var(--chip-warning-fg)',
-            border: 'none', fontSize: 12.5, fontWeight: 700, cursor: syncing ? 'default' : 'pointer',
-          }}
-        >
-          {syncing
-            ? <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
-            : <CloudOff className="size-4 shrink-0" aria-hidden />}
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block' }}>
-              {unsyncedCount} call{unsyncedCount === 1 ? '' : 's'} saved on this device only — tap to retry
-            </span>
-            {getLastSupabaseError() && (
-              <span style={{ display: 'block', fontSize: 11, fontWeight: 650, opacity: 0.9, marginTop: 3 }}>
-                {getLastSupabaseError()}
+        <div style={{
+          margin: '12px 16px 0', padding: '10px 13px', borderRadius: 12,
+          background: 'var(--chip-warning-bg)', color: 'var(--chip-warning-fg)',
+        }}>
+          <button
+            type="button"
+            onClick={() => void resync()}
+            disabled={syncing}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+              padding: 0, border: 'none', background: 'transparent', textAlign: 'left',
+              color: 'inherit', fontSize: 12.5, fontWeight: 700,
+              cursor: syncing ? 'default' : 'pointer',
+            }}
+          >
+            {syncing
+              ? <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
+              : <CloudOff className="size-4 shrink-0" aria-hidden />}
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block' }}>
+                {unsyncedCount} call{unsyncedCount === 1 ? '' : 's'} saved on this device only — tap to retry
               </span>
-            )}
-          </span>
-        </button>
+              {getLastSupabaseError() && (
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 650, opacity: 0.9, marginTop: 3 }}>
+                  {isMissingCallLogsTableError(getLastSupabaseError())
+                    ? 'Cloud is missing the call_logs table — create it once (button below), then retry.'
+                    : getLastSupabaseError()}
+                </span>
+              )}
+            </span>
+          </button>
+          {isMissingCallLogsTableError(getLastSupabaseError()) && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(CALL_LOGS_SCHEMA_SQL)
+                    showToast('SQL copied — paste in Supabase → SQL Editor → Run, then tap retry')
+                  } else {
+                    showToast('Copy from Settings → Supabase SQL (call_logs section)')
+                  }
+                } catch {
+                  showToast('Could not copy — open Settings → Supabase SQL')
+                }
+              }}
+              style={{
+                marginTop: 8, width: '100%', padding: '9px 12px', borderRadius: 10,
+                border: '1.5px solid currentColor', background: 'transparent',
+                color: 'inherit', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+              }}
+            >
+              Copy SQL to create call_logs table
+            </button>
+          )}
+        </div>
       )}
 
       {active ? (

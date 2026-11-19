@@ -27,6 +27,7 @@ import {
   initSupabase,
   testSupabaseConnection,
   saveContactsToDB,
+  CALL_LOGS_SCHEMA_SQL,
   SUPABASE_SCHEMA_SQL,
   syncInvoicesFromDB,
   uploadCardPhoto,
@@ -804,8 +805,34 @@ export function SettingsScreen() {
               <div style={{ flex: 1, fontSize: 15, color: 'var(--danger)' }}>Clear Local Data</div>
             </div>
             <Divider />
-            <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-              <label style={labelStyle}>Supabase SQL (run once)</label>
+            <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <label style={labelStyle}>Fix call cloud sync (run once)</label>
+              <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.45 }}>
+                If Calls says <code>call_logs</code> is missing, paste this in Supabase → SQL Editor → Run.
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard?.writeText(CALL_LOGS_SCHEMA_SQL)
+                    showToast('call_logs SQL copied — paste in Supabase SQL Editor and Run')
+                  } catch {
+                    showToast('Could not copy — select the SQL below manually')
+                  }
+                }}
+                style={{
+                  padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                  background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 800,
+                }}
+              >
+                Copy call_logs SQL
+              </button>
+              <pre style={{ fontSize: 10, background: 'var(--bg3)', padding: 10, borderRadius: 8,
+                width: '100%', fontFamily: 'monospace', lineHeight: 1.75,
+                color: 'var(--text2)', overflowX: 'auto', whiteSpace: 'pre' }}>
+                {CALL_LOGS_SCHEMA_SQL}
+              </pre>
+              <label style={{ ...labelStyle, marginTop: 8 }}>Full Supabase SQL (all tables)</label>
               <pre style={{ fontSize: 10, background: 'var(--bg3)', padding: 10, borderRadius: 8,
                 width: '100%', fontFamily: 'monospace', lineHeight: 1.75,
                 color: 'var(--text2)', overflowX: 'auto', whiteSpace: 'pre' }}>

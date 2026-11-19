@@ -199,6 +199,28 @@ create table if not exists call_logs (
 create index if not exists call_logs_contact_idx on call_logs (contact_id);
 alter table call_logs disable row level security;`
 
+/** Just the call_logs table — run this in Supabase SQL if call sync says the table is missing. */
+export const CALL_LOGS_SCHEMA_SQL = `create table if not exists call_logs (
+  id text primary key,
+  contact_id text not null,
+  called_at timestamptz not null default now(),
+  outcome text not null default 'no-answer',
+  note text default '',
+  callback_at timestamptz,
+  created_at timestamptz default now()
+);
+create index if not exists call_logs_contact_idx on call_logs (contact_id);
+alter table call_logs disable row level security;`
+
+export function isMissingCallLogsTableError(message: string): boolean {
+  const m = message.toLowerCase()
+  return m.includes('call_logs') && (
+    m.includes('schema cache')
+    || m.includes('could not find the table')
+    || m.includes('does not exist')
+  )
+}
+
 let client: SupabaseClient | null = null
 let lastError = ''
 

@@ -36,6 +36,7 @@ import { loadImages } from '../lib/imageStore'
 import { IS_DEMO_MODE } from '../lib/demo'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { SocialMediaPicker } from './SocialMediaPicker'
+import { CardPhotoLightbox, CardPhotoZoomHint } from './CardPhotoLightbox'
 import type { Contact } from '../types/contact'
 
 export const DETAIL_PANEL_WIDTH = 440
@@ -542,6 +543,7 @@ function DetailRow({ icon, bg, right, children }: { icon: ReactNode; bg: string;
 function CardImage({ base64, url, cacheKey, alt }: { base64: string; url: string; cacheKey: string; alt: string }) {
   const [failed, setFailed] = useState(false)
   const [localSrc, setLocalSrc] = useState<string | null>(null)
+  const [enlarged, setEnlarged] = useState(false)
 
   useEffect(() => {
     if (!failed || localSrc) return
@@ -554,14 +556,38 @@ function CardImage({ base64, url, cacheKey, alt }: { base64: string; url: string
     return () => { cancelled = true }
   }, [failed, localSrc, cacheKey])
 
+  const src = localSrc || (base64 ? `data:image/jpeg;base64,${base64}` : url)
+
   return (
-    <img
-      src={localSrc || (base64 ? `data:image/jpeg;base64,${base64}` : url)}
-      onError={(e) => {
-        if (localSrc) { e.currentTarget.style.display = 'none' } else { setFailed(true) }
-      }}
-      style={{ width: '100%', borderRadius: 10, objectFit: 'contain',
-        maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt={alt} />
+    <>
+      <button
+        type="button"
+        onClick={() => setEnlarged(true)}
+        aria-label={`Enlarge ${alt}`}
+        style={{
+          display: 'block', width: '100%', padding: 0, margin: 0,
+          border: 'none', background: 'none', cursor: 'zoom-in',
+          position: 'relative', borderRadius: 10, overflow: 'hidden',
+        }}
+      >
+        <img
+          src={src}
+          onError={(e) => {
+            if (localSrc) { e.currentTarget.style.display = 'none' } else { setFailed(true) }
+          }}
+          style={{
+            width: '100%', borderRadius: 10, objectFit: 'contain',
+            maxHeight: 180, border: '1px solid var(--border2)', background: 'var(--bg3)',
+            display: 'block',
+          }}
+          alt={alt}
+        />
+        <CardPhotoZoomHint />
+      </button>
+      {enlarged && (
+        <CardPhotoLightbox src={src} alt={alt} onClose={() => setEnlarged(false)} />
+      )}
+    </>
   )
 }
 

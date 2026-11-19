@@ -27,6 +27,7 @@ import { getUserPosition, geocodeContacts, formatDistance, LocationError } from 
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 import { normalizeStateValue } from '../../lib/usStates'
 import { loadImages } from '../../lib/imageStore'
+import { CardPhotoLightbox } from '../CardPhotoLightbox'
 
 function useFollowups(contacts: Contact[]) {
   return useMemo(() => {
@@ -454,6 +455,7 @@ const ContactRow = memo(function ContactRow({ contact: c, isLastAdded, selected,
   // often still exists locally even when the cloud copy can't be reached.
   const [imgLoadFailed, setImgLoadFailed] = useState(false)
   const [localFallbackSrc, setLocalFallbackSrc] = useState<string | null>(null)
+  const [enlargedPhoto, setEnlargedPhoto] = useState(false)
 
   useEffect(() => {
     if (!imgLoadFailed || localFallbackSrc) return
@@ -465,6 +467,14 @@ const ContactRow = memo(function ContactRow({ contact: c, isLastAdded, selected,
     })
     return () => { cancelled = true }
   }, [imgLoadFailed, localFallbackSrc, c.id])
+
+  // Prefer full-res for the lightbox (not the list thumbnail).
+  const fullCardSrc =
+    localFallbackSrc
+    || (c.front_image ? `data:image/jpeg;base64,${c.front_image}` : '')
+    || c.front_image_url
+    || c.front_thumb_url
+    || ''
 
   const shareBusinessCard = async () => {
     const text = contactShareText(c)
@@ -663,17 +673,38 @@ const ContactRow = memo(function ContactRow({ contact: c, isLastAdded, selected,
         }}
       >
       {(c.front_image || c.front_thumb_url || c.front_image_url || localFallbackSrc) ? (
-        <img
-          src={localFallbackSrc || (c.front_image ? `data:image/jpeg;base64,${c.front_image}` : (c.front_thumb_url || c.front_image_url))}
-          onError={() => setImgLoadFailed(true)}
-          style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
-            flexShrink: 0, border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="" />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (fullCardSrc) setEnlargedPhoto(true)
+          }}
+          aria-label={`Enlarge card for ${c.company || c.name || 'contact'}`}
+          title="Enlarge card"
+          style={{
+            padding: 0, margin: 0, border: 'none', background: 'none',
+            cursor: 'zoom-in', flexShrink: 0, borderRadius: 8, lineHeight: 0,
+          }}
+        >
+          <img
+            src={localFallbackSrc || (c.front_image ? `data:image/jpeg;base64,${c.front_image}` : (c.front_thumb_url || c.front_image_url))}
+            onError={() => setImgLoadFailed(true)}
+            style={{ width: 90, height: 64, borderRadius: 8, objectFit: 'cover',
+              display: 'block', border: '1px solid var(--border2)', background: 'var(--bg3)' }} alt="" />
+        </button>
       ) : (
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--hdr)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0, fontSize: 16, fontWeight: 800, color: 'rgba(255,255,255,0.9)' }}>
           {initials(c)}
         </div>
+      )}
+      {enlargedPhoto && fullCardSrc && (
+        <CardPhotoLightbox
+          src={fullCardSrc}
+          alt={c.company || c.name || 'Business card'}
+          onClose={() => setEnlargedPhoto(false)}
+        />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden',

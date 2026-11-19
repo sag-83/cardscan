@@ -21,12 +21,16 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { blankContact, initials, phoneKey, sortContactsAlphabetically } from '../../lib/utils'
+import { blankContact, initials, sortContactsAlphabetically } from '../../lib/utils'
 import { Contact } from '../../types/contact'
 import { getUserPosition, geocodeContacts, formatDistance, LocationError } from '../../lib/geocode'
 import { isLocationAccessEnabled } from '../../lib/locationAccess'
 import { normalizeStateValue } from '../../lib/usStates'
 import { loadImages } from '../../lib/imageStore'
+import {
+  buildContactFilterFacets,
+  contactMatchesFilters,
+} from '../../lib/contactFilterFacets'
 import { CardPhotoLightbox } from '../CardPhotoLightbox'
 
 function useFollowups(contacts: Contact[]) {
@@ -99,55 +103,30 @@ export function ContactsScreen() {
     }
   }
 
-  const states = useMemo(() => [...new Set(contacts.map((c) => normalizeStateValue(c.state)).filter(Boolean))].sort(), [contacts])
-  const cities = useMemo(() => {
-    const source = filterState ? contacts.filter((c) => normalizeStateValue(c.state) === filterState) : contacts
-    return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
-  }, [contacts, filterState])
-  const areas = useMemo(() => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(), [contacts])
-  const starCounts = useMemo(() => {
-    const counts = new Map<number, number>([
-      [1, 0],
-      [2, 0],
-      [3, 0],
-      [4, 0],
-    ])
-    contacts.forEach((contact) => {
-      if (contact.stars >= 1 && contact.stars <= 4) {
-        counts.set(contact.stars, (counts.get(contact.stars) ?? 0) + 1)
-      }
-    })
-    return counts
-  }, [contacts])
-  const stateCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    contacts.forEach((contact) => {
-      const state = normalizeStateValue(contact.state)
-      if (!state) return
-      counts.set(state, (counts.get(state) ?? 0) + 1)
-    })
-    return counts
-  }, [contacts])
-  const cityCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    const source = filterState ? contacts.filter((c) => normalizeStateValue(c.state) === filterState) : contacts
-    source.forEach((contact) => {
-      if (!contact.city) return
-      counts.set(contact.city, (counts.get(contact.city) ?? 0) + 1)
-    })
-    return counts
-  }, [contacts, filterState])
-  const areaCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    contacts.forEach((contact) => {
-      if (!contact.area) return
-      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
-    })
-    return counts
-  }, [contacts])
-  const customerCount = useMemo(() => contacts.filter((c) => c.is_customer).length, [contacts])
-  const goodsShownCount = useMemo(() => contacts.filter((c) => c.visited).length, [contacts])
-  const oldCustomerCount = useMemo(() => contacts.filter((c) => c.is_old_customer).length, [contacts])
+  const filterDims = useMemo(() => ({
+    stars: filterStars,
+    state: filterState,
+    city: filterCity,
+    area: filterArea,
+    type: filterType,
+    query,
+  }), [filterStars, filterState, filterCity, filterArea, filterType, query])
+
+  const {
+    states,
+    cities,
+    areas,
+    starCounts,
+    stateCounts,
+    cityCounts,
+    areaCounts,
+    customerCount,
+    goodsShownCount,
+    oldCustomerCount,
+  } = useMemo(
+    () => buildContactFilterFacets(contacts, filterDims),
+    [contacts, filterDims],
+  )
 
   const lastAddedId = useMemo(() => {
     let newestId: string | null = null
@@ -165,27 +144,10 @@ export function ContactsScreen() {
     return newestId
   }, [contacts])
 
-  const baseFiltered = useMemo(() => contacts.filter((c) => {
-    if (filterStars > 0 && c.stars !== filterStars) return false
-    if (filterState && normalizeStateValue(c.state) !== filterState) return false
-    if (filterCity && c.city !== filterCity) return false
-    if (filterArea && c.area !== filterArea) return false
-    if (filterType === 'customer' && !c.is_customer) return false
-    if (filterType === 'goods_shown' && !c.visited) return false
-    if (filterType === 'old_customer' && !c.is_old_customer) return false
-    if (query) {
-      const q = query.toLowerCase()
-      const hay = [c.name, c.company, c.email, c.phone_mobile, c.phone_work, c.city].join(' ').toLowerCase()
-      const textMatch = hay.includes(q)
-
-      const qDigits = phoneKey(query)
-      const phoneMatch = qDigits.length >= 3
-        && [c.phone_mobile, c.phone_work, c.phone_fax].some((p) => phoneKey(p).includes(qDigits))
-
-      if (!textMatch && !phoneMatch) return false
-    }
-    return true
-  }), [contacts, filterStars, filterState, filterCity, filterArea, filterType, query])
+  const baseFiltered = useMemo(
+    () => contacts.filter((c) => contactMatchesFilters(c, filterDims)),
+    [contacts, filterDims],
+  )
 
   const filtered = useMemo(() => (
     nearMeActive

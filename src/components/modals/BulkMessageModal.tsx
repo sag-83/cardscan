@@ -3,6 +3,7 @@ import { Check, Copy, Mail, MessageSquare, Send, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { IS_DEMO_MODE } from '../../lib/demo'
 import { normalizeStateValue } from '../../lib/usStates'
+import { buildContactFilterFacets } from '../../lib/contactFilterFacets'
 import {
   loadBulkEmailBody,
   loadBulkEmailSubject,
@@ -147,50 +148,44 @@ function OutreachSheet({
   onClose: () => void
   showToast: (msg: string, durationMs?: number) => void
 }) {
-  const states = useMemo(
-    () => [...new Set(pool.map((c) => normalizeStateValue(c.state)).filter(Boolean))].sort(),
-    [pool],
-  )
-  const cities = useMemo(() => {
-    const source = filterState
-      ? pool.filter((c) => normalizeStateValue(c.state) === filterState)
-      : pool
-    return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
-  }, [pool, filterState])
-  const areas = useMemo(
-    () => [...new Set(pool.map((c) => c.area).filter(Boolean))].sort(),
-    [pool],
+  const filterDims = useMemo(() => ({
+    stars: filterStars,
+    state: filterState,
+    city: filterCity,
+    area: filterArea,
+    type: filterType,
+    query: '',
+  }), [filterStars, filterState, filterCity, filterArea, filterType])
+
+  const {
+    states,
+    cities,
+    areas,
+    starCounts,
+    stateCounts,
+    cityCounts,
+    areaCounts,
+    customerCount,
+    goodsShownCount,
+    oldCustomerCount,
+  } = useMemo(
+    () => buildContactFilterFacets(pool, filterDims),
+    [pool, filterDims],
   )
 
-  const stateCounts = useMemo(() => countBy(pool, (c) => normalizeStateValue(c.state)), [pool])
-  const cityCounts = useMemo(() => {
-    const source = filterState
-      ? pool.filter((c) => normalizeStateValue(c.state) === filterState)
-      : pool
-    return countBy(source, (c) => c.city)
-  }, [pool, filterState])
-  const areaCounts = useMemo(() => countBy(pool, (c) => c.area), [pool])
-  const starCounts = useMemo(() => {
-    const counts = new Map<number, number>([[1, 0], [2, 0], [3, 0], [4, 0]])
-    pool.forEach((c) => {
-      if (c.stars >= 1 && c.stars <= 4) counts.set(c.stars, (counts.get(c.stars) ?? 0) + 1)
-    })
-    return counts
-  }, [pool])
-  const customerCount = useMemo(() => pool.filter((c) => c.is_customer).length, [pool])
-  const goodsShownCount = useMemo(() => pool.filter((c) => c.visited).length, [pool])
-  const oldCustomerCount = useMemo(() => pool.filter((c) => c.is_old_customer).length, [pool])
-
-  const filtered = useMemo(() => pool.filter((c) => {
-    if (filterStars > 0 && c.stars !== filterStars) return false
-    if (filterState && normalizeStateValue(c.state) !== filterState) return false
-    if (filterCity && c.city !== filterCity) return false
-    if (filterArea && c.area !== filterArea) return false
-    if (filterType === 'customer' && !c.is_customer) return false
-    if (filterType === 'goods_shown' && !c.visited) return false
-    if (filterType === 'old_customer' && !c.is_old_customer) return false
-    return true
-  }), [pool, filterStars, filterState, filterCity, filterArea, filterType])
+  const filtered = useMemo(
+    () => pool.filter((c) => {
+      if (filterStars > 0 && c.stars !== filterStars) return false
+      if (filterState && normalizeStateValue(c.state) !== filterState) return false
+      if (filterCity && c.city !== filterCity) return false
+      if (filterArea && c.area !== filterArea) return false
+      if (filterType === 'customer' && !c.is_customer) return false
+      if (filterType === 'goods_shown' && !c.visited) return false
+      if (filterType === 'old_customer' && !c.is_old_customer) return false
+      return true
+    }),
+    [pool, filterStars, filterState, filterCity, filterArea, filterType],
+  )
 
   const withEmail = useMemo(
     () => filtered.filter((c) => collectEmails(c).length > 0),
@@ -531,16 +526,6 @@ function collectEmails(c: Contact): string[] {
     .map((e) => (e || '').trim())
     .filter(Boolean)
   return list
-}
-
-function countBy(list: Contact[], keyOf: (c: Contact) => string | undefined) {
-  const counts = new Map<string, number>()
-  list.forEach((c) => {
-    const key = (keyOf(c) || '').trim()
-    if (!key) return
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  })
-  return counts
 }
 
 function dropdownStyle(active: boolean): CSSProperties {

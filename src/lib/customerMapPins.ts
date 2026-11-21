@@ -278,7 +278,16 @@ export function getCachedPinPoint(contact: Contact): { point: GeoPoint; exact: b
   return { point: { lat: cached.lat, lng: cached.lng }, exact: Boolean(cached.exact) }
 }
 
+/**
+ * Open Google Maps turn-by-turn to this pin’s exact coordinates.
+ * Prefer lat/lng over address text — mall/complex names often resolve to the
+ * wrong entrance and force another tap to get directions.
+ */
 export function googleMapsSearchUrl(pin: CustomerMapPin): string {
-  const q = pin.address || `${pin.point.lat},${pin.point.lng}`
-  return `https://maps.google.com/?q=${encodeURIComponent(q)}`
+  const { lat, lng } = pin.point
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+  }
+  const q = pin.address || pin.label
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}&travelmode=driving`
 }

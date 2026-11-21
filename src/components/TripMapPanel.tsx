@@ -544,6 +544,8 @@ export function TripMapPanel({
       for (const item of layers) {
         const isPrimary = item.tone === 'primary'
         const geo = L.geoJSON(item.geojson as GeoJSON.GeoJsonObject, {
+          // Outline only — never steal taps from shop pins underneath.
+          interactive: false,
           style: {
             color: isPrimary ? '#ff3b30' : '#007aff',
             weight: isPrimary ? 3.5 : 2,
@@ -553,7 +555,6 @@ export function TripMapPanel({
             dashArray: isPrimary ? undefined : '6 8',
           },
         })
-        geo.bindTooltip(item.label, { sticky: true, opacity: 0.95 })
         geo.addTo(layer)
         try {
           const b = geo.getBounds()
@@ -600,32 +601,32 @@ export function TripMapPanel({
       const icon = L.divIcon({
         className: 'trip-home-marker',
         html: `<div style="
-          width:44px;height:44px;border-radius:14px;
-          background:#007aff;border:3px solid #fff;
-          box-shadow:0 4px 14px rgba(0,0,0,.45);
+          width:28px;height:28px;border-radius:50%;
+          background:#007aff;border:2.5px solid #fff;
+          box-shadow:0 2px 10px rgba(0,0,0,.4);
           display:flex;align-items:center;justify-content:center;
         ">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
             fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
             aria-hidden="true">
             <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
             <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           </svg>
         </div>`,
-        iconSize: [44, 44],
-        iconAnchor: [22, 22],
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       })
 
       const marker = L.marker([point.lat, point.lng], {
         icon,
-        interactive: true,
+        interactive: false,
         keyboard: false,
         zIndexOffset: 800,
       })
       marker.bindTooltip(label ? `Home · ${label}` : 'Home', {
         direction: 'top',
         opacity: 0.95,
-        offset: [0, -18],
+        offset: [0, -12],
       })
       marker.addTo(layer)
     })()

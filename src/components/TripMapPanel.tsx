@@ -391,7 +391,8 @@ export function TripMapPanel({
           setQuery('')
           return
         }
-        setSelected(pin)
+        // Tap same pin again → close the action sheet.
+        setSelected((prev) => (prev?.contactId === pin.contactId ? null : pin))
       })
       marker.addTo(layer)
       bounds.extend([pin.point.lat, pin.point.lng])
@@ -501,7 +502,10 @@ export function TripMapPanel({
   }
 
   const focusPin = (pin: CustomerMapPin) => {
-    setSelected(pin)
+    setSelected((prev) => {
+      if (prev?.contactId === pin.contactId) return null
+      return pin
+    })
     // Don't dump the name into search — that filtered the map and looked broken.
     mapRef.current?.flyTo([pin.point.lat, pin.point.lng], 12, { duration: 0.6 })
   }

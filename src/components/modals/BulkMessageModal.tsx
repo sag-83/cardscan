@@ -81,9 +81,15 @@ export function BulkMessageModal() {
         setFilterState(next)
         if (filterCity) {
           const stillValid = pool.some(
-            (c) => c.city === filterCity && normalizeStateValue(c.state) === next,
+            (c) => c.city === filterCity && (!next || normalizeStateValue(c.state) === next),
           )
           if (!next || !stillValid) setFilterCity('')
+        }
+        if (filterArea) {
+          const stillValid = pool.some(
+            (c) => c.area === filterArea && (!next || normalizeStateValue(c.state) === next),
+          )
+          if (!next || !stillValid) setFilterArea('')
         }
       }}
       onCity={setFilterCity}
@@ -170,6 +176,11 @@ function OutreachSheet({
     () => buildContactFilterFacets(pool, filterDims),
     [pool, filterDims],
   )
+
+  useEffect(() => {
+    if (filterArea && !areas.includes(filterArea)) onArea('')
+    if (filterCity && !cities.includes(filterCity)) onCity('')
+  }, [areas, cities, filterArea, filterCity, onArea, onCity])
 
   const filtered = useMemo(
     () => pool.filter((c) => {

@@ -286,18 +286,6 @@ export function TripScreen() {
       : contacts
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filterState])
-  const areas = useMemo(
-    () => [...new Set(contacts.map((c) => c.area).filter(Boolean))].sort(),
-    [contacts],
-  )
-  const areaCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    contacts.forEach((contact) => {
-      if (!contact.area) return
-      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
-    })
-    return counts
-  }, [contacts])
 
   // Anyone whose most recent call ended in interest. The point of the calling
   // screen is to turn cold names into visits, so those names need to be
@@ -309,6 +297,38 @@ export function TripScreen() {
     })
     return ids
   }, [callLogs])
+
+  // Area options/counts follow other filters (state, city, type, stars) —
+  // PA shouldn't list Long Island / Staten Island.
+  const areaSource = useMemo(() => contacts.filter((c) => {
+    if (filterState && normalizeStateValue(c.state) !== filterState) return false
+    if (filterCity && c.city !== filterCity) return false
+    if (filterType === 'customer' && !c.is_customer) return false
+    if (filterType === 'goods_shown' && !c.visited) return false
+    if (filterType === 'goods_shown_prospects' && !(c.visited && !c.is_customer)) return false
+    if (filterType === 'not_visited' && c.visited) return false
+    if (filterType === 'call_interested' && !interestedIds.has(c.id)) return false
+    if (minStars > 0 && c.stars < minStars) return false
+    return true
+  }), [contacts, filterState, filterCity, filterType, minStars, interestedIds])
+
+  const areas = useMemo(
+    () => [...new Set(areaSource.map((c) => c.area).filter(Boolean))].sort() as string[],
+    [areaSource],
+  )
+  const areaCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    areaSource.forEach((contact) => {
+      if (!contact.area) return
+      counts.set(contact.area, (counts.get(contact.area) ?? 0) + 1)
+    })
+    return counts
+  }, [areaSource])
+
+  useEffect(() => {
+    if (filterArea && !areas.includes(filterArea)) setFilterArea('')
+    if (filterCity && !cities.includes(filterCity)) setFilterCity('')
+  }, [areas, cities, filterArea, filterCity])
 
   const scoped = useMemo(() => contacts.filter((c) => {
     if (filterState && normalizeStateValue(c.state) !== filterState) return false
@@ -1032,8 +1052,16 @@ export function TripScreen() {
                 <select
                   value={filterState}
                   onChange={(e) => {
-                    setFilterState(e.target.value)
+                    const next = e.target.value
+                    setFilterState(next)
                     setFilterCity('')
+                    if (filterArea) {
+                      const ok = contacts.some(
+                        (c) => c.area === filterArea
+                          && (!next || normalizeStateValue(c.state) === next),
+                      )
+                      if (!ok) setFilterArea('')
+                    }
                   }}
                   style={{ ...dropdownStyle(!!filterState), flex: 0.7 }}
                 >

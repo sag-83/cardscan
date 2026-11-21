@@ -149,45 +149,49 @@ export function ContactsScreen() {
     [contacts, filterDims],
   )
 
-  const filtered = useMemo(() => (
-    nearMeActive
-      ? [...baseFiltered].sort((a, b) => {
-          const da = distances.get(a.id) ?? Infinity
-          const db = distances.get(b.id) ?? Infinity
-          return da - db
-        })
-      : sortContactsAlphabetically(baseFiltered)
-  ), [baseFiltered, nearMeActive, distances])
+  /** Only the single newest scan sits above A–Z; the previous one drops back into the alphabet. */
+  const pinnedLast = useMemo(() => {
+    if (!lastAddedId || nearMeActive) return null
+    return baseFiltered.find((c) => c.id === lastAddedId) ?? null
+  }, [baseFiltered, lastAddedId, nearMeActive])
+
+  const filtered = useMemo(() => {
+    const rest = pinnedLast
+      ? baseFiltered.filter((c) => c.id !== pinnedLast.id)
+      : baseFiltered
+    if (nearMeActive) {
+      return [...rest].sort((a, b) => {
+        const da = distances.get(a.id) ?? Infinity
+        const db = distances.get(b.id) ?? Infinity
+        return da - db
+      })
+    }
+    return sortContactsAlphabetically(rest)
+  }, [baseFiltered, pinnedLast, nearMeActive, distances])
 
   const hasFilters = filterStars > 0 || filterState || filterCity || filterArea || filterType
 
   const onStateChange = (nextState: string) => {
     setFilterState(nextState)
     if (filterCity) {
-      const cityStillValid = contacts.some((c) => c.city === filterCity && normalizeStateValue(c.state) === nextState)
-      if (!nextState || !cityStillValid) {
-        setFilterCity('')
-      }
+      const cityStillValid = contacts.some(
+        (c) => c.city === filterCity && (!nextState || normalizeStateValue(c.state) === nextState),
+      )
+      if (!nextState || !cityStillValid) setFilterCity('')
+    }
+    if (filterArea) {
+      const areaStillValid = contacts.some(
+        (c) => c.area === filterArea && (!nextState || normalizeStateValue(c.state) === nextState),
+      )
+      if (!nextState || !areaStillValid) setFilterArea('')
     }
   }
 
-  const jumpToLastAdded = () => {
-    if (!lastAddedId) return
-
-    setQuery('')
-    setFilterStars(0)
-    setFilterState('')
-    setFilterCity('')
-    setFilterArea('')
-    setFilterType('')
-
-    window.setTimeout(() => {
-      document.getElementById(`contact-row-${lastAddedId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      })
-    }, 50)
-  }
+  // Drop area/city if a later filter combo makes them impossible (faceted lists shrink).
+  useEffect(() => {
+    if (filterArea && !areas.includes(filterArea)) setFilterArea('')
+    if (filterCity && !cities.includes(filterCity)) setFilterCity('')
+  }, [areas, cities, filterArea, filterCity])
 
   return (
     <div>
@@ -305,27 +309,6 @@ export function ContactsScreen() {
               </>
             )}
           </button>
-          {lastAddedId && (
-            <button
-              type="button"
-              onClick={jumpToLastAdded}
-              style={{
-                flex: 1,
-                padding: '7px 12px', borderRadius: 999,
-                border: '1.5px solid var(--accent)',
-                background: 'var(--chip-accent-bg)',
-                color: 'var(--accent)', fontSize: 12, fontWeight: 800,
-                cursor: 'pointer', whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <Star className="size-3.5 shrink-0 fill-[var(--accent)] text-[var(--accent)]" aria-hidden />
-              Last
-            </button>
-          )}
         </div>
         {hasFilters && (
           <button
@@ -350,7 +333,7 @@ export function ContactsScreen() {
         />
       )}
 
-      {!filtered.length && (
+      {!filtered.length && !pinnedLast && (
         <div style={{ textAlign: 'center', padding: '70px 24px', color: 'var(--text3)' }}>
           <div style={{ fontSize: 44, marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text3)' }}>
             {contacts.length ? <Search size={44} strokeWidth={1.25} aria-hidden /> : <ContactRound size={44} strokeWidth={1.25} aria-hidden />}
@@ -362,7 +345,29 @@ export function ContactsScreen() {
         </div>
       )}
 
-      {!!filtered.length && (
+      {pinnedLast && (
+        <>
+          <div style={{
+            fontSize: 12, fontWeight: 800, color: 'var(--accent)',
+            padding: '14px 16px 5px', textTransform: 'uppercase',
+            letterSpacing: '0.6px', background: 'var(--bg)',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <Star className="size-3.5 shrink-0 fill-[var(--accent)] text-[var(--accent)]" aria-hidden />
+            Just scanned · last added
+          </div>
+          <ContactRow
+            contact={pinnedLast}
+            isLastAdded
+            selected={pinnedLast.id === detailContactId}
+            onClick={setDetailContactId}
+            onMenu={setMenuContactId}
+            onShareError={showToast}
+          />
+        </>
+      )}
+
+      {(!!filtered.length || pinnedLast) && (
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)',
           padding: '14px 16px 5px', textTransform: 'uppercase',
           letterSpacing: '0.6px', background: 'var(--bg)' }}>
@@ -372,7 +377,7 @@ export function ContactsScreen() {
 
       {filtered.map((c) => (
         <ContactRow key={c.id} contact={c}
-          isLastAdded={c.id === lastAddedId}
+          isLastAdded={false}
           selected={c.id === detailContactId}
           distance={nearMeActive ? distances.get(c.id) : undefined}
           onClick={setDetailContactId}

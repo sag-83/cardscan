@@ -88,14 +88,7 @@ function loadFilters(): CallFilters {
   try {
     const raw = localStorage.getItem(FILTERS_KEY)
     if (raw) {
-      const parsed = { ...DEFAULT_CALL_FILTERS, ...(JSON.parse(raw) as Partial<CallFilters>) }
-      // Territory areas (Long Island, Staten Island…) conflict with state —
-      // keeping both (e.g. NJ + Long Island) empties the queue. Prefer area.
-      if ((parsed.area ?? '').trim()) {
-        parsed.state = ''
-        parsed.city = ''
-      }
-      return parsed
+      return { ...DEFAULT_CALL_FILTERS, ...(JSON.parse(raw) as Partial<CallFilters>) }
     }
   } catch {}
   return DEFAULT_CALL_FILTERS
@@ -202,19 +195,24 @@ export function CallingScreen() {
     return [...new Set(source.map((c) => c.city).filter(Boolean))].sort()
   }, [contacts, filters.state, filters.area])
 
-  const areas = useMemo(
-    () => [...new Set(contacts.map((c) => (c.area ?? '').trim()).filter(Boolean))].sort(),
-    [contacts],
-  )
+  const areas = useMemo(() => {
+    const source = filters.state
+      ? contacts.filter((c) => normalizeStateValue(c.state) === filters.state)
+      : contacts
+    return [...new Set(source.map((c) => (c.area ?? '').trim()).filter(Boolean))].sort()
+  }, [contacts, filters.state])
   const areaCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    contacts.forEach((contact) => {
+    const source = filters.state
+      ? contacts.filter((c) => normalizeStateValue(c.state) === filters.state)
+      : contacts
+    source.forEach((contact) => {
       const area = (contact.area ?? '').trim()
       if (!area) return
       counts.set(area, (counts.get(area) ?? 0) + 1)
     })
     return counts
-  }, [contacts])
+  }, [contacts, filters.state])
 
   const queue = useMemo(
     () => buildCallQueue(contacts, callLogs, filters),
@@ -297,13 +295,30 @@ export function CallingScreen() {
 
   const patchFilters = (next: Partial<CallFilters>) => setFilters((f) => {
     const merged = { ...f, ...next }
-    // Area XOR state/city — Long Island is NY; pairing it with NJ yields zero shops.
-    if (next.area !== undefined && next.area.trim()) {
-      merged.state = ''
-      merged.city = ''
+    // Keep state + area together when the area exists in that state; drop
+    // incompatible pairs (e.g. PA + Long Island) instead of wiping both.
+    if (next.state !== undefined) {
+      const state = (merged.state ?? '').trim()
+      if (state && merged.area) {
+        const areaOk = contacts.some(
+          (c) => (c.area ?? '').trim() === merged.area
+            && normalizeStateValue(c.state) === state,
+        )
+        if (!areaOk) merged.area = ''
+      }
+      if (state && merged.city) {
+        const cityOk = contacts.some(
+          (c) => c.city === merged.city && normalizeStateValue(c.state) === state,
+        )
+        if (!cityOk) merged.city = ''
+      }
     }
-    if (next.state !== undefined && next.state.trim()) {
-      merged.area = ''
+    if (next.area !== undefined && next.area.trim() && merged.state) {
+      const areaOk = contacts.some(
+        (c) => (c.area ?? '').trim() === merged.area
+          && normalizeStateValue(c.state) === merged.state,
+      )
+      if (!areaOk) merged.state = ''
     }
     return merged
   })
@@ -847,8 +862,8 @@ function SetupPanel({
               </select>
             )}
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, lineHeight: 1.45 }}>
-              Pick an area (Long Island, etc.) or a state — not both. Areas only list shops that have
-              Area filled on the business card.
+              Area list shrinks to match the selected state (e.g. PA won’t show Long Island).
+              Counts are for shops in that filter that have Area filled on the card.
             </div>
           </div>
 
@@ -1291,7 +1306,7 @@ function QueueEmpty({ stats, skippedCount, filters, onRestoreSkipped, onClearLoc
       <div style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 330, margin: '0 auto' }}>
         {nothingInScope
           ? (locationClash
-            ? `${filters.state || filters.city} + ${filters.area} don’t overlap — clear the state or the area so Long Island / Staten Island can show.`
+            ? `${filters.state || filters.city} + ${filters.area} don’t overlap — clear the state or pick an area that exists there.`
             : 'No contacts match these filters, or none of them have a phone number saved. Widen the location or switch Who to call.')
           : `Every number in this area has been worked through. ${stats.callbacksLater} callback${stats.callbacksLater === 1 ? ' is' : 's are'} booked for later.`}
       </div>

@@ -86,6 +86,7 @@ import {
   type TripProgress,
   type TripStop,
 } from '../../lib/tripPlanner'
+import { describeTripScope, resolveTripScopeOrigin } from '../../lib/tripScope'
 
 const SETTINGS_KEY = 'cs_trip_options_v1'
 
@@ -455,12 +456,7 @@ export function TripScreen() {
       // Re-planning after dropping a stop must not ask for the device's
       // position again, or re-order the day around a slightly different fix.
       const reuse = overrides?.reuseLast ? lastRun : null
-      const origin = reuse?.origin ?? (await resolveOrigin())
-      // Road trips end at each destination leg — ignore the day-plan "Ends at" box.
-      const end = planMode === 'road'
-        ? null
-        : (reuse ? reuse.end : await resolveEnd(origin))
-      setLastRun({ origin, end })
+      let origin = reuse?.origin ?? (await resolveOrigin())
 
       const omit = omitIdsForPlan(excludedNow)
       // Road trips search the wider library along the highway; area plans use filters.
@@ -473,6 +469,25 @@ export function TripScreen() {
             : 'No contacts match these filters.',
         )
       }
+
+      // State / city / area selected + start is Home/My location → center the
+      // day on that territory (Maryland + 150 mi), not “can home reach MD?”.
+      // Explicit Place start keeps the pin they typed/tapped. Road A→B unchanged.
+      if (planMode !== 'road' && !reuse && (startMode === 'home' || startMode === 'device')) {
+        const scopeOrigin = await resolveTripScopeOrigin({
+          contacts: pool,
+          filterState,
+          filterCity,
+          filterArea,
+        })
+        if (scopeOrigin) origin = scopeOrigin
+      }
+
+      // Road trips end at each destination leg — ignore the day-plan "Ends at" box.
+      const end = planMode === 'road'
+        ? null
+        : (reuse ? reuse.end : await resolveEnd(origin))
+      setLastRun({ origin, end })
 
       if (planMode === 'road' && !overrides?.reuseLast) {
         if (!journeyDest.label.trim()) {
@@ -1283,15 +1298,30 @@ export function TripScreen() {
 
             <Group label={planMode === 'road' ? 'Each day' : 'Trip shape'}>
               {planMode !== 'road' && (
-                <SliderRow
-                  label="Search radius"
-                  value={options.radiusMiles}
-                  min={5}
-                  max={250}
-                  step={5}
-                  format={(v) => `${v} mi`}
-                  onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
-                />
+                <>
+                  <SliderRow
+                    label={
+                      describeTripScope(filterState, filterCity, filterArea)
+                        ? `Search radius from ${describeTripScope(filterState, filterCity, filterArea)}`
+                        : startMode === 'home'
+                          ? 'Search radius from home'
+                          : startMode === 'device'
+                            ? 'Search radius from my location'
+                            : 'Search radius from start'
+                    }
+                    value={options.radiusMiles}
+                    min={5}
+                    max={250}
+                    step={5}
+                    format={(v) => `${v} mi`}
+                    onChange={(radiusMiles) => setOptions((o) => ({ ...o, radiusMiles }))}
+                  />
+                  {describeTripScope(filterState, filterCity, filterArea) && (startMode === 'home' || startMode === 'device') && (
+                    <div style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: -4 }}>
+                      State/area is selected — radius is measured inside that territory, not from home.
+                    </div>
+                  )}
+                </>
               )}
               {planMode === 'road' && (
                 <SliderRow

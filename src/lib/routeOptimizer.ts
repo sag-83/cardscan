@@ -1,26 +1,25 @@
 /**
  * Stop ordering for the trip planner.
  *
- * Choosing the cheapest order to visit N stops is the Travelling Salesman
- * Problem, so an exact answer is out of reach beyond a handful of stops
- * (10 stops is already 360k orderings). Instead this runs the standard
- * heuristic stack used for real-world routing:
+ * Visiting N shops optimally is TSP (exact search blows up fast), so we:
  *
- *   1. Cheapest insertion builds a tour by repeatedly dropping in the stop that
- *      adds the least travel. It beats nearest-neighbour, which tends to strand
- *      one far-away stop and backtrack for it at the end.
- *   2. 2-opt removes crossings by reversing a run of stops.
- *   3. Or-opt relocates runs of 1-3 stops elsewhere in the tour, which fixes the
- *      "one stop sitting in the wrong cluster" case that 2-opt can't.
+ *   1. Seed a tour with Dijkstra on a sparse k-nearest graph of real road
+ *      times — from the current stop, Dijkstra finds the cheapest path to the
+ *      next unvisited shop (and we collect any unvisited shops on that path).
+ *   2. Also try classic cheapest-insertion; keep whichever seed is shorter.
+ *   3. Polish with 2-opt + Or-opt until the tour stops improving.
  *
- * At day-trip sizes (under ~30 stops) this lands within a few percent of
- * optimal in milliseconds.
- *
- * Every candidate move is scored by recomputing the whole tour instead of a
- * delta. That's a few hundred extra additions at these sizes and it keeps the
- * search correct for asymmetric cost matrices — real driving times are not
- * symmetric because of one-way streets, ramps and turn restrictions.
+ * Road edge weights come from OSRM (which itself uses Dijkstra/A*-style
+ * search on the highway graph). We run Dijkstra again on the stop graph so
+ * the *day order* is shortest-path driven, not random.
  */
+
+import {
+  aStar,
+  buildKnnGraph,
+  dijkstra,
+  reconstructPath,
+} from './dijkstra'
 
 /** Square matrix of travel costs; `matrix[i][j]` is the cost from i to j. */
 export type CostMatrix = number[][]
@@ -47,6 +46,8 @@ export type EndIndex = number | null
 const EPSILON = 1e-9
 const MAX_PASSES = 50
 const MAX_SEGMENT_LENGTH = 3
+/** Neighbors per node in the Dijkstra graph (sparse, not complete). */
+const KNN_K = 8
 
 export function tourCost(order: number[], matrix: CostMatrix, endIndex: EndIndex): number {
   let total = 0
@@ -69,25 +70,125 @@ export interface BuildTourOptions {
   limit: number
   endIndex: EndIndex
   /**
-   * Per-candidate multiplier applied to insertion cost during construction.
-   * Below 1 makes a stop more attractive, so it survives the cap. Ordering is
-   * always optimised on true cost afterwards, so this only affects selection.
+   * Per-candidate multiplier applied to insertion / Dijkstra pick cost.
+   * Below 1 makes a stop more attractive, so it survives the cap.
    */
   weights?: Map<number, number>
   /**
-   * Decides between candidates whose insertion cost is effectively identical;
-   * higher wins. Dense districts produce a lot of these ties — several shops
-   * in one building share a coordinate exactly — and without a preference the
-   * cap would fall back to whatever order the candidates arrived in.
+   * Decides between candidates whose cost is effectively identical; higher wins.
    */
   tieBreak?: Map<number, number>
 }
 
 /**
- * Greedy cheapest insertion. When `limit` is below the candidate count this
- * doubles as stop selection: each round takes the stop that adds the least
- * detour, which naturally keeps the route inside one geographic cluster rather
- * than picking the N closest stops scattered in every direction.
+ * Dijkstra-seeded tour: from the current stop, run Dijkstra (or A* when a
+ * finish exists) on a k-nearest road-time graph and walk to the nearest
+ * remaining shop — collecting any other unvisited shops that lie on that
+ * shortest path so we don't skip a storefront we already drive past.
+ */
+export function buildTourDijkstra(matrix: CostMatrix, options: BuildTourOptions): number[] {
+  const { candidates, limit, endIndex, weights, tieBreak } = options
+  const cap = Math.min(limit, candidates.length)
+  if (cap <= 0) return [ORIGIN_INDEX]
+
+  const nodeIds = new Set<number>([ORIGIN_INDEX, ...candidates])
+  if (endIndex !== null && endIndex !== ORIGIN_INDEX) nodeIds.add(endIndex)
+  const graph = buildKnnGraph(matrix, [...nodeIds], KNN_K)
+
+  const order = [ORIGIN_INDEX]
+  const remaining = new Set(candidates)
+  let current = ORIGIN_INDEX
+
+  while (order.length - 1 < cap && remaining.size > 0) {
+    // Full Dijkstra from the current pin (need distances to every remaining shop).
+    const { dist, prev } = dijkstra(graph, current)
+
+    let best: number | null = null
+    let bestScore = Infinity
+    let bestRank = -Infinity
+
+    for (const cand of remaining) {
+      let d = dist.get(cand)
+      // Prefer shops that also sit closer to the eventual finish when set.
+      if (d !== undefined && endIndex !== null && endIndex !== ORIGIN_INDEX) {
+        const toEnd = matrix[cand]?.[endIndex]
+        if (Number.isFinite(toEnd)) d = d + toEnd * 0.12
+      }
+      if (d === undefined) continue
+      const weight = weights?.get(cand) ?? 1
+      const score = d * weight
+      const rank = tieBreak?.get(cand) ?? 0
+      const cheaper = score < bestScore - EPSILON
+      const tied = Math.abs(score - bestScore) <= EPSILON && rank > bestRank
+      if (cheaper || tied) {
+        bestScore = score
+        bestRank = rank
+        best = cand
+      }
+    }
+
+    // Sparse graph can leave a shop unreachable — fall back to direct matrix row.
+    if (best === null) {
+      for (const cand of remaining) {
+        const d = matrix[current]?.[cand]
+        if (!Number.isFinite(d)) continue
+        const weight = weights?.get(cand) ?? 1
+        const score = d * weight
+        const rank = tieBreak?.get(cand) ?? 0
+        if (score < bestScore - EPSILON || (Math.abs(score - bestScore) <= EPSILON && rank > bestRank)) {
+          bestScore = score
+          bestRank = rank
+          best = cand
+        }
+      }
+    }
+
+    if (best === null) break
+
+    // A* path current → chosen shop (heuristic = remaining road time to target).
+    const target = best
+    const star = aStar(
+      graph,
+      current,
+      target,
+      (node) => {
+        const h = matrix[node]?.[target]
+        return Number.isFinite(h) ? h : 0
+      },
+    )
+    const path = reconstructPath(star.prev, current, target)
+    const steps = path.length > 1 ? path.slice(1) : reconstructPath(prev, current, target).slice(1)
+    const walk = steps.length ? steps : [best]
+
+    for (const node of walk) {
+      if (order.length - 1 >= cap) break
+      if (!remaining.has(node)) {
+        if (node === best && !order.includes(node)) {
+          order.push(node)
+          remaining.delete(node)
+          current = node
+        }
+        continue
+      }
+      order.push(node)
+      remaining.delete(node)
+      current = node
+      if (node === best) break
+    }
+
+    if (!order.includes(best) && remaining.has(best) && order.length - 1 < cap) {
+      order.push(best)
+      remaining.delete(best)
+      current = best
+    }
+  }
+
+  return order
+}
+
+/**
+ * Greedy cheapest insertion (kept as a competing seed — Dijkstra wins on
+ * progressive corridors; insertion sometimes wins on dense city packs).
  */
 export function buildTour(matrix: CostMatrix, options: BuildTourOptions): number[] {
   const { candidates, limit, endIndex, weights, tieBreak } = options
@@ -196,11 +297,25 @@ export function improveTour(order: number[], matrix: CostMatrix, endIndex: EndIn
   return { order: current, cost: currentCost }
 }
 
-/** Builds a tour and then improves it. The planner's single entry point. */
+/**
+ * Build with Dijkstra (+ A* when finishing somewhere), compete with
+ * cheapest-insertion, then polish. Returns the shorter improved tour.
+ */
 export function planRoute(matrix: CostMatrix, options: BuildTourOptions): RouteResult {
-  const built = buildTour(matrix, options)
-  if (built.length <= 2) {
-    return { order: built, cost: tourCost(built, matrix, options.endIndex) }
+  if (options.candidates.length === 0) {
+    return { order: [ORIGIN_INDEX], cost: 0 }
   }
-  return improveTour(built, matrix, options.endIndex)
+
+  const dijkstraSeed = buildTourDijkstra(matrix, options)
+  const insertionSeed = buildTour(matrix, options)
+
+  const improvedD = dijkstraSeed.length <= 2
+    ? { order: dijkstraSeed, cost: tourCost(dijkstraSeed, matrix, options.endIndex) }
+    : improveTour(dijkstraSeed, matrix, options.endIndex)
+
+  const improvedI = insertionSeed.length <= 2
+    ? { order: insertionSeed, cost: tourCost(insertionSeed, matrix, options.endIndex) }
+    : improveTour(insertionSeed, matrix, options.endIndex)
+
+  return improvedD.cost <= improvedI.cost + EPSILON ? improvedD : improvedI
 }

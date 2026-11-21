@@ -441,8 +441,8 @@ export async function planTrip(
 }
 
 /**
- * Order (and optionally cap) already-located stops with cheapest-insertion +
- * 2-opt on real road times when OSRM answers — same engine as a single day plan.
+ * Order (and optionally cap) already-located stops with Dijkstra/A* seeding
+ * on road times (OSRM matrix) + 2-opt polish — same engine as a single day plan.
  */
 export async function buildPlanFromLocated(
   located: LocatedContact[],

@@ -18,11 +18,16 @@ import {
 import type { Contact } from '../types/contact'
 import { useStore } from '../store/useStore'
 import { useTheme } from '../hooks/useTheme'
+import { geocodePlace } from '../lib/geocode'
 import {
   googleMapsSearchUrl,
   resolveCustomerMapPins,
   type CustomerMapPin,
 } from '../lib/customerMapPins'
+import {
+  buildBoundaryLayers,
+  type BoundaryFilter,
+} from '../lib/mapBoundaries'
 
 export type TripMapFilter = 'all' | 'customer' | 'prospect'
 /** Tap a pin to apply this role without opening the sheet first. */
@@ -88,6 +93,12 @@ interface Props {
    * Reorder / add / delete keep the live trail redraw without zooming out.
    */
   routeFitToken?: string
+  /** State / city / area from trip setup — drawn as a map outline. */
+  boundaryFilter?: BoundaryFilter
+  /** Saved home — always shown as a home icon on the map. */
+  homePlace?: { label: string; point?: { lat: number; lng: number } | null }
+  /** Persist geocoded home coords back into trip settings. */
+  onHomeResolved?: (point: { lat: number; lng: number }) => void
 }
 
 function toPick(pin: CustomerMapPin): TripMapPick {
@@ -119,16 +130,24 @@ export function TripMapPanel({
   compact = false,
   dayRoutes = [],
   routeFitToken = '',
+  boundaryFilter = { state: '', city: '', area: '' },
+  homePlace,
+  onHomeResolved,
 }: Props) {
   const { theme, toggle: toggleTheme } = useTheme()
   const mapEl = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
+  const boundaryLayerRef = useRef<L.LayerGroup | null>(null)
+  const homeLayerRef = useRef<L.LayerGroup | null>(null)
   const zoomCtrlRef = useRef<L.Control.Zoom | null>(null)
+  const onHomeResolvedRef = useRef(onHomeResolved)
+  onHomeResolvedRef.current = onHomeResolved
   const fittedRef = useRef(false)
   /** Only auto-fit the itinerary route once per route fingerprint — never fight user zoom. */
   const routeFitKeyRef = useRef<string>('')
+  const boundaryFitKeyRef = useRef<string>('')
   const userInteractingRef = useRef(false)
   const contactsRef = useRef(contacts)
   contactsRef.current = contacts
@@ -267,6 +286,8 @@ export function TripMapPanel({
 
     layerRef.current = L.layerGroup().addTo(map)
     routeLayerRef.current = L.layerGroup().addTo(map)
+    boundaryLayerRef.current = L.layerGroup().addTo(map)
+    homeLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
 
     zoomCtrlRef.current = L.control.zoom({ position: 'bottomright' })
@@ -284,6 +305,8 @@ export function TripMapPanel({
       mapRef.current = null
       layerRef.current = null
       routeLayerRef.current = null
+      boundaryLayerRef.current = null
+      homeLayerRef.current = null
       zoomCtrlRef.current = null
     }
   }, [])
@@ -489,6 +512,126 @@ export function TripMapPanel({
       map.fitBounds(routeBounds.pad(0.18), { maxZoom: 11, animate: true })
     }
   }, [dayRoutes, pins, routeFitToken])
+
+  // Highlight the selected state / city / area as a map outline.
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = boundaryLayerRef.current
+    if (!map || !layer) return
+
+    let cancelled = false
+    const key = `${boundaryFilter.state}|${boundaryFilter.city}|${boundaryFilter.area}`
+
+    ;(async () => {
+      layer.clearLayers()
+      if (!boundaryFilter.state && !boundaryFilter.city && !boundaryFilter.area) {
+        boundaryFitKeyRef.current = ''
+        return
+      }
+
+      const pinById = new Map(pins.map((p) => [p.contactId, p]))
+      const layers = await buildBoundaryLayers(
+        boundaryFilter,
+        contacts,
+        (c) => {
+          const pin = pinById.get(c.id)
+          return pin ? pin.point : null
+        },
+      )
+      if (cancelled) return
+
+      const bounds = L.latLngBounds([])
+      for (const item of layers) {
+        const isPrimary = item.tone === 'primary'
+        const geo = L.geoJSON(item.geojson as GeoJSON.GeoJsonObject, {
+          style: {
+            color: isPrimary ? '#ff3b30' : '#007aff',
+            weight: isPrimary ? 3.5 : 2,
+            opacity: isPrimary ? 0.95 : 0.55,
+            fillColor: isPrimary ? '#ff3b30' : '#007aff',
+            fillOpacity: isPrimary ? 0.08 : 0.04,
+            dashArray: isPrimary ? undefined : '6 8',
+          },
+        })
+        geo.bindTooltip(item.label, { sticky: true, opacity: 0.95 })
+        geo.addTo(layer)
+        try {
+          const b = geo.getBounds()
+          if (b.isValid()) bounds.extend(b)
+        } catch {
+          /* ignore empty */
+        }
+      }
+
+      if (
+        bounds.isValid()
+        && key
+        && key !== boundaryFitKeyRef.current
+        && !userInteractingRef.current
+      ) {
+        boundaryFitKeyRef.current = key
+        map.fitBounds(bounds.pad(0.18), { maxZoom: 10, animate: true })
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [boundaryFilter.state, boundaryFilter.city, boundaryFilter.area, contacts, pins])
+
+  // Home icon — fixed screen size at every zoom so the base is always obvious.
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = homeLayerRef.current
+    if (!map || !layer) return
+
+    let cancelled = false
+    layer.clearLayers()
+
+    const label = (homePlace?.label || '').trim()
+    if (!label && !homePlace?.point) return
+
+    ;(async () => {
+      let point = homePlace?.point ?? null
+      if (!point && label) {
+        point = await geocodePlace(label)
+        if (point && !cancelled) onHomeResolvedRef.current?.(point)
+      }
+      if (cancelled || !point) return
+
+      const icon = L.divIcon({
+        className: 'trip-home-marker',
+        html: `<div style="
+          width:44px;height:44px;border-radius:14px;
+          background:#007aff;border:3px solid #fff;
+          box-shadow:0 4px 14px rgba(0,0,0,.45);
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
+            fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true">
+            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+            <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+        </div>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+      })
+
+      const marker = L.marker([point.lat, point.lng], {
+        icon,
+        interactive: true,
+        keyboard: false,
+        zIndexOffset: 800,
+      })
+      marker.bindTooltip(label ? `Home · ${label}` : 'Home', {
+        direction: 'top',
+        opacity: 0.95,
+        offset: [0, -18],
+      })
+      marker.addTo(layer)
+    })()
+
+    return () => { cancelled = true }
+  }, [homePlace?.label, homePlace?.point?.lat, homePlace?.point?.lng])
 
   const applyPick = (pin: CustomerMapPin, role: 'start' | 'end' | 'via') => {
     const pick = toPick(pin)

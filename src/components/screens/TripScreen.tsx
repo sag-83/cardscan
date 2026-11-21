@@ -829,6 +829,12 @@ export function TripScreen() {
           compact={!isDesktop}
           dayRoutes={dayRoutes}
           routeFitToken={savedItinerary?.id ?? (plan ? `day:${plan.stops.map((s) => s.contact.id).join(',')}` : '')}
+          boundaryFilter={{ state: filterState, city: filterCity, area: filterArea }}
+          homePlace={home}
+          onHomeResolved={(point) => {
+            if (home.point?.lat === point.lat && home.point?.lng === point.lng) return
+            patch({ home: { ...home, point } })
+          }}
         />
       </div>
 

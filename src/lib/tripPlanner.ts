@@ -260,7 +260,7 @@ function resolveCoarseGroup(group: CoarseGroup): Promise<GeoPoint | null> {
     : geocodePostalCode(group.zip)
 }
 
-interface LocatedContact {
+export interface LocatedContact {
   contact: Contact
   point: GeoPoint
   approximate: boolean
@@ -428,17 +428,41 @@ export async function planTrip(
     throw new TripPlanError('Could not pin any of these addresses on the map.')
   }
 
+  skipped.overCap = Math.max(0, inRange.length - located.length - droppedFromShortlist)
+
   throwIfCancelled(signal)
   onProgress?.({ phase: 'routing', done: 0, total: 1, label: 'Working out the order' })
 
-  // ─── Cost the whole shortlist once, on real roads where possible ──────────
-  // Asking OSRM for the full shortlist rather than just the chosen stops costs
-  // the same single request, and it means the *selection* is made on driving
-  // time too. Straight-line distance would happily pick a shop three miles
-  // away across a river over one eight miles away down a highway.
-  // A finish that isn't the start needs its own node in the matrix so the
-  // final leg is costed, but it must stay out of `candidates` — the driver
-  // ends there, he doesn't call on it.
+  return buildPlanFromLocated(located, origin, end, options, {
+    candidateCount: inRange.length,
+    skipped,
+    signal,
+  })
+}
+
+/**
+ * Order (and optionally cap) already-located stops with cheapest-insertion +
+ * 2-opt on real road times when OSRM answers — same engine as a single day plan.
+ */
+export async function buildPlanFromLocated(
+  located: LocatedContact[],
+  origin: TripOrigin,
+  end: TripEnd | null,
+  options: TripOptions,
+  extras?: {
+    candidateCount?: number
+    skipped?: TripSkipped
+    signal?: AbortSignal
+    /** Visit every located stop (no maxStops trim). */
+    visitAll?: boolean
+  },
+): Promise<TripPlan> {
+  const signal = extras?.signal
+  const skipped = extras?.skipped ?? { noAddress: 0, outOfRadius: 0, unresolved: 0, overCap: 0 }
+  if (located.length === 0) {
+    throw new TripPlanError('No located stops to route.')
+  }
+
   const endsAtStart = end !== null
     && end.point.lat === origin.point.lat
     && end.point.lng === origin.point.lng
@@ -466,15 +490,12 @@ export async function planTrip(
 
   const route = planRoute(minutesMatrix, {
     candidates: located.map((_, index) => index + 1),
-    limit: options.maxStops,
+    limit: extras?.visitAll ? located.length : options.maxStops,
     endIndex,
     weights,
     tieBreak,
   })
 
-  skipped.overCap = Math.max(0, inRange.length - (route.order.length - 1) - droppedFromShortlist)
-
-  // ─── Assemble the plan ────────────────────────────────────────────────────
   const stops: TripStop[] = []
   let cumulativeMiles = 0
   let driveMinutes = 0
@@ -520,9 +541,120 @@ export async function planTrip(
     driveMinutes,
     visitMinutes: stops.length * options.minutesPerStop,
     costSource: road ? 'road' : 'estimate',
-    candidateCount: inRange.length,
+    candidateCount: extras?.candidateCount ?? located.length,
     skipped,
   }
+}
+
+/** Locate every in-radius contact (street pins) for multi-day progressive planning. */
+export async function locateTripCandidates(
+  contacts: Contact[],
+  origin: TripOrigin,
+  options: TripOptions,
+  onProgress?: (progress: TripProgress) => void,
+  signal?: AbortSignal,
+): Promise<{ located: LocatedContact[]; skipped: TripSkipped }> {
+  const skipped: TripSkipped = { noAddress: 0, outOfRadius: 0, unresolved: 0, overCap: 0 }
+
+  const audience = contacts.filter((contact) => matchesTripAudience(contact, options.priority))
+  const addressable = audience.filter((contact) => {
+    if (hasAnyLocation(contact)) return true
+    skipped.noAddress++
+    return false
+  })
+
+  const nearby = addressable.filter((contact) => {
+    if (!isStateOutOfRange(contact.state ?? '', origin.point, options.radiusMiles)) return true
+    skipped.outOfRadius++
+    return false
+  })
+
+  const groups = groupByCoarseLocation(nearby)
+  const pending = [...groups.values()].filter(
+    (group) => !(group.kind === 'city' && getCachedCityCoords(group.city, group.state)),
+  )
+
+  const coarsePoints = new Map<CoarseGroup, GeoPoint>()
+  for (const group of groups.values()) {
+    const cached = group.kind === 'city' ? getCachedCityCoords(group.city, group.state) : null
+    if (cached) coarsePoints.set(group, cached)
+  }
+
+  let scanned = 0
+  for (const group of pending) {
+    throwIfCancelled(signal)
+    onProgress?.({
+      phase: 'scanning',
+      done: scanned,
+      total: pending.length,
+      label: group.kind === 'city' ? [group.city, group.state].filter(Boolean).join(', ') : group.zip,
+    })
+    const point = await resolveCoarseGroup(group)
+    if (point) coarsePoints.set(group, point)
+    scanned++
+  }
+
+  const inRange: Contact[] = []
+  for (const group of groups.values()) {
+    const point = coarsePoints.get(group)
+    if (!point) {
+      skipped.unresolved += group.contacts.length
+      continue
+    }
+    const coarseMiles = distanceBetween(origin.point, point)
+    if (coarseMiles > options.radiusMiles + COARSE_RADIUS_BUFFER_MILES) {
+      skipped.outOfRadius += group.contacts.length
+      continue
+    }
+    inRange.push(...group.contacts)
+  }
+
+  // Cap street lookups: enough for all days with slack for the optimiser.
+  const cap = Math.min(
+    MAX_SHORTLIST * 2,
+    Math.max(MIN_SHORTLIST, options.maxStops * SHORTLIST_MULTIPLIER * 2),
+  )
+  // Prefer contacts closer to origin (coarse city / ZIP) so the progressive
+  // sweep starts with reachable shops first.
+  const contactCoarse = new Map<string, GeoPoint>()
+  for (const group of groups.values()) {
+    const point = coarsePoints.get(group)
+    if (!point) continue
+    for (const c of group.contacts) contactCoarse.set(c.id, point)
+  }
+  const withDist = inRange.map((contact) => {
+    const coarse = contactCoarse.get(contact.id)
+    const miles = coarse ? distanceBetween(origin.point, coarse) : options.radiusMiles
+    return { contact, miles }
+  }).sort((a, b) => a.miles - b.miles)
+
+  const shortlist = withDist.slice(0, cap).map((row) => row.contact)
+  skipped.overCap = Math.max(0, inRange.length - shortlist.length)
+
+  const located: LocatedContact[] = []
+  let locatedCount = 0
+  for (const contact of shortlist) {
+    throwIfCancelled(signal)
+    onProgress?.({
+      phase: 'locating',
+      done: locatedCount,
+      total: shortlist.length,
+      label: contact.company || contact.name || 'Contact',
+    })
+    locatedCount++
+    const resolved = await geocodeContactLocation(contact)
+    if (!resolved) {
+      skipped.unresolved++
+      continue
+    }
+    if (distanceBetween(origin.point, resolved.point) > options.radiusMiles) {
+      skipped.outOfRadius++
+      continue
+    }
+    located.push({ contact, point: resolved.point, approximate: resolved.approximate })
+  }
+
+  return { located, skipped }
 }
 
 // ─── Handing the route off to Google Maps ───────────────────────────────────
